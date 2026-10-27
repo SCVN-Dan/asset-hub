@@ -32,7 +32,17 @@
     "step1": "Click “Open GitHub”. Use the browser where you are already signed in to GitHub if you can.",
     "step2": "Paste the code (⌘V / Ctrl+V) and click Continue, then Authorize.",
     "step3": "If GitHub emails you a verification code, open that email and enter the code on GitHub. This happens once per browser.",
-    "step4": "Come back here — the app continues by itself. No terminal or SSH key needed."
+    "step4": "Come back here — the app continues by itself. No terminal or SSH key needed.",
+    "ghMissingTitle": "GitHub CLI is not installed on this computer",
+    "ghMissingBody": "Asset Hub can download the official GitHub CLI (about 15 MB) into its own folder. No admin rights or Terminal needed.",
+    "installGh": "Install automatically",
+    "installing": "Installing GitHub CLI…",
+    "installStage": {
+      "start": "Contacting GitHub…",
+      "download": "Downloading…",
+      "verify": "Checking the download…",
+      "extract": "Unpacking…"
+    }
   },
   "browse": {
     "demoBanner": "Sample data — not connected to GitHub.",
@@ -99,11 +109,12 @@
     "rateLimited": "GitHub rate limit reached. Try again after {{time}}.",
     "network": "Could not reach GitHub. Check the network or VPN.",
     "truncated": "This repository is too large to list through the API.",
-    "ghNotFound": "GitHub CLI (gh) is not installed. Install it (brew install gh) or use a token.",
+    "ghNotFound": "GitHub CLI (gh) is not installed.",
     "ghNotLoggedIn": "gh is not logged in. Run gh auth login first.",
     "emptyToken": "Enter a token first.",
     "unknown": "Something went wrong.",
-    "openSso": "Open SSO authorization"
+    "openSso": "Open SSO authorization",
+    "ghInstallFailed": "Could not install GitHub CLI automatically. Check the network, or sign in with a token below."
   },
   "picker": {
     "search": "Search {{label}}…",

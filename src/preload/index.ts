@@ -19,6 +19,14 @@ const api: AssetHubApi = {
     },
     signOut: () => ipcRenderer.invoke(IPC.signOut)
   },
+  tools: {
+    installGh: () => ipcRenderer.invoke(IPC.installGh),
+    onInstallProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
+      ipcRenderer.on(IPC.installProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.installProgress, handler)
+    }
+  },
   source: {
     listRepos: () => ipcRenderer.invoke(IPC.listRepos),
     listBranches: (repo) => ipcRenderer.invoke(IPC.listBranches, repo),

@@ -3,7 +3,8 @@ import { createDefaultRegistry, SourceError } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
 import { IPC, type AuthMethod, type AuthStatus, type IpcError, type IpcResult } from '@shared/ipc'
-import { AuthError, AuthStore, ghWebLogin, readGhToken, type GhLoginPrompt } from './auth'
+import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
+import { installGh, readInstalledGh } from './ghInstaller'
 import { listTreeWithGit } from './gitTree'
 import { FileTreeCache } from './treeCache'
 
@@ -30,12 +31,13 @@ async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
 const electronFetch: FetchLike = (url, init) => net.fetch(url, init)
 
 /** Owns the GitHub session in the main process; the token never reaches the renderer. */
-export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string }): void {
+export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; toolsDir: string }): void {
   const store = new AuthStore(options.authFile)
   const cache = new FileTreeCache(options.cacheDir)
   const registry = createDefaultRegistry()
   let session: Session | undefined
   let restored = false
+  const managed = readInstalledGh(options.toolsDir).then((info) => setManagedGh(info?.path))
 
   async function start(method: AuthMethod, token: string, persist: boolean): Promise<AuthStatus> {
     if (!token.trim()) throw new AuthError('emptyToken', 'Token is empty')
@@ -56,6 +58,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   async function restore(): Promise<void> {
     if (restored) return
     restored = true
+    await managed
     const saved = store.load()
     if (!saved) return
     try {
@@ -79,7 +82,12 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     })
   )
   ipcMain.handle(IPC.signInWithToken, (_e, token: unknown) => wrap(() => start('pat', typeof token === 'string' ? token : '', true)))
-  ipcMain.handle(IPC.signInWithGh, () => wrap(async () => start('gh', await readGhToken(), true)))
+  ipcMain.handle(IPC.signInWithGh, () =>
+    wrap(async () => {
+      await managed
+      return start('gh', await readGhToken(), true)
+    })
+  )
 
   // One browser login at a time. A second request (button pressed again, or the
   // renderer reloaded mid-login) joins the pending one and gets the same code.
@@ -90,6 +98,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
 
   ipcMain.handle(IPC.ghWebLogin, (event) =>
     wrap(async () => {
+      await managed
       if (!pending) {
         const listeners = new Set<Electron.WebContents>()
         const login = ghWebLogin((prompt) => {
@@ -112,6 +121,20 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     })
   )
   ipcMain.handle(IPC.cancelGhWebLogin, () => pending?.cancel())
+
+  ipcMain.handle(IPC.installGh, (event) =>
+    wrap(async () => {
+      try {
+        const info = await installGh(options.toolsDir, electronFetch, (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send(IPC.installProgress, progress)
+        })
+        setManagedGh(info.path)
+        return { version: info.version }
+      } catch (err) {
+        throw new AuthError('ghInstallFailed', err instanceof Error ? err.message : String(err))
+      }
+    })
+  )
   // Never leave a gh process waiting in the background after the app quits.
   app.on('before-quit', () => pending?.cancel())
   ipcMain.handle(IPC.signOut, () =>

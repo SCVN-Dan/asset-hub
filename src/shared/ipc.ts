@@ -11,6 +11,8 @@ export const IPC = {
   ghWebLogin: 'auth:gh-web-login',
   cancelGhWebLogin: 'auth:gh-web-login-cancel',
   ghLoginPrompt: 'auth:gh-login-prompt',
+  installGh: 'tools:install-gh',
+  installProgress: 'tools:install-progress',
   signOut: 'auth:sign-out',
   listRepos: 'source:list-repos',
   listBranches: 'source:list-branches',
@@ -19,7 +21,9 @@ export const IPC = {
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
-export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken'
+export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed'
+
+export type InstallProgress = { stage: 'download'; received: number; total: number } | { stage: 'verify' } | { stage: 'extract' }
 
 export interface IpcError {
   code: AppErrorCode
@@ -59,6 +63,11 @@ export interface AssetHubApi {
     /** Fires with the one-time code while ghWebLogin waits; returns an unsubscribe function. */
     onGhLoginPrompt(listener: (prompt: { code: string; url: string }) => void): () => void
     signOut(): Promise<IpcResult<AuthStatus>>
+  }
+  tools: {
+    /** Downloads and verifies GitHub CLI into the app's own folder. */
+    installGh(): Promise<IpcResult<{ version: string }>>
+    onInstallProgress(listener: (progress: InstallProgress) => void): () => void
   }
   source: {
     listRepos(): Promise<IpcResult<RepoRef[]>>

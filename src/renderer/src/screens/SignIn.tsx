@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Language } from '@shared/settings'
+import type { InstallProgress } from '@shared/ipc'
 import { ErrorNote } from '../components/ErrorNote'
+import { RemoteError, unwrap } from '../remoteSource'
 import { CubeIcon, GithubIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 
@@ -13,7 +15,7 @@ interface Props {
   onDemo(): void
 }
 
-type Busy = 'pat' | 'gh' | undefined
+type Busy = 'pat' | 'gh' | 'install' | undefined
 
 export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
   const { t } = useTranslation()
@@ -23,7 +25,21 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
   const [ghPrompt, setGhPrompt] = useState<{ code: string; url: string }>()
   const cancelled = useRef(false)
 
+  const [progress, setProgress] = useState<InstallProgress>()
+
   useEffect(() => window.api.auth.onGhLoginPrompt(setGhPrompt), [])
+  useEffect(() => window.api.tools.onInstallProgress(setProgress), [])
+
+  const ghMissing = error instanceof RemoteError && error.error.code === 'ghNotFound'
+
+  /** Installs gh into the app folder, then continues straight into the gh sign-in. */
+  const installThenSignIn = () =>
+    run('install', async () => {
+      unwrap(await window.api.tools.installGh())
+      setProgress(undefined)
+      setBusy('gh')
+      await onGh()
+    })
 
   const run = async (kind: Exclude<Busy, undefined>, action: () => Promise<void>) => {
     setBusy(kind)
@@ -36,6 +52,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
     } finally {
       setBusy(undefined)
       setGhPrompt(undefined)
+      setProgress(undefined)
     }
   }
 
@@ -132,7 +149,31 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
             <span className="muted small">{t('signin.patScope')}</span>
           </form>
 
-          {error !== undefined && <ErrorNote error={error} />}
+          {busy === 'install' && (
+            <div className="device-code" role="status">
+              <strong>{t('signin.installing')}</strong>
+              <progress
+                className="progress"
+                max={progress?.stage === 'download' && progress.total ? progress.total : undefined}
+                value={progress?.stage === 'download' && progress.total ? progress.received : undefined}
+              />
+              <span className="muted small">{progress ? t(`signin.installStage.${progress.stage}`) : t('signin.installStage.start')}</span>
+            </div>
+          )}
+
+          {ghMissing && busy === undefined ? (
+            <div className="device-code">
+              <strong>{t('signin.ghMissingTitle')}</strong>
+              <span className="small" style={{ color: 'var(--text-2)' }}>
+                {t('signin.ghMissingBody')}
+              </span>
+              <button type="button" className="btn btn-primary" onClick={() => void installThenSignIn()}>
+                {t('signin.installGh')}
+              </button>
+            </div>
+          ) : (
+            error !== undefined && <ErrorNote error={error} />
+          )}
         </div>
 
         <p className="muted small center" style={{ margin: 0 }}>

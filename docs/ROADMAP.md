@@ -83,6 +83,9 @@ Mục tiêu: đăng nhập, chọn repo/branch, **thấy toàn bộ FBX của br
 | Lọc FBX qua `FbxHandler.match`, đổ vào cây thư mục + grid, search theo tên | ✅ |
 | Index SQLite — dời: cache JSON theo commit đủ cho 1 repo; SQLite khi tìm nhiều repo (Phase 7) | ⏳ |
 | Spike trên repo thật (qua bản clone local, chỉ đọc) → kết quả ở PLAN §11 | ✅ |
+| Picker repo/branch có nhóm (theo tổ chức / tiền tố branch), nhớ repo + branch lần trước | ✅ |
+| **Không cần Terminal**: app tự cài GitHub CLI chính thức (kiểm SHA-256) vào thư mục app nếu máy chưa có; hướng dẫn 4 bước trong khung mã | ✅ |
+| Đọc mã đăng nhập cho mọi phiên bản gh (2.103 đổi câu chữ) + watchdog 20 s | ✅ |
 
 ## Phase 3 — Preview FBX + dependency + thông số (Mốc A)
 Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách dependency, thông số. **Xong phase này là đạt mục đích chính của tool.**
@@ -94,6 +97,7 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 | `FbxHandler.resolveDependencies`: kiểu A (GUID) + kiểu B (tìm texture theo tên) | ⏳ |
 | Tải on-demand FBX + texture: `git lfs pull --include` | ⏳ |
 | Preview three.js (`PreviewProvider` kind `three`) + gán texture từ dependency | ⏳ |
+| Điều khiển xem: kéo xoay (orbit), cuộn zoom, pan; góc nhìn có sẵn (trước/bên/trên); tự xoay; wireframe; reset góc nhìn | ⏳ |
 | Thumbnail grid + cache theo hash | ⏳ |
 | #3 Preview animation clip trong FBX | ⏳ |
 | #1 Thông số asset + cảnh báo dung lượng playable (`AssetCheck`) | ⏳ |
@@ -183,6 +187,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | Sửa: nhớ branch (do app dev chạy main process cũ — `npm run dev` giờ dùng `--watch`); app tự cài gh, không cần Terminal; tương thích câu chữ mới của gh 2.103. |
 | 2026-10-27 | **Phase 2 xong**: test end-to-end với tài khoản thật trên `hb_creative_xp_hero @ vn/net-catch` — 747 FBX, cache hoạt động. Thêm đăng nhập gh qua trình duyệt ngay trong app. |
 | 2026-10-27 | **Phase 2 code xong**: đăng nhập gh/PAT, list repo/branch, Trees API + LFS + fallback git, dò Unity root, thư mục loại trừ. 26 unit test + smoke test qua. Spike repo thật → PLAN §11. Còn: test end-to-end với tài khoản thật. |
 | 2026-10-27 | **Phase 1 xong**: app Electron chạy với dữ liệu mẫu (Sign in, Browse, Settings, EN/VI). Typecheck, 11 unit test, smoke test đều qua. |

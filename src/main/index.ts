@@ -57,7 +57,7 @@ app.whenReady().then(() => {
     if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url)
   })
 
-  registerGitHubIpc({ authFile: join(userData, 'auth.json'), cacheDir: () => settings.get().cacheDir })
+  registerGitHubIpc({ authFile: join(userData, 'auth.json'), cacheDir: () => settings.get().cacheDir, toolsDir: join(userData, 'tools') })
 
   createWindow()
 

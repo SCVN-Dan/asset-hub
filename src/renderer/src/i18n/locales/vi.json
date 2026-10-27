@@ -32,7 +32,17 @@
     "step1": "Bấm “Mở GitHub”. Nên dùng trình duyệt bạn đã đăng nhập GitHub sẵn.",
     "step2": "Dán mã (⌘V / Ctrl+V), bấm Continue rồi Authorize.",
     "step3": "Nếu GitHub gửi mã xác minh qua email, mở email đó và nhập mã trên GitHub. Chỉ cần làm một lần cho mỗi trình duyệt.",
-    "step4": "Quay lại đây — app tự tiếp tục. Không cần terminal hay SSH key."
+    "step4": "Quay lại đây — app tự tiếp tục. Không cần terminal hay SSH key.",
+    "ghMissingTitle": "Máy này chưa có GitHub CLI",
+    "ghMissingBody": "Asset Hub có thể tải GitHub CLI chính thức (khoảng 15 MB) vào thư mục riêng của app. Không cần quyền admin hay Terminal.",
+    "installGh": "Cài tự động",
+    "installing": "Đang cài GitHub CLI…",
+    "installStage": {
+      "start": "Đang kết nối GitHub…",
+      "download": "Đang tải…",
+      "verify": "Đang kiểm tra file tải về…",
+      "extract": "Đang giải nén…"
+    }
   },
   "browse": {
     "demoBanner": "Dữ liệu mẫu — chưa kết nối GitHub.",
@@ -97,11 +107,12 @@
     "rateLimited": "Đã chạm giới hạn request của GitHub. Thử lại sau {{time}}.",
     "network": "Không kết nối được GitHub. Kiểm tra mạng hoặc VPN.",
     "truncated": "Repo quá lớn để liệt kê qua API.",
-    "ghNotFound": "Chưa cài GitHub CLI (gh). Cài bằng brew install gh hoặc dùng token.",
+    "ghNotFound": "Chưa cài GitHub CLI (gh).",
     "ghNotLoggedIn": "gh chưa đăng nhập. Chạy gh auth login trước.",
     "emptyToken": "Hãy nhập token.",
     "unknown": "Đã có lỗi xảy ra.",
-    "openSso": "Mở trang SSO authorization"
+    "openSso": "Mở trang SSO authorization",
+    "ghInstallFailed": "Không cài được GitHub CLI tự động. Kiểm tra mạng, hoặc đăng nhập bằng token bên dưới."
   },
   "picker": {
     "search": "Tìm {{label}}…",

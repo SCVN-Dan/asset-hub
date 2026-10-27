@@ -3,12 +3,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { delimiter, dirname, join } from 'path'
 import { safeStorage } from 'electron'
+import { parseGhLoginPrompt, type GhLoginPrompt } from './ghPrompt'
 import type { AuthMethod } from '@shared/ipc'
 
 /** Errors specific to obtaining a token (as opposed to calling GitHub). */
 export class AuthError extends Error {
   constructor(
-    readonly code: 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken',
+    readonly code: 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed',
     message: string
   ) {
     super(message)
@@ -57,8 +58,14 @@ export class AuthStore {
   }
 }
 
+/** gh that the app downloaded itself (see ghInstaller); used when no system gh exists. */
+let managedGh: string | undefined
+export function setManagedGh(path: string | undefined): void {
+  managedGh = path
+}
+
 /** Apps launched from Finder get a minimal PATH, so also look where gh is usually installed. */
-function findGh(): string | undefined {
+export function findGh(): string | undefined {
   const dirs = [
     ...(process.env.PATH ?? '').split(delimiter),
     join(homedir(), '.local/bin'),
@@ -68,12 +75,7 @@ function findGh(): string | undefined {
   ]
   const names = process.platform === 'win32' ? ['gh.exe'] : ['gh']
   for (const dir of dirs) for (const name of names) if (dir && existsSync(join(dir, name))) return join(dir, name)
-  return undefined
-}
-
-export interface GhLoginPrompt {
-  code: string
-  url: string
+  return managedGh && existsSync(managedGh) ? managedGh : undefined
 }
 
 /**
@@ -81,6 +83,8 @@ export interface GhLoginPrompt {
  * the device URL, then waits until the user approves in the browser. This uses
  * GitHub CLI's own OAuth app, so no organisation GitHub App is needed.
  */
+export type { GhLoginPrompt }
+
 export function ghWebLogin(onPrompt: (prompt: GhLoginPrompt) => void): { done: Promise<void>; cancel(): void } {
   const gh = findGh()
   if (!gh) return { done: Promise.reject(new AuthError('ghNotFound', 'GitHub CLI (gh) was not found')), cancel: () => {} }
@@ -93,20 +97,29 @@ export function ghWebLogin(onPrompt: (prompt: GhLoginPrompt) => void): { done: P
   let prompted = false
   const onData = (chunk: Buffer) => {
     output += chunk.toString()
-    const code = /one-time code: ([A-Z0-9]{4}-[A-Z0-9]{4})/.exec(output)?.[1]
-    const url = /(https:\/\/github\.com\/login\/device\S*)/.exec(output)?.[1]
-    if (!prompted && code && url) {
+    const prompt = prompted ? undefined : parseGhLoginPrompt(output)
+    if (prompt) {
       prompted = true
-      onPrompt({ code, url })
+      onPrompt(prompt)
     }
   }
   child.stdout.on('data', onData)
   child.stderr.on('data', onData)
+  let stalled = false
+  // If gh changes its wording again, fail visibly instead of waiting forever.
+  const watchdog = setTimeout(() => {
+    if (prompted) return
+    stalled = true
+    child.kill()
+  }, 20_000)
   const done = new Promise<void>((resolve, reject) => {
     child.on('error', (err) => reject(new AuthError('ghNotLoggedIn', err.message)))
-    child.on('close', (code) =>
-      code === 0 ? resolve() : reject(new AuthError('ghNotLoggedIn', output.trim().split('\n').pop() || `gh exited with ${code}`))
-    )
+    child.on('close', (code) => {
+      clearTimeout(watchdog)
+      if (code === 0) resolve()
+      else if (stalled) reject(new AuthError('ghNotLoggedIn', `No sign-in code from gh. Output: ${output.trim() || '(none)'}`))
+      else reject(new AuthError('ghNotLoggedIn', output.trim().split('\n').pop() || `gh exited with ${code}`))
+    })
   })
   return { done, cancel: () => child.kill() }
 }
