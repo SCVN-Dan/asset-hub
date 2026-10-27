@@ -1,9 +1,11 @@
-import { app, clipboard, ipcMain, net } from 'electron'
+import { join } from 'path'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell } from 'electron'
 import { createDefaultRegistry, SourceError } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
-import { IPC, type AuthMethod, type AuthStatus, type IpcError, type IpcResult } from '@shared/ipc'
+import { IPC, type AuthMethod, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
 import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
+import { exportUnityPackage } from './exporter'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { listTreeWithGit } from './gitTree'
 import { FileBlobCache, FileCommitCache, ThumbnailStore } from './caches'
@@ -166,6 +168,39 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       requireSession().findByNames(String(repo), String(branch), Array.isArray(names) ? names.map(String) : [], String(nearPath), String(root))
     )
   )
+  ipcMain.handle(IPC.exportPackage, (event, raw: ExportRequest) =>
+    wrap(async () => {
+      const src = requireSession()
+      const req: ExportRequest = {
+        repo: String(raw.repo),
+        branch: String(raw.branch),
+        root: String(raw.root),
+        paths: Array.isArray(raw.paths) ? raw.paths.map(String) : [],
+        layout: raw.layout === 'grouped' ? 'grouped' : 'source',
+        skipByName: raw.skipByName === true,
+        previews: Object.fromEntries(
+          Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
+        ),
+        suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_')
+      }
+      if (!req.paths.length) return { canceled: true }
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const options = {
+        title: 'Export .unitypackage',
+        defaultPath: join(app.getPath('downloads'), `${req.suggestedName}.unitypackage`),
+        filters: [{ name: 'Unity Package', extensions: ['unitypackage'] }]
+      }
+      const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+      if (choice.canceled || !choice.filePath) return { canceled: true }
+      const result = await exportUnityPackage(src, req, choice.filePath, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.exportProgress, progress)
+      })
+      return { canceled: false, ...result }
+    })
+  )
+  ipcMain.handle(IPC.showItemInFolder, (_e, path: unknown) => {
+    if (typeof path === 'string' && path.endsWith('.unitypackage')) shell.showItemInFolder(path)
+  })
   ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 5000) : []))
   ipcMain.handle(IPC.saveThumb, (_e, key: unknown, dataUrl: unknown) =>
     typeof key === 'string' && typeof dataUrl === 'string' ? thumbs.save(key, dataUrl) : undefined

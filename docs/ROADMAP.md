@@ -22,7 +22,7 @@
 | **A · Asset Browser** | 1 | App shell + UI (dữ liệu giả) | ~1 tuần | ✅ |
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
-| **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | ⏳ tiếp theo |
+| **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ⏳ |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
 | C | 6 | ~~Render pipeline & Shader Mapping~~ — gộp vào Phase 5 | — | — |
@@ -114,14 +114,15 @@ Mục tiêu: app **chỉ xuất `.unitypackage`**; import làm trong Unity (Asse
 
 | Việc | State |
 |---|---|
-| Writer `.unitypackage` (tar.gz: `<guid>/asset`, `asset.meta`, `pathname`, `preview.png`), không cần Unity | ⏳ |
-| `pathname`: mặc định giữ đường dẫn như project nguồn; tuỳ chọn gom dưới `Assets/AssetHub/<repo>/` | ⏳ |
-| Xuất 1 asset hoặc nhiều asset đã chọn — gộp dependency, mỗi GUID một bản | ⏳ |
-| Thumbnail đã render làm `preview.png` | ⏳ |
-| Tóm tắt trước khi xuất: số file, dung lượng, cảnh báo (thiếu material/texture, texture ghép theo tên, shader custom, vượt ngân sách) | ⏳ |
-| Tuỳ chọn bỏ texture ghép theo tên khỏi gói | ⏳ |
-| Chọn nơi lưu, mở thư mục sau khi xuất | ⏳ |
-| Test: mở package trong Unity, GUID + tham chiếu material/texture giữ nguyên | ⏳ |
+| Writer `.unitypackage` (tar.gz: `<guid>/asset`, `asset.meta`, `pathname`, `preview.png`), không cần Unity | ✅ |
+| `pathname`: mặc định giữ đường dẫn như project nguồn; tuỳ chọn gom dưới `Assets/AssetHub/<repo>/` | ✅ |
+| Xuất 1 asset hoặc nhiều asset (gói) — gộp dependency, mỗi GUID một bản | ✅ |
+| Thumbnail đã render làm `preview.png` (PNG 128×128) | ✅ |
+| Tóm tắt trước khi xuất: số file, dung lượng, thiếu, ghép theo tên | ✅ |
+| Tuỳ chọn bỏ texture ghép theo tên khỏi gói | ✅ |
+| Chọn nơi lưu, mở thư mục sau khi xuất; báo file bị bỏ (thiếu `.meta` / trùng GUID) | ✅ |
+| Test gói: GUID khớp `.meta`, `pathname` đúng, texture của `.mat` có trong gói (kiểm tra bằng `tar`) | ✅ |
+| Test import trong Unity (Assets › Import Package › Custom Package) | ⏳ chờ user |
 | #10 Deep link `assethub://` + nút Copy link | ⏳ |
 | ~~Copy thẳng vào project, màn review import, lịch sử / undo import (#5)~~ — bỏ: import làm trong Unity | — |
 
@@ -196,6 +197,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | **Phase 4 (phần app) xong**: xuất `.unitypackage` 1 model hoặc cả gói, preview PNG, 2 layout đường dẫn, bỏ texture theo tên. Test gói Short_Wood + Snow_Tree: 5 asset, GUID/pathname/tham chiếu đúng. Còn: test import trong Unity, deep link. |
 | 2026-10-27 | **Không import trong app**: Phase 4 chỉ còn xuất `.unitypackage`; bỏ copy vào project, review import, lịch sử/undo; Phase 5 + 6 gộp thành phase tuỳ chọn (so với project đích chỉ đọc, chỉnh `.mat` khi xuất); Companion tạm hoãn. |
 | 2026-10-27 | Thêm xuất `.unitypackage` vào Phase 4 (ưu tiên), thêm Phase 4.5 tìm asset mọi branch / mọi repo; chỉ mục dùng chung + tìm bằng hình vào Phase 7; particle xuất bằng `.unitypackage`. |
 | 2026-10-27 | **Phase 3 xong** — Mốc A đạt: xem FBX 3D (xoay/zoom/pan, góc nhìn, wireframe, animation), dependency kiểu A/B, thông số + ngân sách playable, thumbnail. Test trên Short_Wood (A), LogPlatform (thiếu material), Snow_Tree (B), TF_Player_Throw (animation). |

@@ -169,6 +169,20 @@ button { cursor: pointer; }
 .dot-info { background: #6aa8ff; }
 .dot-warn { background: var(--warn); }
 
+/* ---------- export ---------- */
+.export-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border-radius: 10px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+.export-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.export-items { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.export-items li { display: flex; align-items: center; gap: 4px; max-width: 240px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--panel-2); font-size: 12px; }
+.export-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.export-status { display: flex; flex-direction: column; gap: 6px; }
+.export-status.done { color: #a8ecc9; }
+.check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.link-btn { width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; }
+.link-btn:hover { background: var(--border); color: var(--text); }
+.badge-warn { background: var(--warn-bg); color: #f7d9a0; }
+
 /* ---------- settings ---------- */
 .settings { max-width: 720px; width: 100%; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
 .settings-head { display: flex; align-items: center; gap: 16px; }

@@ -13,6 +13,12 @@ interface Props {
   /** Repo context; absent with sample data, where nothing can be downloaded. */
   live?: LiveContext
   onThumb(key: string, dataUrl: string): void
+  /** Called once dependencies are known, so the pack can show sizes and warnings. */
+  onReport(path: string, report: DependencyReport): void
+  inPack: boolean
+  exporting: boolean
+  onTogglePack(): void
+  onExport(): void
 }
 
 type Deps = { status: 'idle' } | { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; report: DependencyReport }
@@ -37,7 +43,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
@@ -61,7 +67,9 @@ export function AssetDetails({ asset, handler, live, onThumb }: Props) {
       (result) => {
         if (cancelled) return
         try {
-          setDeps({ status: 'ready', report: unwrap(result) })
+          const report = unwrap(result)
+          setDeps({ status: 'ready', report })
+          onReport(repoPath, report)
         } catch (error) {
           setDeps({ status: 'error', error })
         }
@@ -110,6 +118,16 @@ export function AssetDetails({ asset, handler, live, onThumb }: Props) {
           {report && <span className="badge">{t(`deps.kind.${report.kind}`)}</span>}
           {asset.lfs && <span className="badge">LFS</span>}
         </div>
+        {live && handler?.resolveDependencies && (
+          <div className="field-row">
+            <button type="button" className="btn btn-primary" onClick={onExport} disabled={exporting}>
+              {t('export.exportOne')}
+            </button>
+            <button type="button" className="btn" aria-pressed={inPack} onClick={onTogglePack} disabled={exporting}>
+              {inPack ? t('export.inPack') : t('export.addToPack')}
+            </button>
+          </div>
+        )}
       </div>
 
       {stats && (

@@ -23,13 +23,41 @@ export const IPC = {
   findByNames: 'assets:find-by-names',
   indexProgress: 'assets:index-progress',
   getThumbs: 'thumbs:get',
-  saveThumb: 'thumbs:save'
+  saveThumb: 'thumbs:save',
+  exportPackage: 'export:unitypackage',
+  exportProgress: 'export:progress',
+  showItemInFolder: 'shell:show-item'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
 export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed'
 
 export type InstallProgress = { stage: 'download'; received: number; total: number } | { stage: 'verify' } | { stage: 'extract' }
+
+export interface ExportRequest {
+  repo: string
+  branch: string
+  root: string
+  /** Repo paths of the models to export; their dependencies are added automatically. */
+  paths: string[]
+  layout: 'source' | 'grouped'
+  /** Leave out textures that were only matched by file name. */
+  skipByName: boolean
+  /** PNG previews keyed by repo path. */
+  previews: Record<string, Uint8Array>
+  /** Default file name in the save dialog. */
+  suggestedName: string
+}
+
+export interface ExportResult {
+  canceled: boolean
+  path?: string
+  assets?: number
+  bytes?: number
+  skipped?: Array<{ path: string; reason: 'noMeta' | 'noGuid' | 'duplicateGuid' }>
+}
+
+export type ExportProgress = { stage: 'resolve' | 'download' | 'write'; done: number; total: number }
 
 export interface IpcError {
   code: AppErrorCode
@@ -91,5 +119,11 @@ export interface AssetHubApi {
   thumbs: {
     get(keys: string[]): Promise<Record<string, string>>
     save(key: string, dataUrl: string): Promise<void>
+  }
+  exporter: {
+    /** Asks where to save, then builds the .unitypackage. */
+    unityPackage(request: ExportRequest): Promise<IpcResult<ExportResult>>
+    onProgress(listener: (progress: ExportProgress) => void): () => void
+    showInFolder(path: string): Promise<void>
   }
 }

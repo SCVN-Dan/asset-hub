@@ -45,6 +45,15 @@ const api: AssetHubApi = {
   thumbs: {
     get: (keys) => ipcRenderer.invoke(IPC.getThumbs, keys),
     save: (key, dataUrl) => ipcRenderer.invoke(IPC.saveThumb, key, dataUrl)
+  },
+  exporter: {
+    unityPackage: (request) => ipcRenderer.invoke(IPC.exportPackage, request),
+    onProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
+      ipcRenderer.on(IPC.exportProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.exportProgress, handler)
+    },
+    showInFolder: (path) => ipcRenderer.invoke(IPC.showItemInFolder, path)
   }
 }
 

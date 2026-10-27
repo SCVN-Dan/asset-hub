@@ -179,5 +179,34 @@
       "noMeta": "FBX này không có file .meta nên không rõ import settings và GUID.",
       "noMaterials": "FBX này tắt import material."
     }
+  },
+  "export": {
+    "title": "Xuất",
+    "exportOne": "Xuất .unitypackage",
+    "addToPack": "Thêm vào gói",
+    "inPack": "Đã trong gói ✓",
+    "pack_other": "Gói: {{count}} model",
+    "summary": "{{files}} file · ~{{size}}",
+    "resolving": "đang tìm dependency…",
+    "missing_other": "thiếu {{count}}",
+    "byName_other": "{{count}} texture theo tên",
+    "remove": "Bỏ {{name}} khỏi gói",
+    "layout": "Đường dẫn trong Unity",
+    "layoutSource": "Giữ như project nguồn",
+    "layoutGrouped": "Gom dưới Assets/AssetHub/<repo>/",
+    "skipByName": "Bỏ texture ghép theo tên",
+    "clear": "Xoá gói",
+    "export_other": "Xuất {{count}} model thành .unitypackage",
+    "exporting": "Đang xuất…",
+    "choosing": "Chọn nơi lưu…",
+    "stage": {
+      "resolve": "Đang tìm dependency {{done}} / {{total}}…",
+      "download": "Đang tải file {{done}} / {{total}}…",
+      "write": "Đang ghi gói…"
+    },
+    "done_other": "Đã xuất {{count}} asset ({{size}}):",
+    "skipped_other": "Bỏ qua {{count}} file (thiếu .meta hoặc trùng GUID): {{list}}",
+    "showInFolder": "Mở trong Finder",
+    "dismiss": "Đóng"
   }
 }

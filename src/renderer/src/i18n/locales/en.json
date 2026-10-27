@@ -183,5 +183,40 @@
       "noMeta": "This FBX has no .meta file, so its import settings and GUID are unknown.",
       "noMaterials": "Material import is turned off for this FBX."
     }
+  },
+  "export": {
+    "title": "Export",
+    "exportOne": "Export .unitypackage",
+    "addToPack": "Add to pack",
+    "inPack": "In pack ✓",
+    "pack_one": "Pack: {{count}} model",
+    "pack_other": "Pack: {{count}} models",
+    "summary": "{{files}} files · ~{{size}}",
+    "resolving": "resolving…",
+    "missing_one": "{{count}} missing",
+    "missing_other": "{{count}} missing",
+    "byName_one": "{{count}} texture by name",
+    "byName_other": "{{count}} textures by name",
+    "remove": "Remove {{name}} from the pack",
+    "layout": "Paths in Unity",
+    "layoutSource": "Same as source project",
+    "layoutGrouped": "Under Assets/AssetHub/<repo>/",
+    "skipByName": "Leave out textures matched by name",
+    "clear": "Clear",
+    "export_one": "Export .unitypackage",
+    "export_other": "Export {{count}} models as .unitypackage",
+    "exporting": "Exporting…",
+    "choosing": "Choose where to save…",
+    "stage": {
+      "resolve": "Resolving dependencies {{done}} / {{total}}…",
+      "download": "Downloading files {{done}} / {{total}}…",
+      "write": "Writing package…"
+    },
+    "done_one": "Exported {{count}} asset ({{size}}):",
+    "done_other": "Exported {{count}} assets ({{size}}):",
+    "skipped_one": "{{count}} file left out (no .meta or duplicate GUID): {{list}}",
+    "skipped_other": "{{count}} files left out (no .meta or duplicate GUID): {{list}}",
+    "showInFolder": "Show in Finder",
+    "dismiss": "Close"
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   buildFolderTree,
@@ -6,7 +6,9 @@ import {
   isInExcludedFolder,
   isInFolder,
   projectEntries,
+  type Asset,
   type AssetSource,
+  type DependencyReport,
   type HandlerRegistry,
   type RepoRef,
   type TreeEntry
@@ -14,6 +16,8 @@ import {
 import type { Language } from '@shared/settings'
 import { AssetCard } from '../components/AssetCard'
 import { AssetDetails } from '../components/AssetDetails'
+import { ExportBar, type ExportOptions, type ExportState, type PackItem } from '../components/ExportBar'
+import { unwrap } from '../remoteSource'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
@@ -36,6 +40,23 @@ interface Props {
 }
 
 const ALL = 'all'
+
+/** PNG preview for Unity's import dialog, from a cached thumbnail data URL. */
+async function thumbToPng(dataUrl: string, size = 128): Promise<Uint8Array | undefined> {
+  try {
+    const img = new Image()
+    img.src = dataUrl
+    await img.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = size
+    const scale = Math.max(size / img.width, size / img.height)
+    canvas.getContext('2d')!.drawImage(img, (size - img.width * scale) / 2, (size - img.height * scale) / 2, img.width * scale, img.height * scale)
+    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'))
+    return blob ? new Uint8Array(await blob.arrayBuffer()) : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /** 'owner/repo' → 'owner/' */
 const ownerPrefix = (fullName: string) => fullName.slice(0, fullName.indexOf('/') + 1)
@@ -69,6 +90,20 @@ export function Browse({
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string>()
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const [pack, setPack] = useState<PackItem[]>([])
+  const [exportOptions, setExportOptions] = useState<ExportOptions>({ layout: 'source', skipByName: false })
+  const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
+  const reports = useRef(new Map<string, DependencyReport>())
+
+  useEffect(
+    () => window.api.exporter.onProgress((progress) => setExportState((s) => (s.status === 'running' ? { status: 'running', progress } : s))),
+    []
+  )
+  // A pack belongs to one repo + branch.
+  useEffect(() => {
+    setPack([])
+    reports.current.clear()
+  }, [repo, branch])
 
   useEffect(() => {
     let cancelled = false
@@ -161,6 +196,32 @@ export function Browse({
       cancelled = true
     }
   }, [source, allAssets])
+
+  const runExport = async (items: PackItem[]) => {
+    if (!live || !items.length) return
+    setExportState({ status: 'running' })
+    const previews: Record<string, Uint8Array> = {}
+    for (const item of items) {
+      const thumb = thumbs[item.asset.sha]
+      const png = thumb ? await thumbToPng(thumb) : undefined
+      if (png) previews[item.path] = png
+    }
+    const suggestedName = items.length === 1 ? items[0].asset.name.replace(/\.[^.]+$/, '') : `${live.repo.split('/').pop()}-${items.length}-assets`
+    try {
+      const result = unwrap(await window.api.exporter.unityPackage({ ...live, paths: items.map((i) => i.path), ...exportOptions, previews, suggestedName }))
+      setExportState(result.canceled ? { status: 'idle' } : { status: 'done', result })
+    } catch (error) {
+      setExportState({ status: 'error', error })
+    }
+  }
+
+  const packItem = (asset: Asset): PackItem => ({ asset, path: root + asset.path, report: reports.current.get(root + asset.path) })
+  const togglePack = (asset: Asset) =>
+    setPack((items) => (items.some((i) => i.asset.id === asset.id) ? items.filter((i) => i.asset.id !== asset.id) : [...items, packItem(asset)]))
+  const rememberReport = (path: string, report: DependencyReport) => {
+    reports.current.set(path, report)
+    setPack((items) => items.map((i) => (i.path === path ? { ...i, report } : i)))
+  }
 
   const saveThumb = (key: string, dataUrl: string) => {
     setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
@@ -285,6 +346,18 @@ export function Browse({
           {tree.status === 'loading' && repo && <p className="empty">{t('browse.loading')}</p>}
           {tree.status === 'error' && <ErrorNote error={tree.error} />}
           {tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
+          {(pack.length > 0 || exportState.status !== 'idle') && (
+            <ExportBar
+              items={pack}
+              options={exportOptions}
+              state={exportState}
+              onOptions={setExportOptions}
+              onExport={() => void runExport(pack)}
+              onRemove={(path) => setPack((items) => items.filter((i) => i.path !== path))}
+              onClear={() => setPack([])}
+              onDismiss={() => setExportState({ status: 'idle' })}
+            />
+          )}
           {tree.status === 'ready' && visible.length > 0 && (
             <div className="grid">
               {visible.map((a) => (
@@ -301,7 +374,17 @@ export function Browse({
           )}
         </main>
 
-        <AssetDetails asset={selected} handler={selected && registry.get(selected.type)} live={live} onThumb={saveThumb} />
+        <AssetDetails
+          asset={selected}
+          handler={selected && registry.get(selected.type)}
+          live={live}
+          onThumb={saveThumb}
+          onReport={rememberReport}
+          inPack={!!selected && pack.some((i) => i.asset.id === selected.id)}
+          exporting={exportState.status === 'running'}
+          onTogglePack={() => selected && togglePack(selected)}
+          onExport={() => selected && void runExport([packItem(selected)])}
+        />
       </div>
     </div>
   )
