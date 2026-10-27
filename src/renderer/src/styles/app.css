@@ -40,6 +40,7 @@ button { cursor: pointer; }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:disabled:hover { background: transparent; }
 .device-code { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border-radius: 10px; background: var(--bg); border: 1px solid var(--accent); }
+.steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--text-2); }
 .device-code-value { font-size: 28px; letter-spacing: 0.12em; user-select: all; }
 .error-note { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border-radius: var(--radius); background: #2a1616; border: 1px solid #6b2a2a; color: #f6c4c4; font-size: 13px; word-break: break-word; }
 .input, .select { height: 40px; padding: 0 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }

@@ -95,6 +95,12 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
                   {t('signin.cancel')}
                 </button>
               </div>
+              <ol className="steps">
+                <li>{t('signin.step1')}</li>
+                <li>{t('signin.step2')}</li>
+                <li>{t('signin.step3')}</li>
+                <li>{t('signin.step4')}</li>
+              </ol>
               <span className="muted small">{t('signin.ghWaiting')}</span>
             </div>
           )}

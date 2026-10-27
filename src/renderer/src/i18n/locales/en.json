@@ -28,7 +28,11 @@
     "ghCopied": "Code copied to the clipboard — paste it on GitHub.",
     "ghWaiting": "Waiting for you to approve in the browser…",
     "cancel": "Cancel",
-    "ghOpen": "Open GitHub"
+    "ghOpen": "Open GitHub",
+    "step1": "Click “Open GitHub”. Use the browser where you are already signed in to GitHub if you can.",
+    "step2": "Paste the code (⌘V / Ctrl+V) and click Continue, then Authorize.",
+    "step3": "If GitHub emails you a verification code, open that email and enter the code on GitHub. This happens once per browser.",
+    "step4": "Come back here — the app continues by itself. No terminal or SSH key needed."
   },
   "browse": {
     "demoBanner": "Sample data — not connected to GitHub.",

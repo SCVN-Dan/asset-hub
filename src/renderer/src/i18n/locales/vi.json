@@ -28,7 +28,11 @@
     "ghCopied": "Mã đã được copy vào clipboard — dán vào trang GitHub.",
     "ghWaiting": "Đang chờ bạn xác nhận trên trình duyệt…",
     "cancel": "Huỷ",
-    "ghOpen": "Mở GitHub"
+    "ghOpen": "Mở GitHub",
+    "step1": "Bấm “Mở GitHub”. Nên dùng trình duyệt bạn đã đăng nhập GitHub sẵn.",
+    "step2": "Dán mã (⌘V / Ctrl+V), bấm Continue rồi Authorize.",
+    "step3": "Nếu GitHub gửi mã xác minh qua email, mở email đó và nhập mã trên GitHub. Chỉ cần làm một lần cho mỗi trình duyệt.",
+    "step4": "Quay lại đây — app tự tiếp tục. Không cần terminal hay SSH key."
   },
   "browse": {
     "demoBanner": "Dữ liệu mẫu — chưa kết nối GitHub.",
