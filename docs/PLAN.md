@@ -208,6 +208,30 @@ Màn Review hiện mỗi material: `Shader: URP/Lit → Project/Character (mappi
 
 ---
 
+## 6c. Xuất `.unitypackage` (chốt 2026-10-27)
+
+`.unitypackage` là file **tar.gz**; mỗi asset là một thư mục đặt theo GUID:
+
+```
+<guid>/asset        ← nội dung file (FBX, .mat, .png…)
+<guid>/asset.meta   ← .meta gốc → GUID giữ nguyên
+<guid>/pathname     ← đường dẫn đích, vd. "Assets/AssetHub/xp_hero/Knight.fbx"
+<guid>/preview.png  ← tuỳ chọn: thumbnail trong hộp thoại import của Unity
+```
+
+App tự tạo, không cần Unity: danh sách file lấy từ dependency report (`files`), `.meta` từ repo, thumbnail từ cache.
+
+| Ưu điểm | Lưu ý |
+|---|---|
+| Import bằng hộp thoại sẵn có của Unity, người dùng tự chọn file | Asset cùng GUID đã có trong project sẽ bị Unity **ghi đè** — app vẫn cần kiểm tra trùng trước (Phase 5) |
+| Không cần biết đường dẫn project đích, gửi được cho người khác | Chuyển pipeline / Shader Mapping vẫn cần chạy trong Unity (Companion) |
+| Phase 9 dùng lại nguyên cho particle prefab — chỉ thêm file dependency | |
+| `pathname` ghi theo Import Profile (mirror / per-asset / by-type) | |
+
+Phase 4 có hai lựa chọn: **"Xuất .unitypackage"** (làm trước) và "Copy thẳng vào project".
+
+---
+
 ## 7. Rủi ro & vấn đề cần lường
 
 | Vấn đề | Mức | Hướng xử lý |
@@ -321,6 +345,28 @@ interface PreviewProvider {
 - `ParticlePrefabHandler`: `match` = prefab có component `ParticleSystem` (đọc YAML).
 - Check "script thiếu" cho MonoBehaviour custom; sub-emitter đi theo GUID nên resolver tổng quát đã xử lý.
 - Preview `unity-render`: Companion mở scene tạm, simulate, chụp frame → GIF/WebM → cache; hoặc CI batchmode render sẵn.
+
+---
+
+## 8e. Tìm asset trên mọi branch / mọi repo (chốt 2026-10-27)
+
+Bài toán: không biết asset nằm ở repo / branch nào; tài khoản test thấy 50 repo, riêng `hb_creative_xp_hero` có 103 branch → không thể tải hết mỗi lần tìm.
+
+**Bước 1 — chỉ mục cục bộ, chạy nền trong app (Phase 4.5)**
+- Chỉ lưu thứ cần để tìm: tên, path, blob SHA, dung lượng, repo, branch. Không tải nội dung.
+- **Gộp theo SHA**: một file có mặt ở nhiều branch lưu một lần + danh sách branch → chỉ mục nhỏ vì các branch dùng chung phần lớn file.
+- **Tăng dần**: branch có commit không đổi thì bỏ qua (cây đã cache theo commit).
+- Ưu tiên branch mặc định + branch push trong 30 ngày; branch cũ quét khi máy rảnh.
+- Ô tìm kiếm có phạm vi: Branch này / Mọi branch của repo / Mọi repo. Kết quả kiểu `Knight_Hero.fbx · hb_creative_xp_hero · 12 branch (vn/net-catch, main…)`.
+
+**Bước 2 — chỉ mục dùng chung cho team (Phase 7)**
+- GitHub Action chạy định kỳ quét repo, đẩy chỉ mục + thumbnail vào một repo riêng (vd. `supercent-io/asset-index`).
+- App chỉ tải chỉ mục → tìm gần như tức thì; thumbnail render một lần, cả team dùng.
+
+**Kiểu tìm trên chỉ mục**
+- Theo tên, đường dẫn, loại, repo, branch.
+- "Asset này còn ở đâu?": cùng SHA hoặc cùng GUID ở repo / branch khác.
+- Sau này: tìm bằng hình ảnh / mô tả (embedding thumbnail).
 
 ---
 

@@ -20,10 +20,11 @@
 | **A · Asset Browser** | 1 | App shell + UI (dữ liệu giả) | ~1 tuần | ✅ |
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
-| **B · Import** | 4 | Import cơ bản (copy + `.meta`, lịch sử, undo) | ~1 tuần | ⏳ |
+| **B · Import** | 4 | Xuất `.unitypackage` (ưu tiên) + copy vào project, lịch sử, undo | ~1 tuần | ⏳ tiếp theo |
+| B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ⏳ |
 | B | 5 | Unity Companion + lọc trùng + Import Profile | 2–3 tuần | ⏳ |
 | **C · Shader** | 6 | Render pipeline & Shader Mapping | 2–3 tuần | ⏳ |
-| **D · Mở rộng** | 7 | Polish & mở rộng (nhiều repo, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
+| **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
 
@@ -106,11 +107,16 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 | Tăng tốc chỉ mục GUID: dùng lại chỉ mục của commit trước cho các `.meta` không đổi | ⏳ |
 | Unit test resolver, client, cache (43 test) + e2e trên repo thật | ✅ |
 
-## Phase 4 — Import cơ bản (Mốc B)
-Mục tiêu: chọn FBX → copy FBX + dependency (kèm `.meta`, giữ GUID) vào project đích. Chưa lọc trùng phức tạp: GUID đã có thì bỏ qua.
+## Phase 4 — Xuất `.unitypackage` + import cơ bản (Mốc B)
+Mục tiêu: lấy FBX + dependency (kèm `.meta`, giữ GUID) ra khỏi repo theo hai cách: **xuất `.unitypackage`** (ưu tiên — không cần biết project đích, gửi được cho người khác, Phase 9 dùng lại cho particle) hoặc copy thẳng vào project đích. Chưa lọc trùng phức tạp: GUID đã có thì báo / bỏ qua. Chi tiết: PLAN §6c.
 
 | Việc | State |
 |---|---|
+| Writer `.unitypackage` (tar.gz: `<guid>/asset`, `asset.meta`, `pathname`, `preview.png`), không cần Unity | ⏳ |
+| `pathname` theo layout (mặc định `mirror` dưới `Assets/AssetHub/<repo>/`), dependency dùng chung vào `_Shared` | ⏳ |
+| Nút "Xuất .unitypackage" (1 asset hoặc nhiều asset đã chọn), chọn nơi lưu, kèm thumbnail làm preview | ⏳ |
+| Cảnh báo trước khi xuất nếu đã chọn project đích: GUID nào đã có (Unity sẽ ghi đè) | ⏳ |
+| Test: package mở được trong Unity, GUID và tham chiếu material/texture giữ nguyên | ⏳ |
 | Chọn project đích (thư mục Unity), kiểm tra hợp lệ | ⏳ |
 | Copy file + `.meta`, layout `mirror`, thư mục `_Shared` | ⏳ |
 | Bỏ qua file có GUID đã tồn tại trong đích (quét `.meta` của đích) | ⏳ |
@@ -118,6 +124,19 @@ Mục tiêu: chọn FBX → copy FBX + dependency (kèm `.meta`, giữ GUID) và
 | Metadata nguồn gốc + log import trong `<project>/.assethub/` | ⏳ |
 | #5 Lịch sử import + undo file mới | ⏳ |
 | #10 Deep link `assethub://` + nút Copy link | ⏳ |
+
+## Phase 4.5 — Tìm asset trên mọi branch / mọi repo (Mốc B)
+Mục tiêu: tìm được asset khi không biết nó ở repo / branch nào. Chỉ mục cục bộ, chạy nền trong app. Chi tiết: PLAN §8e.
+
+| Việc | State |
+|---|---|
+| Chỉ mục nhẹ: tên, path, blob SHA, dung lượng, repo, branch — không tải nội dung | ⏳ |
+| Gộp theo SHA: cùng file ở nhiều branch chỉ lưu một lần + danh sách branch | ⏳ |
+| Cập nhật tăng dần: branch có commit không đổi thì bỏ qua (dùng cache cây theo commit) | ⏳ |
+| Ưu tiên quét: branch mặc định + branch push trong 30 ngày; branch cũ quét khi rảnh | ⏳ |
+| Ô tìm kiếm có phạm vi: Branch này / Mọi branch của repo / Mọi repo; lọc theo loại, repo | ⏳ |
+| "Asset này còn ở đâu?": cùng SHA hoặc cùng GUID ở repo / branch khác | ⏳ |
+| Index SQLite + FTS (thay cho JSON khi dữ liệu lớn) | ⏳ |
 
 ## Phase 5 — Unity Companion + lọc trùng + Import Profile (Mốc B)
 | Việc | State |
@@ -150,7 +169,8 @@ Mục tiêu: chọn FBX → copy FBX + dependency (kèm `.meta`, giữ GUID) và
 | Việc | State |
 |---|---|
 | Device Flow qua GitHub App cá nhân (test) | ⏳ |
-| #4 Tìm kiếm nhiều repo (thư viện repo, SQLite FTS) | ⏳ |
+| Tìm kiếm bước 2: chỉ mục dùng chung cho team — GitHub Action định kỳ quét repo, đẩy chỉ mục + thumbnail vào repo riêng (vd. `supercent-io/asset-index`); app chỉ tải về, tìm tức thì | ⏳ |
+| Tìm bằng hình ảnh / mô tả (embedding thumbnail) | ⏳ |
 | #7 Bộ sưu tập / yêu thích / tag | ⏳ |
 | #9 `AudioHandler` + `SpriteHandler` (preview audio, sprite/UI 2D) | ⏳ |
 | pHash cảnh báo texture gần giống | ⏳ |
@@ -175,6 +195,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | Companion `renderPreview`: scene tạm, simulate, xuất GIF/WebM, cache | ⏳ |
 | (Tuỳ chọn) CI batchmode render preview sẵn | ⏳ |
 | Tab Particles trong UI (sinh từ registry) | ⏳ |
+| Xuất particle prefab bằng cùng cơ chế `.unitypackage` (Phase 4) | ⏳ |
 | (Sau nữa) VFX Graph | ⏳ |
 
 ---
@@ -189,6 +210,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | Thêm xuất `.unitypackage` vào Phase 4 (ưu tiên), thêm Phase 4.5 tìm asset mọi branch / mọi repo; chỉ mục dùng chung + tìm bằng hình vào Phase 7; particle xuất bằng `.unitypackage`. |
 | 2026-10-27 | **Phase 3 xong** — Mốc A đạt: xem FBX 3D (xoay/zoom/pan, góc nhìn, wireframe, animation), dependency kiểu A/B, thông số + ngân sách playable, thumbnail. Test trên Short_Wood (A), LogPlatform (thiếu material), Snow_Tree (B), TF_Player_Throw (animation). |
 | 2026-10-27 | Sửa: nhớ branch (do app dev chạy main process cũ — `npm run dev` giờ dùng `--watch`); app tự cài gh, không cần Terminal; tương thích câu chữ mới của gh 2.103. |
 | 2026-10-27 | **Phase 2 xong**: test end-to-end với tài khoản thật trên `hb_creative_xp_hero @ vn/net-catch` — 747 FBX, cache hoạt động. Thêm đăng nhập gh qua trình duyệt ngay trong app. |
