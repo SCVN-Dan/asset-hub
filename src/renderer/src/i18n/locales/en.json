@@ -1,0 +1,108 @@
+{
+  "common": {
+    "language": "Language",
+    "back": "Back",
+    "settings": "Settings"
+  },
+  "assetTypes": {
+    "all": "All",
+    "fbx": "FBX"
+  },
+  "preview": {
+    "notYet": "3D preview arrives in a later phase."
+  },
+  "signin": {
+    "tagline": "Pull FBX and dependencies from a GitHub branch",
+    "title": "Sign in to GitHub",
+    "desc": "The app only needs read access to repository contents. Tokens are encrypted with the system keychain.",
+    "ghCliSub": "Uses GitHub CLI (gh). If gh is signed out, you approve in the browser with a one-time code.",
+    "checking": "Checking…",
+    "or": "or",
+    "patLabel": "Fine-grained Personal Access Token",
+    "patScope": "Required permission: Contents · Read-only",
+    "use": "Use",
+    "github": "Sign in with GitHub",
+    "sso": "Org uses SAML SSO? Authorize the token for the organisation when GitHub asks.",
+    "demo": "Continue with sample data",
+    "ghCodeHint": "Enter this code on GitHub to sign in gh:",
+    "ghCopied": "Code copied to the clipboard — paste it on GitHub.",
+    "ghWaiting": "Waiting for you to approve in the browser…",
+    "cancel": "Cancel",
+    "ghOpen": "Open GitHub"
+  },
+  "browse": {
+    "demoBanner": "Sample data — not connected to GitHub.",
+    "repo": "Repo",
+    "branch": "Branch",
+    "project": "Project",
+    "refresh": "Reload branch",
+    "loadingRepos": "Loading repos…",
+    "search": "Search assets",
+    "searchPlaceholder": "Search by file name…",
+    "folders": "Folders",
+    "allFolders": "All folders",
+    "assetCount_one": "{{count}} asset",
+    "assetCount_other": "{{count}} assets",
+    "hidden_one": "{{count}} asset hidden in excluded folders ({{folders}}).",
+    "hidden_other": "{{count}} assets hidden in excluded folders ({{folders}}).",
+    "loading": "Loading branch…",
+    "noRepos": "No repositories are visible to this account.",
+    "noResults": "No assets match this folder and search.",
+    "types": "Asset types",
+    "branchNoPrefix": "Branches",
+    "defaultBranch": "default",
+    "loadingBranches": "Loading branches…"
+  },
+  "details": {
+    "label": "Asset details",
+    "empty": "Select an asset to see its details.",
+    "path": "Path",
+    "size": "Size",
+    "storage": "Storage",
+    "lfs": "Git LFS",
+    "git": "Git",
+    "sha": "Blob SHA",
+    "type": "Type",
+    "deps": "Dependencies",
+    "depsLater": "Materials, textures and shaders are resolved in a later phase.",
+    "copyPath": "Copy path",
+    "copied": "Copied"
+  },
+  "settings": {
+    "title": "Settings",
+    "account": "Account",
+    "signedInAs": "Signed in as {{login}}",
+    "method": {
+      "gh": "via gh CLI",
+      "pat": "via access token"
+    },
+    "notPersisted": "The system keychain is unavailable, so you will need to sign in again next time.",
+    "demoMode": "Using sample data.",
+    "signOut": "Sign out",
+    "signIn": "Sign in",
+    "languageHelp": "Applies to the whole app.",
+    "excluded": "Excluded folders",
+    "excludedHelp": "Comma-separated folder names hidden at any depth, e.g. third-party packs.",
+    "cacheDir": "Cache folder",
+    "cacheDirHelp": "Branch listings, downloaded files and thumbnails are stored here.",
+    "choose": "Choose…"
+  },
+  "errors": {
+    "unauthorized": "GitHub rejected the token. Check that it is valid and not expired.",
+    "sso": "This organisation uses SAML SSO. Authorize the token for it, then try again.",
+    "forbidden": "The token does not have permission for this. It needs Contents: Read-only.",
+    "notFound": "Not found, or this account has no access to it.",
+    "rateLimited": "GitHub rate limit reached. Try again after {{time}}.",
+    "network": "Could not reach GitHub. Check the network or VPN.",
+    "truncated": "This repository is too large to list through the API.",
+    "ghNotFound": "GitHub CLI (gh) is not installed. Install it (brew install gh) or use a token.",
+    "ghNotLoggedIn": "gh is not logged in. Run gh auth login first.",
+    "emptyToken": "Enter a token first.",
+    "unknown": "Something went wrong.",
+    "openSso": "Open SSO authorization"
+  },
+  "picker": {
+    "search": "Search {{label}}…",
+    "noMatch": "No matches."
+  }
+}

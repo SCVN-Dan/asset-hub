@@ -1,0 +1,181 @@
+import { SourceError } from '../errors'
+import type { RepoRef, TreeEntry } from '../types'
+
+/** Minimal fetch shape so tests can inject a fake and main can use Electron's net.fetch. */
+export type FetchLike = (
+  url: string,
+  init?: { method?: string; headers?: Record<string, string>; body?: string }
+) => Promise<{
+  status: number
+  ok: boolean
+  headers: { get(name: string): string | null }
+  json(): Promise<unknown>
+  text(): Promise<string>
+}>
+
+export interface GitHubUser {
+  login: string
+  name?: string
+}
+
+const API = 'https://api.github.com'
+/** Max pages followed for list endpoints (100 items each). */
+const MAX_PAGES = 20
+/** Aliases per GraphQL query when reading many small blobs. */
+const GRAPHQL_BATCH = 50
+
+function splitRepo(repo: string): [string, string] {
+  const [owner, name, ...rest] = repo.split('/')
+  if (!owner || !name || rest.length) throw new SourceError('notFound', `Invalid repository name "${repo}"`)
+  return [owner, name]
+}
+
+const repoPath = (repo: string) => splitRepo(repo).map(encodeURIComponent).join('/')
+const refPath = (ref: string) => ref.split('/').map(encodeURIComponent).join('/')
+
+export class GitHubClient {
+  constructor(
+    private readonly token: string,
+    private readonly fetchImpl: FetchLike,
+    private readonly apiBase = API
+  ) {}
+
+  async getUser(): Promise<GitHubUser> {
+    const { data } = await this.request<{ login: string; name?: string | null }>('/user')
+    return { login: data.login, name: data.name ?? undefined }
+  }
+
+  async listRepos(): Promise<RepoRef[]> {
+    const repos = await this.paginate<{ full_name: string; default_branch: string }>(
+      '/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member'
+    )
+    return repos.map((r) => ({ fullName: r.full_name, defaultBranch: r.default_branch }))
+  }
+
+  async listBranches(repo: string): Promise<string[]> {
+    const branches = await this.paginate<{ name: string }>(`/repos/${repoPath(repo)}/branches?per_page=100`)
+    return branches.map((b) => b.name)
+  }
+
+  /** Commit SHA at the tip of a branch. */
+  async getBranchHead(repo: string, branch: string): Promise<string> {
+    const { data } = await this.request<{ object: { sha: string } }>(`/repos/${repoPath(repo)}/git/ref/heads/${refPath(branch)}`)
+    return data.object.sha
+  }
+
+  /** Full recursive tree of a commit. `truncated` is set when GitHub cut the listing short. */
+  async getTree(repo: string, commitSha: string): Promise<{ entries: TreeEntry[]; truncated: boolean }> {
+    const { data } = await this.request<{
+      truncated: boolean
+      tree: Array<{ path: string; type: string; sha: string; size?: number }>
+    }>(`/repos/${repoPath(repo)}/git/trees/${encodeURIComponent(commitSha)}?recursive=1`)
+    const entries: TreeEntry[] = []
+    for (const item of data.tree) {
+      // 'commit' entries are submodules; they are not part of this repo's files.
+      if (item.type !== 'blob' && item.type !== 'tree') continue
+      entries.push({ path: item.path, type: item.type, sha: item.sha, size: item.size })
+    }
+    return { entries, truncated: data.truncated }
+  }
+
+  /** Text of one file at a commit, or undefined when it does not exist. */
+  async getFileText(repo: string, commitSha: string, path: string): Promise<string | undefined> {
+    const texts = await this.getBlobTexts(repo, commitSha, [path])
+    return texts.get(path)
+  }
+
+  /**
+   * Reads many small text blobs (LFS pointers, .gitattributes) with batched
+   * GraphQL queries — one request per 50 files instead of one each.
+   */
+  async getBlobTexts(repo: string, commitSha: string, paths: readonly string[]): Promise<Map<string, string>> {
+    const [owner, name] = splitRepo(repo)
+    const result = new Map<string, string>()
+    for (let start = 0; start < paths.length; start += GRAPHQL_BATCH) {
+      const batch = paths.slice(start, start + GRAPHQL_BATCH)
+      const fields = batch
+        .map((p, i) => `f${i}: object(expression: ${JSON.stringify(`${commitSha}:${p}`)}) { ... on Blob { text } }`)
+        .join('\n')
+      const query = `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${fields} } }`
+      const { data } = await this.request<{
+        data?: { repository: Record<string, { text: string | null } | null> | null }
+        errors?: Array<{ type?: string; message: string }>
+      }>('/graphql', { method: 'POST', body: JSON.stringify({ query }) })
+      const repoData = data.data?.repository
+      if (!repoData) {
+        const err = data.errors?.[0]
+        throw new SourceError(err?.type === 'NOT_FOUND' ? 'notFound' : 'unknown', err?.message ?? 'GraphQL request failed')
+      }
+      batch.forEach((p, i) => {
+        const text = repoData[`f${i}`]?.text
+        if (typeof text === 'string') result.set(p, text)
+      })
+    }
+    return result
+  }
+
+  private async paginate<T>(path: string): Promise<T[]> {
+    const items: T[] = []
+    let url: string | undefined = path
+    for (let page = 0; url && page < MAX_PAGES; page++) {
+      const { data, headers } = await this.request<T[]>(url)
+      items.push(...data)
+      url = nextLink(headers.get('link'))
+    }
+    return items
+  }
+
+  private async request<T>(
+    pathOrUrl: string,
+    init: { method?: string; body?: string } = {}
+  ): Promise<{ data: T; headers: { get(name: string): string | null } }> {
+    const url = pathOrUrl.startsWith('http') ? pathOrUrl : this.apiBase + pathOrUrl
+    let res: Awaited<ReturnType<FetchLike>>
+    try {
+      res = await this.fetchImpl(url, {
+        method: init.method ?? 'GET',
+        body: init.body,
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${this.token}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          ...(init.body ? { 'Content-Type': 'application/json' } : {})
+        }
+      })
+    } catch (err) {
+      throw new SourceError('network', err instanceof Error ? err.message : String(err))
+    }
+    if (res.ok) return { data: (await res.json()) as T, headers: res.headers }
+    throw await toSourceError(res)
+  }
+}
+
+async function toSourceError(res: Awaited<ReturnType<FetchLike>>): Promise<SourceError> {
+  let message = `GitHub responded ${res.status}`
+  try {
+    const body = (await res.json()) as { message?: string }
+    if (body?.message) message = body.message
+  } catch {
+    // keep the status message
+  }
+  const sso = res.headers.get('x-github-sso')
+  const remaining = res.headers.get('x-ratelimit-remaining')
+  const reset = Number(res.headers.get('x-ratelimit-reset'))
+  const resetAt = Number.isFinite(reset) && reset > 0 ? reset * 1000 : undefined
+  if (res.status === 401) return new SourceError('unauthorized', message)
+  if (res.status === 403 && sso) return new SourceError('sso', message, { ssoUrl: /url=(\S+)/.exec(sso)?.[1] })
+  if (res.status === 429 || (res.status === 403 && remaining === '0')) return new SourceError('rateLimited', message, { resetAt })
+  if (res.status === 403) return new SourceError('forbidden', message)
+  if (res.status === 404) return new SourceError('notFound', message)
+  return new SourceError('unknown', message)
+}
+
+/** Extracts rel="next" from a GitHub Link header. */
+export function nextLink(header: string | null): string | undefined {
+  if (!header) return undefined
+  for (const part of header.split(',')) {
+    const match = /<([^>]+)>;\s*rel="next"/.exec(part)
+    if (match) return match[1]
+  }
+  return undefined
+}

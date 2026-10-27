@@ -1,0 +1,106 @@
+{
+  "common": {
+    "language": "Ngôn ngữ",
+    "back": "Quay lại",
+    "settings": "Cài đặt"
+  },
+  "assetTypes": {
+    "all": "Tất cả",
+    "fbx": "FBX"
+  },
+  "preview": {
+    "notYet": "Preview 3D sẽ có ở phase sau."
+  },
+  "signin": {
+    "tagline": "Lấy FBX và dependency từ branch GitHub",
+    "title": "Đăng nhập GitHub",
+    "desc": "App chỉ cần quyền đọc nội dung repo. Token được mã hoá bằng keychain của máy.",
+    "ghCliSub": "Dùng GitHub CLI (gh). Nếu gh chưa đăng nhập, bạn xác nhận trên trình duyệt bằng mã một lần.",
+    "checking": "Đang kiểm tra…",
+    "or": "hoặc",
+    "patLabel": "Fine-grained Personal Access Token",
+    "patScope": "Quyền cần: Contents · Read-only",
+    "use": "Dùng",
+    "github": "Đăng nhập với GitHub",
+    "sso": "Org bật SAML SSO? Authorize token cho tổ chức khi GitHub hỏi.",
+    "demo": "Dùng dữ liệu mẫu",
+    "ghCodeHint": "Nhập mã này trên GitHub để đăng nhập gh:",
+    "ghCopied": "Mã đã được copy vào clipboard — dán vào trang GitHub.",
+    "ghWaiting": "Đang chờ bạn xác nhận trên trình duyệt…",
+    "cancel": "Huỷ",
+    "ghOpen": "Mở GitHub"
+  },
+  "browse": {
+    "demoBanner": "Dữ liệu mẫu — chưa kết nối GitHub.",
+    "repo": "Repo",
+    "branch": "Branch",
+    "project": "Project",
+    "refresh": "Tải lại branch",
+    "loadingRepos": "Đang tải repo…",
+    "search": "Tìm asset",
+    "searchPlaceholder": "Tìm theo tên file…",
+    "folders": "Thư mục",
+    "allFolders": "Tất cả thư mục",
+    "assetCount_other": "{{count}} asset",
+    "hidden_other": "Đang ẩn {{count}} asset trong thư mục loại trừ ({{folders}}).",
+    "loading": "Đang tải branch…",
+    "noRepos": "Tài khoản này không thấy repo nào.",
+    "noResults": "Không có asset nào khớp thư mục và từ khoá.",
+    "types": "Loại asset",
+    "branchNoPrefix": "Branch",
+    "defaultBranch": "mặc định",
+    "loadingBranches": "Đang tải branch…"
+  },
+  "details": {
+    "label": "Chi tiết asset",
+    "empty": "Chọn một asset để xem chi tiết.",
+    "path": "Đường dẫn",
+    "size": "Dung lượng",
+    "storage": "Lưu trữ",
+    "lfs": "Git LFS",
+    "git": "Git",
+    "sha": "Blob SHA",
+    "type": "Loại",
+    "deps": "Dependency",
+    "depsLater": "Material, texture và shader sẽ được resolve ở phase sau.",
+    "copyPath": "Copy đường dẫn",
+    "copied": "Đã copy"
+  },
+  "settings": {
+    "title": "Cài đặt",
+    "account": "Tài khoản",
+    "signedInAs": "Đăng nhập: {{login}}",
+    "method": {
+      "gh": "qua gh CLI",
+      "pat": "qua access token"
+    },
+    "notPersisted": "Không dùng được keychain của máy, lần sau sẽ phải đăng nhập lại.",
+    "demoMode": "Đang dùng dữ liệu mẫu.",
+    "signOut": "Đăng xuất",
+    "signIn": "Đăng nhập",
+    "languageHelp": "Áp dụng cho toàn app.",
+    "excluded": "Thư mục loại trừ",
+    "excludedHelp": "Tên thư mục cách nhau bằng dấu phẩy, ẩn ở mọi cấp, vd. gói bên thứ ba.",
+    "cacheDir": "Thư mục cache",
+    "cacheDirHelp": "Danh sách file của branch, file đã tải và thumbnail được lưu ở đây.",
+    "choose": "Chọn…"
+  },
+  "errors": {
+    "unauthorized": "GitHub từ chối token. Kiểm tra token còn hợp lệ và chưa hết hạn.",
+    "sso": "Tổ chức này dùng SAML SSO. Authorize token cho tổ chức rồi thử lại.",
+    "forbidden": "Token không đủ quyền. Cần Contents: Read-only.",
+    "notFound": "Không tìm thấy, hoặc tài khoản không có quyền truy cập.",
+    "rateLimited": "Đã chạm giới hạn request của GitHub. Thử lại sau {{time}}.",
+    "network": "Không kết nối được GitHub. Kiểm tra mạng hoặc VPN.",
+    "truncated": "Repo quá lớn để liệt kê qua API.",
+    "ghNotFound": "Chưa cài GitHub CLI (gh). Cài bằng brew install gh hoặc dùng token.",
+    "ghNotLoggedIn": "gh chưa đăng nhập. Chạy gh auth login trước.",
+    "emptyToken": "Hãy nhập token.",
+    "unknown": "Đã có lỗi xảy ra.",
+    "openSso": "Mở trang SSO authorization"
+  },
+  "picker": {
+    "search": "Tìm {{label}}…",
+    "noMatch": "Không có kết quả."
+  }
+}

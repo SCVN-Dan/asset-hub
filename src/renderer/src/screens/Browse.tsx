@@ -1,0 +1,292 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+  buildFolderTree,
+  findUnityProjectRoots,
+  isInExcludedFolder,
+  isInFolder,
+  projectEntries,
+  type AssetSource,
+  type HandlerRegistry,
+  type RepoRef,
+  type TreeEntry
+} from '@core/index'
+import type { Language } from '@shared/settings'
+import { AssetCard } from '../components/AssetCard'
+import { AssetDetails } from '../components/AssetDetails'
+import { Picker } from '../components/Picker'
+import { ErrorNote } from '../components/ErrorNote'
+import { FolderTree } from '../components/FolderTree'
+import { CubeIcon, GearIcon, InfoIcon, RefreshIcon, SearchIcon } from '../components/Icons'
+import { LangToggle } from '../components/LangToggle'
+
+interface Props {
+  source: AssetSource
+  registry: HandlerRegistry
+  language: Language
+  cacheDir: string
+  excludedFolders: string[]
+  /** Signed-in GitHub login, shown in the top bar. */
+  login?: string
+  /** Repo/branch to reopen when they still exist. */
+  initialRepo?: string
+  initialBranch?: string
+  onOpenBranch(repo: string, branch: string): void
+  onLanguage(language: Language): void
+  onSettings(): void
+}
+
+const ALL = 'all'
+
+/** 'owner/repo' → 'owner/' */
+const ownerPrefix = (fullName: string) => fullName.slice(0, fullName.indexOf('/') + 1)
+/** 'vn/net-catch' → 'vn/'; branches without a slash are ungrouped. */
+const branchPrefix = (name: string) => (name.includes('/') ? name.slice(0, name.indexOf('/') + 1) : '')
+
+type Load<T> = { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; data: T }
+
+export function Browse({
+  source,
+  registry,
+  language,
+  cacheDir,
+  excludedFolders,
+  login,
+  initialRepo,
+  initialBranch,
+  onOpenBranch,
+  onLanguage,
+  onSettings
+}: Props) {
+  const { t } = useTranslation()
+  const [repos, setRepos] = useState<Load<RepoRef[]>>({ status: 'loading' })
+  const [repo, setRepo] = useState('')
+  const [branches, setBranches] = useState<string[]>([])
+  const [branch, setBranch] = useState('')
+  const [tree, setTree] = useState<Load<TreeEntry[]>>({ status: 'loading' })
+  const [reloadKey, setReloadKey] = useState(0)
+  const [root, setRoot] = useState('')
+  const [typeFilter, setTypeFilter] = useState(ALL)
+  const [folder, setFolder] = useState('')
+  const [query, setQuery] = useState('')
+  const [selectedId, setSelectedId] = useState<string>()
+
+  useEffect(() => {
+    let cancelled = false
+    setRepos({ status: 'loading' })
+    source.listRepos().then(
+      (list) => {
+        if (cancelled) return
+        setRepos({ status: 'ready', data: list })
+        const has = (name?: string) => !!name && list.some((r) => r.fullName === name)
+        setRepo((current) => (has(current) ? current : has(initialRepo) ? initialRepo! : (list[0]?.fullName ?? '')))
+      },
+      (error: unknown) => !cancelled && setRepos({ status: 'error', error })
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [source])
+
+  const repoList = repos.status === 'ready' ? repos.data : []
+  const repoNames = useMemo(() => repoList.map((r) => r.fullName), [repoList])
+  const defaultBranch = repoList.find((r) => r.fullName === repo)?.defaultBranch
+
+  useEffect(() => {
+    if (!repo) return
+    let cancelled = false
+    setBranches([])
+    setBranch('')
+    setTree({ status: 'loading' })
+    source.listBranches(repo).then(
+      (list) => {
+        if (cancelled) return
+        setBranches(list)
+        const preferred = repoList.find((r) => r.fullName === repo)?.defaultBranch
+        if (repo === initialRepo && initialBranch && list.includes(initialBranch)) setBranch(initialBranch)
+        else setBranch(preferred && list.includes(preferred) ? preferred : (list[0] ?? ''))
+      },
+      (error: unknown) => !cancelled && setTree({ status: 'error', error })
+    )
+    return () => {
+      cancelled = true
+    }
+    // repoList is read only for the default branch; it must not retrigger branch loading.
+  }, [source, repo])
+
+  useEffect(() => {
+    if (!repo || !branch) return
+    onOpenBranch(repo, branch)
+    let cancelled = false
+    setTree({ status: 'loading' })
+    source.listTree(repo, branch).then(
+      (entries) => {
+        if (cancelled) return
+        setTree({ status: 'ready', data: entries })
+        const roots = findUnityProjectRoots(entries)
+        setRoot((current) => (roots.includes(current) ? current : (roots[0] ?? '')))
+        setFolder('')
+        setSelectedId(undefined)
+      },
+      (error: unknown) => !cancelled && setTree({ status: 'error', error })
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [source, repo, branch, reloadKey])
+
+  const roots = useMemo(() => (tree.status === 'ready' ? findUnityProjectRoots(tree.data) : []), [tree])
+  const allAssets = useMemo(() => {
+    if (tree.status !== 'ready') return []
+    // Without a Unity project marker, show the repo as-is.
+    const entries = roots.length ? projectEntries(tree.data, root) : tree.data
+    return registry.collectAssets(entries)
+  }, [tree, roots, root, registry])
+  const assets = useMemo(() => allAssets.filter((a) => !isInExcludedFolder(a.path, excludedFolders)), [allAssets, excludedFolders])
+  const hiddenCount = allAssets.length - assets.length
+  const ofType = useMemo(() => (typeFilter === ALL ? assets : assets.filter((a) => a.type === typeFilter)), [assets, typeFilter])
+  const folderRoot = useMemo(() => buildFolderTree(ofType), [ofType])
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return ofType.filter((a) => isInFolder(a.path, folder) && (!q || a.name.toLowerCase().includes(q)))
+  }, [ofType, folder, query])
+  const selected = visible.find((a) => a.id === selectedId)
+
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const a of assets) counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
+    return counts
+  }, [assets])
+
+  return (
+    <div className="browse">
+      <header className="topbar">
+        <div className="brand" style={{ marginRight: 8 }}>
+          <span style={{ color: 'var(--accent-text)' }}>
+            <CubeIcon size={24} />
+          </span>
+          <span className="brand-name">Asset Hub</span>
+        </div>
+        <Picker
+          label={t('browse.repo')}
+          value={repo}
+          options={repoNames}
+          groupOf={ownerPrefix}
+          ungroupedLabel=""
+          placeholder={repos.status === 'loading' ? t('browse.loadingRepos') : t('browse.noRepos')}
+          width={320}
+          onChange={setRepo}
+        />
+        <Picker
+          label={t('browse.branch')}
+          value={branch}
+          options={branches}
+          groupOf={branchPrefix}
+          ungroupedLabel={t('browse.branchNoPrefix')}
+          tagOf={(b) => (b === defaultBranch ? t('browse.defaultBranch') : undefined)}
+          placeholder={repo ? t('browse.loadingBranches') : '—'}
+          width={220}
+          onChange={setBranch}
+        />
+        {roots.length > 1 && (
+          <label className="picker">
+            <span className="muted small">{t('browse.project')}</span>
+            <select className="select" value={root} onChange={(e) => setRoot(e.target.value)}>
+              {roots.map((r) => (
+                <option key={r} value={r}>
+                  {r || '/'}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <button
+          type="button"
+          className="btn icon-btn"
+          aria-label={t('browse.refresh')}
+          title={t('browse.refresh')}
+          disabled={!branch || tree.status === 'loading'}
+          onClick={() => setReloadKey((k) => k + 1)}
+        >
+          <RefreshIcon />
+        </button>
+        <div className="search">
+          <SearchIcon />
+          <label htmlFor="q" className="sr-only">
+            {t('browse.search')}
+          </label>
+          <input id="q" type="search" placeholder={t('browse.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <LangToggle value={language} onChange={onLanguage} />
+        <button type="button" className="btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
+          <GearIcon />
+          {login && <span className="small">{login}</span>}
+        </button>
+      </header>
+
+      {source.isDemo && (
+        <div className="banner" role="status">
+          <InfoIcon />
+          {t('browse.demoBanner')}
+        </div>
+      )}
+
+      <div className="browse-body">
+        <aside className="sidebar">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="label-caps">{t('browse.types')}</span>
+            <div className="tabs" role="group" aria-label={t('browse.types')}>
+              <button type="button" className="tab" aria-pressed={typeFilter === ALL} onClick={() => setTypeFilter(ALL)}>
+                {t('assetTypes.all')} <span className="muted">{assets.length}</span>
+              </button>
+              {registry.all().map((h) => (
+                <button key={h.id} type="button" className="tab" aria-pressed={typeFilter === h.id} onClick={() => setTypeFilter(h.id)}>
+                  {t(h.labelKey)} <span className="muted">{typeCounts.get(h.id) ?? 0}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <nav aria-label={t('browse.folders')} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <span className="label-caps">{t('browse.folders')}</span>
+            {/* Mount only once the branch is loaded so the initial expansion sees real folders. */}
+            {tree.status === 'ready' && (
+              <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={setFolder} />
+            )}
+          </nav>
+          {hiddenCount > 0 && (
+            <p className="muted small" style={{ margin: 0 }}>
+              {t('browse.hidden', { count: hiddenCount, folders: excludedFolders.join(', ') })}
+            </p>
+          )}
+        </aside>
+
+        <main className="content">
+          <div className="content-head">
+            <h1>{folder || t('browse.allFolders')}</h1>
+            <span className="muted small">{t('browse.assetCount', { count: visible.length })}</span>
+          </div>
+          {repos.status === 'error' && <ErrorNote error={repos.error} />}
+          {repos.status === 'ready' && repoList.length === 0 && <p className="empty">{t('browse.noRepos')}</p>}
+          {tree.status === 'loading' && repo && <p className="empty">{t('browse.loading')}</p>}
+          {tree.status === 'error' && <ErrorNote error={tree.error} />}
+          {tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
+          {tree.status === 'ready' && visible.length > 0 && (
+            <div className="grid">
+              {visible.map((a) => (
+                <AssetCard
+                  key={a.id}
+                  asset={a}
+                  handler={registry.get(a.type)}
+                  selected={a.id === selectedId}
+                  onSelect={() => setSelectedId(a.id)}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+
+        <AssetDetails asset={selected} handler={selected && registry.get(selected.type)} cacheDir={cacheDir} />
+      </div>
+    </div>
+  )
+}
