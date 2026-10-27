@@ -7,7 +7,7 @@ import { IPC, type AuthMethod, type AuthStatus, type ExportRequest, type IpcErro
 import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { exportUnityPackage } from './exporter'
 import { installGh, readInstalledGh } from './ghInstaller'
-import { listTreeWithGit } from './gitTree'
+import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
 import { FileBlobCache, FileCommitCache, ThumbnailStore } from './caches'
 
 interface Session {
@@ -54,7 +54,11 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       handlerFor: (entry) => registry.classify(entry),
       cache,
       blobCache,
-      gitFallback: (repo, commit) => listTreeWithGit(options.cacheDir(), repo, commit, token.trim())
+      gitFallback: (repo, commit) => listTreeWithGit(options.cacheDir(), repo, commit, token.trim()),
+      readBlobsBulk: async (repo, oids) => {
+        if (!(await hasGit())) throw new Error('git is not available')
+        return readBlobsWithGit(options.cacheDir(), repo, oids, token.trim())
+      }
     })
     session = { source, status: { signedIn: true, login: user.login, method, persisted } }
     return session.status

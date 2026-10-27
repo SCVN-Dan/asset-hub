@@ -106,7 +106,7 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 | #3 Preview animation clip trong FBX | ✅ |
 | #1 Thông số (tris, vertex, mesh, material, bone, clip, dung lượng) + cảnh báo ngân sách playable | ✅ |
 | Panel chi tiết: cây dependency, loại shader, cảnh báo thiếu / ghép theo tên | ✅ |
-| Tăng tốc chỉ mục GUID: dùng lại chỉ mục của commit trước cho các `.meta` không đổi | ⏳ |
+| Tăng tốc chỉ mục GUID: một lần `git fetch` cho mọi `.meta` (partial clone, không checkout) + nhớ GUID theo SHA của `.meta` cho mọi commit/branch; GraphQL 6 luồng khi máy không có git. Repo test: **~130 s → ~10 s** lần đầu, branch khác ~6 s | ✅ |
 | Unit test resolver, client, cache (43 test) + e2e trên repo thật | ✅ |
 
 ## Phase 4 — Xuất `.unitypackage` (Mốc B)
@@ -197,6 +197,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | Chỉ mục GUID nhanh hơn ~13 lần: git fetch một lần + cache GUID theo SHA `.meta`. Không gọi git trên macOS khi chưa có Command Line Tools. |
 | 2026-10-27 | **Phase 4 (phần app) xong**: xuất `.unitypackage` 1 model hoặc cả gói, preview PNG, 2 layout đường dẫn, bỏ texture theo tên. Test gói Short_Wood + Snow_Tree: 5 asset, GUID/pathname/tham chiếu đúng. Còn: test import trong Unity, deep link. |
 | 2026-10-27 | **Không import trong app**: Phase 4 chỉ còn xuất `.unitypackage`; bỏ copy vào project, review import, lịch sử/undo; Phase 5 + 6 gộp thành phase tuỳ chọn (so với project đích chỉ đọc, chỉnh `.mat` khi xuất); Companion tạm hoãn. |
 | 2026-10-27 | Thêm xuất `.unitypackage` vào Phase 4 (ưu tiên), thêm Phase 4.5 tìm asset mọi branch / mọi repo; chỉ mục dùng chung + tìm bằng hình vào Phase 7; particle xuất bằng `.unitypackage`. |

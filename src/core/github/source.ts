@@ -29,6 +29,8 @@ export interface GitHubSourceOptions {
   blobCache?: BlobCache
   /** Lists a commit's files with git when the Trees API response is truncated (very large repos). */
   gitFallback?(repo: string, commitSha: string): Promise<TreeEntry[]>
+  /** Fast path for many small blobs at once (e.g. one git fetch); falls back to GraphQL when absent or failing. */
+  readBlobsBulk?(repo: string, oids: readonly string[]): Promise<Map<string, Uint8Array>>
 }
 
 export interface IndexProgress {
@@ -47,8 +49,11 @@ interface Snapshot {
 /** .meta files worth indexing: anything a model, material or shader can reference. */
 // Models are left out: their .meta files are large and nothing a material uses points at them.
 const INDEXED = /\.(mat|png|jpe?g|tga|psd|tiff?|exr|bmp|gif|hdr|shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i
-const INDEX_CONCURRENCY = 3
-const INDEX_BATCH = 200
+const INDEX_CONCURRENCY = 6
+const INDEX_BATCH = 120
+/** Meta blob SHA → GUID ('' when the file has none), shared by every commit and branch of a repo. */
+const SHA_KIND = 'metaguids'
+const SHA_KEY = 'by-sha'
 
 export class GitHubAssetSource implements AssetSource {
   readonly id = 'github'
@@ -178,26 +183,52 @@ export class GitHubAssetSource implements AssetSource {
       snap.guids = new Map(Object.entries(cached))
       return snap.guids
     }
-    const metas = snap.entries.filter((e) => e.type === 'blob' && INDEXED.test(e.path)).map((e) => e.path)
-    const batches: string[][] = []
-    for (let i = 0; i < metas.length; i += INDEX_BATCH) batches.push(metas.slice(i, i + INDEX_BATCH))
-    const guids = new Map<string, string>()
-    let done = 0
+    const metas = snap.entries.filter((e) => e.type === 'blob' && INDEXED.test(e.path))
+    // .meta files rarely change between commits and branches: only read the ones not seen before.
+    const bySha = (await this.options.cache?.get<Record<string, string>>(SHA_KIND, repo, SHA_KEY)) ?? {}
+    const todo = metas.filter((m) => !(m.sha in bySha))
+    let done = metas.length - todo.length
     onProgress?.({ done, total: metas.length })
-    let next = 0
-    const worker = async () => {
-      while (next < batches.length) {
-        const batch = batches[next++]
-        const texts = await this.client.getBlobTexts(repo, snap.commit, batch)
-        for (const [path, text] of texts) {
-          const guid = metaGuid(text)
-          if (guid) guids.set(guid, path.slice(0, -'.meta'.length))
-        }
-        done += batch.length
+    const learn = (sha: string, text: string) => {
+      bySha[sha] = metaGuid(text) ?? ''
+    }
+
+    let remaining = todo
+    if (remaining.length && this.options.readBlobsBulk) {
+      try {
+        const blobs = await this.options.readBlobsBulk(repo, [...new Set(remaining.map((m) => m.sha))])
+        const dec = new TextDecoder()
+        for (const [sha, bytes] of blobs) learn(sha, dec.decode(bytes))
+        remaining = remaining.filter((m) => !(m.sha in bySha))
+        done = metas.length - remaining.length
         onProgress?.({ done, total: metas.length })
+      } catch {
+        // No usable git or the fetch failed: read through the API instead.
       }
     }
-    await Promise.all(Array.from({ length: INDEX_CONCURRENCY }, worker))
+
+    if (remaining.length) {
+      const batches: TreeEntry[][] = []
+      for (let i = 0; i < remaining.length; i += INDEX_BATCH) batches.push(remaining.slice(i, i + INDEX_BATCH))
+      let next = 0
+      const worker = async () => {
+        while (next < batches.length) {
+          const batch = batches[next++]
+          const texts = await this.client.getBlobTexts(repo, snap.commit, batch.map((m) => m.path))
+          for (const m of batch) learn(m.sha, texts.get(m.path) ?? '')
+          done += batch.length
+          onProgress?.({ done, total: metas.length })
+        }
+      }
+      await Promise.all(Array.from({ length: INDEX_CONCURRENCY }, worker))
+    }
+
+    const guids = new Map<string, string>()
+    for (const m of metas) {
+      const guid = bySha[m.sha]
+      if (guid) guids.set(guid, m.path.slice(0, -'.meta'.length))
+    }
+    if (todo.length) await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha)
     await this.options.cache?.set('guids', repo, snap.commit, Object.fromEntries(guids))
     snap.guids = guids
     return guids

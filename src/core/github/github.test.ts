@@ -275,3 +275,81 @@ describe('GitHubAssetSource file access', () => {
     expect(await src.findByNames('o/r', 'main', ['t.PNG', 'nope.png'], 'p/Assets/Hero.fbx', 'p/')).toEqual({ 't.PNG': 'p/Assets/T.png', 'nope.png': null })
   })
 })
+
+describe('GUID index speed-ups', () => {
+  const G = (n: number) => n.toString(16).padStart(32, '0')
+  const metaTree = (shaOfB: string) => [
+    { path: 'p/ProjectSettings/ProjectVersion.txt', type: 'blob', sha: 'pv', size: 20 },
+    { path: 'p/Assets/Hero.fbx', type: 'blob', sha: 'fbx', size: 500 },
+    { path: 'p/Assets/Hero.fbx.meta', type: 'blob', sha: 'fm', size: 200 },
+    { path: 'p/Assets/A.png', type: 'blob', sha: 'a', size: 10 },
+    { path: 'p/Assets/A.png.meta', type: 'blob', sha: 'ma', size: 10 },
+    { path: 'p/Assets/B.png', type: 'blob', sha: 'b', size: 10 },
+    { path: 'p/Assets/B.png.meta', type: 'blob', sha: shaOfB, size: 10 }
+  ]
+  const metaText: Record<string, string> = { ma: `guid: ${G(1)}\n`, mb1: `guid: ${G(2)}\n`, mb2: `guid: ${G(3)}\n` }
+
+  function make(opts: { bulk?: boolean } = {}) {
+    let commit = 'c1'
+    let shaOfB = 'mb1'
+    const graphqlPaths: string[] = []
+    const { fetch } = fakeFetch((url, body) => {
+      if (url.includes('/git/ref/heads/')) return { json: { object: { sha: commit } } }
+      if (url.includes('/git/trees/')) return { json: { truncated: false, tree: metaTree(shaOfB) } }
+      if (url.endsWith('/graphql')) {
+        const query = JSON.parse(body!).query as string
+        const repository: Record<string, { text: string } | null> = {}
+        for (const m of query.matchAll(/(f\d+): object\(expression: "c\d:([^"]+)"\)/g)) {
+          graphqlPaths.push(m[2])
+          const sha = metaTree(shaOfB).find((e) => e.path === m[2])?.sha
+          repository[m[1]] = sha && metaText[sha] ? { text: metaText[sha] } : m[2].endsWith('Hero.fbx.meta') ? { text: 'guid: ' + G(9) + '\n' } : null
+        }
+        return { json: { data: { repository } } }
+      }
+      if (url.endsWith('/git/blobs/fbx')) return { bytes: 'Kaydara FBX Binary' }
+      return { status: 404, json: {} }
+    })
+    const store = new Map<string, unknown>()
+    const bulkCalls: string[][] = []
+    const registry = createDefaultRegistry()
+    const src = new GitHubAssetSource(new GitHubClient('t', fetch), {
+      shouldResolveLfs: () => false,
+      handlerFor: (e) => registry.classify(e),
+      cache: { get: async <T,>(k: string, r: string, c: string) => store.get(`${k}:${r}@${c}`) as T | undefined, set: async (k, r, c, v) => void store.set(`${k}:${r}@${c}`, v) },
+      readBlobsBulk: opts.bulk
+        ? async (_repo, oids) => {
+            bulkCalls.push([...oids])
+            return new Map(oids.filter((o) => metaText[o]).map((o) => [o, new TextEncoder().encode(metaText[o])]))
+          }
+        : undefined
+    })
+    return {
+      src,
+      graphqlPaths,
+      bulkCalls,
+      advance: () => {
+        commit = 'c2'
+        shaOfB = 'mb2'
+      }
+    }
+  }
+
+  it('reads metas with the bulk reader when available, not GraphQL', async () => {
+    const t = make({ bulk: true })
+    await t.src.listTree('o/r', 'main')
+    await t.src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')
+    expect(t.bulkCalls).toEqual([['ma', 'mb1']])
+    expect(t.graphqlPaths).toEqual(['p/Assets/Hero.fbx.meta']) // only the model's own .meta
+  })
+
+  it('on a new commit only reads the .meta files that changed', async () => {
+    const t = make()
+    await t.src.listTree('o/r', 'main')
+    await t.src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')
+    t.graphqlPaths.length = 0
+    t.advance()
+    await t.src.listTree('o/r', 'main')
+    await t.src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')
+    expect(t.graphqlPaths.filter((p) => p !== 'p/Assets/Hero.fbx.meta')).toEqual(['p/Assets/B.png.meta'])
+  })
+})
