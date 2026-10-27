@@ -16,7 +16,7 @@
 - Tự resolve dependency của FBX: `.fbx.meta` → `.mat` → texture + shader.
 - Preview 3D FBX (three.js) và thumbnail.
 - Lọc asset trùng với project đích (GUID + hash).
-- Import vào project đích, giữ GUID khi an toàn, remap khi cần.
+- ~~Import vào project đích~~ → **xuất `.unitypackage`**, import làm trong Unity (chốt 2026-10-27).
 - Nhận diện và chuyển đổi render pipeline của material (phase sau).
 - Tính năng bổ sung đã chốt: xem §8c.
 
@@ -153,6 +153,8 @@ UI hiển thị badge pipeline trên từng asset trước khi import.
 
 ## 6b. Lưu trữ khi import & xử lý shader (chốt 2026-10-27)
 
+> **Cập nhật:** app không import nữa (xem §6c). Phần còn dùng: layout `pathname` khi xuất, và các cảnh báo shader (Phase 5, tuỳ chọn). Import Profile, Companion và Shader Mapping chạy trong Unity tạm hoãn.
+
 Unity tham chiếu bằng GUID nên user có thể di chuyển asset sau khi import mà không vỡ tham chiếu. App chỉ cần một layout mặc định hợp lý + cấu hình theo project.
 
 ### Import Profile (mỗi project đích một file `<project>/.assethub/profile.json`, commit lên Git để cả team dùng chung)
@@ -228,7 +230,7 @@ App tự tạo, không cần Unity: danh sách file lấy từ dependency report
 | Phase 9 dùng lại nguyên cho particle prefab — chỉ thêm file dependency | |
 | `pathname` ghi theo Import Profile (mirror / per-asset / by-type) | |
 
-Phase 4 có hai lựa chọn: **"Xuất .unitypackage"** (làm trước) và "Copy thẳng vào project".
+**Chốt:** app chỉ xuất `.unitypackage`; người dùng import trong Unity. Không có "copy thẳng vào project".
 
 ---
 

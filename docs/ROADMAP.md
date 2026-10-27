@@ -8,6 +8,8 @@
 
 Ước lượng thời gian là sơ bộ, cho 1 người.
 
+**Phạm vi (2026-10-27):** app không import vào Unity — chỉ xuất `.unitypackage`, người dùng import bằng Unity.
+
 **Nguyên tắc chia phase:** làm xong mục đích chính trước — **tìm và hiển thị được FBX của một branch, có preview** (Mốc A) — rồi mới mở rộng dần sang import, lọc trùng, shader. Kiến trúc handler (PLAN §8d) có từ Phase 1 để các phase sau chỉ cắm thêm.
 
 ---
@@ -20,10 +22,10 @@
 | **A · Asset Browser** | 1 | App shell + UI (dữ liệu giả) | ~1 tuần | ✅ |
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
-| **B · Import** | 4 | Xuất `.unitypackage` (ưu tiên) + copy vào project, lịch sử, undo | ~1 tuần | ⏳ tiếp theo |
+| **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | ⏳ tiếp theo |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ⏳ |
-| B | 5 | Unity Companion + lọc trùng + Import Profile | 2–3 tuần | ⏳ |
-| **C · Shader** | 6 | Render pipeline & Shader Mapping | 2–3 tuần | ⏳ |
+| **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
+| C | 6 | ~~Render pipeline & Shader Mapping~~ — gộp vào Phase 5 | — | — |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
@@ -107,23 +109,21 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 | Tăng tốc chỉ mục GUID: dùng lại chỉ mục của commit trước cho các `.meta` không đổi | ⏳ |
 | Unit test resolver, client, cache (43 test) + e2e trên repo thật | ✅ |
 
-## Phase 4 — Xuất `.unitypackage` + import cơ bản (Mốc B)
-Mục tiêu: lấy FBX + dependency (kèm `.meta`, giữ GUID) ra khỏi repo theo hai cách: **xuất `.unitypackage`** (ưu tiên — không cần biết project đích, gửi được cho người khác, Phase 9 dùng lại cho particle) hoặc copy thẳng vào project đích. Chưa lọc trùng phức tạp: GUID đã có thì báo / bỏ qua. Chi tiết: PLAN §6c.
+## Phase 4 — Xuất `.unitypackage` (Mốc B)
+Mục tiêu: app **chỉ xuất `.unitypackage`**; import làm trong Unity (Assets › Import Package, hộp thoại của Unity tự đánh dấu file mới / đã có và cho chọn file). App không ghi vào project Unity. Chi tiết: PLAN §6c.
 
 | Việc | State |
 |---|---|
 | Writer `.unitypackage` (tar.gz: `<guid>/asset`, `asset.meta`, `pathname`, `preview.png`), không cần Unity | ⏳ |
-| `pathname` theo layout (mặc định `mirror` dưới `Assets/AssetHub/<repo>/`), dependency dùng chung vào `_Shared` | ⏳ |
-| Nút "Xuất .unitypackage" (1 asset hoặc nhiều asset đã chọn), chọn nơi lưu, kèm thumbnail làm preview | ⏳ |
-| Cảnh báo trước khi xuất nếu đã chọn project đích: GUID nào đã có (Unity sẽ ghi đè) | ⏳ |
-| Test: package mở được trong Unity, GUID và tham chiếu material/texture giữ nguyên | ⏳ |
-| Chọn project đích (thư mục Unity), kiểm tra hợp lệ | ⏳ |
-| Copy file + `.meta`, layout `mirror`, thư mục `_Shared` | ⏳ |
-| Bỏ qua file có GUID đã tồn tại trong đích (quét `.meta` của đích) | ⏳ |
-| Màn Review bản đầu (danh sách file, trạng thái Mới / Đã có) | ⏳ |
-| Metadata nguồn gốc + log import trong `<project>/.assethub/` | ⏳ |
-| #5 Lịch sử import + undo file mới | ⏳ |
+| `pathname`: mặc định giữ đường dẫn như project nguồn; tuỳ chọn gom dưới `Assets/AssetHub/<repo>/` | ⏳ |
+| Xuất 1 asset hoặc nhiều asset đã chọn — gộp dependency, mỗi GUID một bản | ⏳ |
+| Thumbnail đã render làm `preview.png` | ⏳ |
+| Tóm tắt trước khi xuất: số file, dung lượng, cảnh báo (thiếu material/texture, texture ghép theo tên, shader custom, vượt ngân sách) | ⏳ |
+| Tuỳ chọn bỏ texture ghép theo tên khỏi gói | ⏳ |
+| Chọn nơi lưu, mở thư mục sau khi xuất | ⏳ |
+| Test: mở package trong Unity, GUID + tham chiếu material/texture giữ nguyên | ⏳ |
 | #10 Deep link `assethub://` + nút Copy link | ⏳ |
+| ~~Copy thẳng vào project, màn review import, lịch sử / undo import (#5)~~ — bỏ: import làm trong Unity | — |
 
 ## Phase 4.5 — Tìm asset trên mọi branch / mọi repo (Mốc B)
 Mục tiêu: tìm được asset khi không biết nó ở repo / branch nào. Chỉ mục cục bộ, chạy nền trong app. Chi tiết: PLAN §8e.
@@ -138,32 +138,18 @@ Mục tiêu: tìm được asset khi không biết nó ở repo / branch nào. C
 | "Asset này còn ở đâu?": cùng SHA hoặc cùng GUID ở repo / branch khác | ⏳ |
 | Index SQLite + FTS (thay cho JSON khi dữ liệu lớn) | ⏳ |
 
-## Phase 5 — Unity Companion + lọc trùng + Import Profile (Mốc B)
-| Việc | State |
-|---|---|
-| UPM package Companion: quét project đích → index GUID + hash | ⏳ |
-| Protocol App ↔ Companion: JSON có `version` + `capabilities`, giữ chỗ `renderPreview` | ⏳ |
-| Dedupe trường hợp 1–3, màn review xung đột đầy đủ | ⏳ |
-| Remap GUID trong `.mat` và `.fbx.meta` | ⏳ |
-| FBX kiểu B: user xác nhận texture tìm theo tên | ⏳ |
-| Tuỳ chọn import settings: giữ `.meta` gốc / preset đích | ⏳ |
-| Import Profile `.assethub/profile.json`: root, layout (mirror / per-asset / by-type) + màn cài đặt | ⏳ |
-| Shader tình huống 1: so phiên bản package, cảnh báo nguồn mới hơn | ⏳ |
-| Shader tình huống 2: mặc định dùng bản đích, so property, ghi đè cần xác nhận, đổi tên khi giữ cả hai | ⏳ |
-| Shader tình huống 3: trùng tên shader → remap | ⏳ |
-| #11 Import vào thư mục đang chọn trong Unity | ⏳ |
-| #5 Undo cho file bị ghi đè (backup + khôi phục) | ⏳ |
-| Test trong Unity cùng user | ⏳ |
+## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
+Chỉ làm khi cần. Unity tự xử lý import; phần này giúp biết trước những gì Unity sẽ ghi đè hoặc thiếu.
 
-## Phase 6 — Render pipeline & Shader Mapping (Mốc C)
 | Việc | State |
 |---|---|
-| Nhận diện pipeline nguồn/đích, badge trên asset | ⏳ |
-| Shader Mapping engine trong Companion (shader, props, keywords, log) | ⏳ |
-| shaderPolicy: keep-source / prefer-project / force-project-shader | ⏳ |
-| Preset: Built-in → URP (Render Pipeline Converter), Built-in → HDRP, URP → Built-in | ⏳ |
-| Cờ đỏ cho custom shader, fallback Lit | ⏳ |
-| Màn Review hiện dòng shader mapping cho từng material | ⏳ |
+| Chọn project Unity trên máy (chỉ đọc) → đánh dấu asset đã có cùng GUID (Unity sẽ ghi đè khi import) | ⏳ |
+| Cảnh báo shader: so phiên bản URP (`packages-lock.json`) nguồn ↔ đích; shader custom chưa có trong đích; trùng tên shader | ⏳ |
+| Chỉnh `.mat` khi xuất (Shader Mapping đơn giản): đổi shader GUID + tên property theo bảng mapping — không cần Unity | ⏳ |
+| ~~Unity Companion, import vào thư mục đang chọn (#11), undo ghi đè~~ — tạm hoãn: chỉ cần nếu sau này muốn chạy Render Pipeline Converter tự động | — |
+
+## Phase 6 — ~~Render pipeline & Shader Mapping~~ (gộp vào Phase 5)
+Phần còn giá trị (cảnh báo pipeline, chỉnh `.mat` khi xuất) đã chuyển sang Phase 5.
 
 ## Phase 7 — Polish & mở rộng (Mốc D)
 | Việc | State |
@@ -210,6 +196,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | **Không import trong app**: Phase 4 chỉ còn xuất `.unitypackage`; bỏ copy vào project, review import, lịch sử/undo; Phase 5 + 6 gộp thành phase tuỳ chọn (so với project đích chỉ đọc, chỉnh `.mat` khi xuất); Companion tạm hoãn. |
 | 2026-10-27 | Thêm xuất `.unitypackage` vào Phase 4 (ưu tiên), thêm Phase 4.5 tìm asset mọi branch / mọi repo; chỉ mục dùng chung + tìm bằng hình vào Phase 7; particle xuất bằng `.unitypackage`. |
 | 2026-10-27 | **Phase 3 xong** — Mốc A đạt: xem FBX 3D (xoay/zoom/pan, góc nhìn, wireframe, animation), dependency kiểu A/B, thông số + ngân sách playable, thumbnail. Test trên Short_Wood (A), LogPlatform (thiếu material), Snow_Tree (B), TF_Player_Throw (animation). |
 | 2026-10-27 | Sửa: nhớ branch (do app dev chạy main process cũ — `npm run dev` giờ dùng `--watch`); app tự cài gh, không cần Terminal; tương thích câu chữ mới của gh 2.103. |
