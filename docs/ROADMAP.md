@@ -19,7 +19,7 @@
 | — | 0 | Planning & setup | — | ✅ |
 | **A · Asset Browser** | 1 | App shell + UI (dữ liệu giả) | ~1 tuần | ✅ |
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
-| A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ⏳ |
+| A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Import** | 4 | Import cơ bản (copy + `.meta`, lịch sử, undo) | ~1 tuần | ⏳ |
 | B | 5 | Unity Companion + lọc trùng + Import Profile | 2–3 tuần | ⏳ |
 | **C · Shader** | 6 | Render pipeline & Shader Mapping | 2–3 tuần | ⏳ |
@@ -92,17 +92,19 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 
 | Việc | State |
 |---|---|
-| Sparse-checkout `*.meta`, `*.mat` (`GIT_LFS_SKIP_SMUDGE=1`) | ⏳ |
-| `GenericGuidResolver` (đệ quy, dùng chung mọi loại asset) + bảng GUID → path | ⏳ |
-| `FbxHandler.resolveDependencies`: kiểu A (GUID) + kiểu B (tìm texture theo tên) | ⏳ |
-| Tải on-demand FBX + texture: `git lfs pull --include` | ⏳ |
-| Preview three.js (`PreviewProvider` kind `three`) + gán texture từ dependency | ⏳ |
-| Điều khiển xem: kéo xoay (orbit), cuộn zoom, pan; góc nhìn có sẵn (trước/bên/trên); tự xoay; wireframe; reset góc nhìn | ⏳ |
-| Thumbnail grid + cache theo hash | ⏳ |
-| #3 Preview animation clip trong FBX | ⏳ |
-| #1 Thông số asset + cảnh báo dung lượng playable (`AssetCheck`) | ⏳ |
-| Panel chi tiết: cây dependency, badge pipeline, cảnh báo | ⏳ |
-| Unit test resolver bằng data mẫu | ⏳ |
+| Đọc `.meta` / `.mat` qua GraphQL theo lô (thay cho sparse-checkout — không cần git trên máy người dùng), chia lô + thử lại khi GitHub 502/504 | ✅ |
+| Chỉ mục GUID → path theo commit (material, texture, shader), cache trên đĩa. Lần đầu ~130 s với repo test, sau đó tức thì | ✅ |
+| Resolver GUID tổng quát đệ quy (cho prefab/particle) — dời sang Phase 9, FBX dùng resolver riêng | ⏳ |
+| `FbxHandler.resolveDependencies`: kiểu A (GUID → .mat → shader + texture) + kiểu B (tên texture trong FBX → file gần nhất) | ✅ |
+| Tải on-demand FBX + texture: git blob API, LFS batch API; cache nội dung theo hash | ✅ |
+| Preview three.js + gán texture (texture trong FBX theo tên, texture `.mat` theo material) | ✅ |
+| Điều khiển xem: kéo xoay (orbit), cuộn zoom, pan; góc nhìn có sẵn (trước/bên/trên); tự xoay; wireframe; reset góc nhìn | ✅ |
+| Thumbnail grid: chụp khi xem lần đầu, cache theo hash | ✅ |
+| #3 Preview animation clip trong FBX | ✅ |
+| #1 Thông số (tris, vertex, mesh, material, bone, clip, dung lượng) + cảnh báo ngân sách playable | ✅ |
+| Panel chi tiết: cây dependency, loại shader, cảnh báo thiếu / ghép theo tên | ✅ |
+| Tăng tốc chỉ mục GUID: dùng lại chỉ mục của commit trước cho các `.meta` không đổi | ⏳ |
+| Unit test resolver, client, cache (43 test) + e2e trên repo thật | ✅ |
 
 ## Phase 4 — Import cơ bản (Mốc B)
 Mục tiêu: chọn FBX → copy FBX + dependency (kèm `.meta`, giữ GUID) vào project đích. Chưa lọc trùng phức tạp: GUID đã có thì bỏ qua.
@@ -187,6 +189,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-27 | **Phase 3 xong** — Mốc A đạt: xem FBX 3D (xoay/zoom/pan, góc nhìn, wireframe, animation), dependency kiểu A/B, thông số + ngân sách playable, thumbnail. Test trên Short_Wood (A), LogPlatform (thiếu material), Snow_Tree (B), TF_Player_Throw (animation). |
 | 2026-10-27 | Sửa: nhớ branch (do app dev chạy main process cũ — `npm run dev` giờ dùng `--watch`); app tự cài gh, không cần Terminal; tương thích câu chữ mới của gh 2.103. |
 | 2026-10-27 | **Phase 2 xong**: test end-to-end với tài khoản thật trên `hb_creative_xp_hero @ vn/net-catch` — 747 FBX, cache hoạt động. Thêm đăng nhập gh qua trình duyệt ngay trong app. |
 | 2026-10-27 | **Phase 2 code xong**: đăng nhập gh/PAT, list repo/branch, Trees API + LFS + fallback git, dò Unity root, thư mục loại trừ. 26 unit test + smoke test qua. Spike repo thật → PLAN §11. Còn: test end-to-end với tài khoản thật. |

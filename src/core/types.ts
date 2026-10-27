@@ -1,3 +1,6 @@
+import type { DepContext } from './deps/fbx'
+import type { DependencyReport } from './deps/types'
+
 // Shared domain types. Keep this file free of DOM / Node / Electron imports so
 // it can be used from both the main process (indexer) and the renderer.
 
@@ -30,14 +33,6 @@ export interface Asset {
   lfs: boolean
 }
 
-/** A dependency edge found by a resolver (filled in from Phase 3). */
-export interface DepNode {
-  guid: string
-  path?: string
-  kind: string
-  children: DepNode[]
-}
-
 /** Per-type statistics, stored as JSON in the index (`stats_json`). */
 export type AssetStats = Record<string, number | string | boolean>
 
@@ -55,12 +50,6 @@ export interface PreviewProvider {
   kind: PreviewKind
   /** Always async so previews rendered elsewhere (Companion / CI) can plug in later. */
   load(asset: Asset, ctx: PreviewContext): Promise<PreviewResult>
-}
-
-export interface ResolveContext {
-  /** Looks up a path by GUID in the branch index. */
-  pathForGuid(guid: string): string | undefined
-  readText(path: string): Promise<string>
 }
 
 export interface AssetCheckResult {
@@ -82,8 +71,8 @@ export interface AssetTypeHandler {
   /** Short badge text shown on cards, e.g. 'FBX'. */
   badge: string
   match(entry: TreeEntry): boolean
-  /** Defaults to the generic GUID resolver once it exists (Phase 3). */
-  resolveDependencies?(asset: Asset, ctx: ResolveContext): Promise<DepNode[]>
+  /** Files this asset needs (materials, textures, shaders), by repo path. */
+  resolveDependencies?(repoPath: string, ctx: DepContext): Promise<DependencyReport>
   getStats?(asset: Asset): Promise<AssetStats>
   checks?: AssetCheck[]
   preview: PreviewProvider

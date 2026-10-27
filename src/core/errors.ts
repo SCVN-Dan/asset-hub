@@ -14,6 +14,8 @@ export interface SourceErrorDetail {
   resetAt?: number
   /** URL where the user authorises the token for SAML SSO. */
   ssoUrl?: string
+  /** HTTP status, when the error came from a response. */
+  status?: number
 }
 
 export class SourceError extends Error {

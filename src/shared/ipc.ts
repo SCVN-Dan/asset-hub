@@ -1,4 +1,4 @@
-import type { RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { DependencyReport, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { Settings } from './settings'
 
 export const IPC = {
@@ -17,7 +17,13 @@ export const IPC = {
   listRepos: 'source:list-repos',
   listBranches: 'source:list-branches',
   listTree: 'source:list-tree',
-  openExternal: 'shell:open-external'
+  openExternal: 'shell:open-external',
+  resolveAsset: 'assets:resolve',
+  readFile: 'assets:read-file',
+  findByNames: 'assets:find-by-names',
+  indexProgress: 'assets:index-progress',
+  getThumbs: 'thumbs:get',
+  saveThumb: 'thumbs:save'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
@@ -73,5 +79,17 @@ export interface AssetHubApi {
     listRepos(): Promise<IpcResult<RepoRef[]>>
     listBranches(repo: string): Promise<IpcResult<string[]>>
     listTree(repo: string, branch: string): Promise<IpcResult<TreeEntry[]>>
+  }
+  assets: {
+    /** Materials, textures and shaders of one asset. Repo paths throughout. */
+    resolve(repo: string, branch: string, path: string, root: string): Promise<IpcResult<DependencyReport>>
+    readFile(repo: string, branch: string, path: string): Promise<IpcResult<Uint8Array>>
+    findByNames(repo: string, branch: string, names: string[], nearPath: string, root: string): Promise<IpcResult<Record<string, string | null>>>
+    /** Progress of the one-off GUID index build for a commit. */
+    onIndexProgress(listener: (progress: { done: number; total: number }) => void): () => void
+  }
+  thumbs: {
+    get(keys: string[]): Promise<Record<string, string>>
+    save(key: string, dataUrl: string): Promise<void>
   }
 }

@@ -9,7 +9,8 @@
     "fbx": "FBX"
   },
   "preview": {
-    "notYet": "3D preview arrives in a later phase."
+    "notYet": "3D preview arrives in a later phase.",
+    "renderer": "Rendered in the app."
   },
   "signin": {
     "tagline": "Pull FBX and dependencies from a GitHub branch",
@@ -78,7 +79,6 @@
     "sha": "Blob SHA",
     "type": "Type",
     "deps": "Dependencies",
-    "depsLater": "Materials, textures and shaders are resolved in a later phase.",
     "copyPath": "Copy path",
     "copied": "Copied"
   },
@@ -119,5 +119,69 @@
   "picker": {
     "search": "Search {{label}}…",
     "noMatch": "No matches."
+  },
+  "viewer": {
+    "loading": "Loading model…",
+    "error": "Could not display this model: {{message}}",
+    "tools": "View controls",
+    "view": {
+      "front": "Front",
+      "side": "Side",
+      "top": "Top",
+      "reset": "Reset"
+    },
+    "autoRotate": "Auto-rotate",
+    "wireframe": "Wireframe",
+    "animation": "Animation",
+    "noAnimation_one": "{{count}} animation clip — pick to play",
+    "noAnimation_other": "{{count}} animation clips — pick to play",
+    "hint": "Drag to rotate · scroll to zoom · right-drag to pan",
+    "needsRepo": "Preview needs a GitHub repository (not sample data)."
+  },
+  "stats": {
+    "title": "Stats",
+    "triangles": "Triangles",
+    "vertices": "Vertices",
+    "meshes": "Meshes",
+    "materials": "Materials",
+    "bones": "Bones",
+    "clips": "Animations",
+    "file": "FBX size",
+    "textures": "Textures"
+  },
+  "budget": {
+    "triangles": "{{value}} triangles — above the playable budget of {{limit}}.",
+    "textureSize": "A texture is {{value}} px — above {{limit}} px for playables.",
+    "textureBytes": "Textures total {{value}} — above {{limit}}.",
+    "fileBytes": "FBX is {{value}} — above {{limit}}.",
+    "bones": "{{value}} bones — above {{limit}}."
+  },
+  "deps": {
+    "needsRepo": "Dependencies need a GitHub repository.",
+    "resolving": "Resolving materials and textures…",
+    "indexing": "Indexing project GUIDs (first time for this commit): {{done}} / {{total}}",
+    "missing": "missing",
+    "byName": "by name",
+    "embedded": "Textures named inside the FBX",
+    "files_one": "An import would copy {{count}} file (with .meta).",
+    "files_other": "An import would copy {{count}} files (with .meta).",
+    "kind": {
+      "A": "Separate materials",
+      "B": "Embedded materials",
+      "none": "No materials"
+    },
+    "shader": {
+      "builtin": "built-in",
+      "package": "package",
+      "project": "custom"
+    },
+    "warning": {
+      "missingMaterial": "Some materials referenced by this FBX are not in the repository.",
+      "missingTexture": "Some textures could not be found.",
+      "textureByName": "Textures were matched by file name — check they are the right ones.",
+      "customShader": "Uses a custom shader from the project; it may not exist in the target project.",
+      "noMeta": "This FBX has no .meta file, so its import settings and GUID are unknown.",
+      "noMaterials": "Material import is turned off for this FBX."
+    }
   }
 }

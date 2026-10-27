@@ -1,18 +1,18 @@
+import { resolveFbxDependencies } from '../deps/fbx'
 import type { AssetTypeHandler } from '../types'
 
 const FBX_EXT = /\.fbx$/i
 
-/**
- * Phase 1: recognises FBX files only. Dependency resolution (kind A via GUID,
- * kind B via texture names), stats and the three.js preview arrive in Phase 3.
- */
+/** FBX models: kind A materials via GUID, kind B textures via names inside the FBX. */
 export const fbxHandler: AssetTypeHandler = {
   id: 'fbx',
   labelKey: 'assetTypes.fbx',
   badge: 'FBX',
   match: (entry) => FBX_EXT.test(entry.path),
+  resolveDependencies: resolveFbxDependencies,
   preview: {
     kind: 'three',
-    load: async () => ({ status: 'unavailable', reasonKey: 'preview.notYet' })
+    // Rendered in the renderer with three.js; nothing to prepare here.
+    load: async () => ({ status: 'unavailable', reasonKey: 'preview.renderer' })
   }
 }

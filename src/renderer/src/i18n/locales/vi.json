@@ -9,7 +9,8 @@
     "fbx": "FBX"
   },
   "preview": {
-    "notYet": "Preview 3D sẽ có ở phase sau."
+    "notYet": "Preview 3D sẽ có ở phase sau.",
+    "renderer": "Hiển thị trong app."
   },
   "signin": {
     "tagline": "Lấy FBX và dependency từ branch GitHub",
@@ -76,7 +77,6 @@
     "sha": "Blob SHA",
     "type": "Loại",
     "deps": "Dependency",
-    "depsLater": "Material, texture và shader sẽ được resolve ở phase sau.",
     "copyPath": "Copy đường dẫn",
     "copied": "Đã copy"
   },
@@ -117,5 +117,67 @@
   "picker": {
     "search": "Tìm {{label}}…",
     "noMatch": "Không có kết quả."
+  },
+  "viewer": {
+    "loading": "Đang tải model…",
+    "error": "Không hiển thị được model: {{message}}",
+    "tools": "Điều khiển góc nhìn",
+    "view": {
+      "front": "Trước",
+      "side": "Bên",
+      "top": "Trên",
+      "reset": "Đặt lại"
+    },
+    "autoRotate": "Tự xoay",
+    "wireframe": "Wireframe",
+    "animation": "Animation",
+    "noAnimation_other": "{{count}} animation clip — chọn để phát",
+    "hint": "Kéo để xoay · cuộn để zoom · kéo chuột phải để di chuyển",
+    "needsRepo": "Preview cần repo GitHub (không dùng được với dữ liệu mẫu)."
+  },
+  "stats": {
+    "title": "Thông số",
+    "triangles": "Tam giác",
+    "vertices": "Đỉnh",
+    "meshes": "Mesh",
+    "materials": "Material",
+    "bones": "Bone",
+    "clips": "Animation",
+    "file": "Dung lượng FBX",
+    "textures": "Texture"
+  },
+  "budget": {
+    "triangles": "{{value}} tam giác — vượt ngân sách playable {{limit}}.",
+    "textureSize": "Có texture {{value}} px — vượt {{limit}} px cho playable.",
+    "textureBytes": "Tổng texture {{value}} — vượt {{limit}}.",
+    "fileBytes": "FBX nặng {{value}} — vượt {{limit}}.",
+    "bones": "{{value}} bone — vượt {{limit}}."
+  },
+  "deps": {
+    "needsRepo": "Dependency cần repo GitHub.",
+    "resolving": "Đang tìm material và texture…",
+    "indexing": "Đang lập chỉ mục GUID của project (lần đầu cho commit này): {{done}} / {{total}}",
+    "missing": "thiếu",
+    "byName": "theo tên",
+    "embedded": "Texture được nhắc trong FBX",
+    "files_other": "Import sẽ copy {{count}} file (kèm .meta).",
+    "kind": {
+      "A": "Material tách ra",
+      "B": "Material nhúng",
+      "none": "Không có material"
+    },
+    "shader": {
+      "builtin": "built-in",
+      "package": "package",
+      "project": "custom"
+    },
+    "warning": {
+      "missingMaterial": "Một số material mà FBX tham chiếu không có trong repo.",
+      "missingTexture": "Không tìm thấy một số texture.",
+      "textureByName": "Texture được ghép theo tên file — hãy kiểm tra lại cho đúng.",
+      "customShader": "Dùng shader custom của project; project đích có thể không có shader này.",
+      "noMeta": "FBX này không có file .meta nên không rõ import settings và GUID.",
+      "noMaterials": "FBX này tắt import material."
+    }
   }
 }

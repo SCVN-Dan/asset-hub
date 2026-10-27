@@ -6,7 +6,7 @@ import { IPC, type AuthMethod, type AuthStatus, type IpcError, type IpcResult } 
 import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { listTreeWithGit } from './gitTree'
-import { FileTreeCache } from './treeCache'
+import { FileBlobCache, FileCommitCache, ThumbnailStore } from './caches'
 
 interface Session {
   source: GitHubAssetSource
@@ -33,7 +33,9 @@ const electronFetch: FetchLike = (url, init) => net.fetch(url, init)
 /** Owns the GitHub session in the main process; the token never reaches the renderer. */
 export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; toolsDir: string }): void {
   const store = new AuthStore(options.authFile)
-  const cache = new FileTreeCache(options.cacheDir)
+  const cache = new FileCommitCache(options.cacheDir)
+  const blobCache = new FileBlobCache(options.cacheDir)
+  const thumbs = new ThumbnailStore(options.cacheDir)
   const registry = createDefaultRegistry()
   let session: Session | undefined
   let restored = false
@@ -47,7 +49,9 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     const source = new GitHubAssetSource(client, {
       // Only asset files need their real LFS size; other LFS files stay flagged without a request.
       shouldResolveLfs: (entry) => registry.classify(entry) !== undefined,
+      handlerFor: (entry) => registry.classify(entry),
       cache,
+      blobCache,
       gitFallback: (repo, commit) => listTreeWithGit(options.cacheDir(), repo, commit, token.trim())
     })
     session = { source, status: { signedIn: true, login: user.login, method, persisted } }
@@ -148,4 +152,22 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.listRepos, () => wrap(() => requireSession().listRepos()))
   ipcMain.handle(IPC.listBranches, (_e, repo: string) => wrap(() => requireSession().listBranches(String(repo))))
   ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) => wrap(() => requireSession().listTree(String(repo), String(branch))))
+
+  ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string) =>
+    wrap(() =>
+      requireSession().resolve(String(repo), String(branch), String(path), String(root), (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.indexProgress, progress)
+      })
+    )
+  )
+  ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string) => wrap(() => requireSession().readFile(String(repo), String(branch), String(path))))
+  ipcMain.handle(IPC.findByNames, (_e, repo: string, branch: string, names: unknown, nearPath: string, root: string) =>
+    wrap(() =>
+      requireSession().findByNames(String(repo), String(branch), Array.isArray(names) ? names.map(String) : [], String(nearPath), String(root))
+    )
+  )
+  ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 5000) : []))
+  ipcMain.handle(IPC.saveThumb, (_e, key: unknown, dataUrl: unknown) =>
+    typeof key === 'string' && typeof dataUrl === 'string' ? thumbs.save(key, dataUrl) : undefined
+  )
 }

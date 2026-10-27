@@ -99,7 +99,7 @@ button { cursor: pointer; }
 .search:focus-within { border-color: var(--accent); }
 .search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
 
-.browse-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 360px; }
+.browse-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 420px; }
 .sidebar { overflow: auto; padding: 16px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }
 .content { overflow: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 .details { overflow: auto; padding: 20px; border-left: 1px solid var(--border); background: var(--panel); display: flex; flex-direction: column; gap: 16px; }
@@ -138,6 +138,37 @@ button { cursor: pointer; }
 .kv dd { margin: 0; word-break: break-all; }
 .note { padding: 10px 12px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); color: var(--muted); font-size: 12px; }
 
+/* ---------- viewer & details ---------- */
+.asset-img { width: 100%; height: 100%; object-fit: cover; }
+.viewer { position: relative; flex: 0 0 auto; height: 300px; border-radius: 10px; overflow: hidden; background: #1e222b; border: 1px solid var(--border); }
+.viewer-canvas { position: absolute; inset: 0; }
+.viewer-canvas canvas { display: block; cursor: grab; }
+.viewer-canvas canvas:active { cursor: grabbing; }
+.viewer-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; color: var(--muted); font-size: 13px; background: rgba(15, 17, 21, 0.6); }
+.viewer-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.viewer-btn { height: 28px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--border-strong); background: rgba(15, 17, 21, 0.78); color: var(--text-2); font-size: 12px; }
+.viewer-btn:hover { color: var(--text); }
+.viewer-btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.viewer-clips { position: absolute; left: 8px; bottom: 30px; }
+.viewer-clips .select { height: 30px; font-size: 12px; background: rgba(15, 17, 21, 0.85); max-width: 260px; }
+.viewer-hint { position: absolute; left: 10px; bottom: 8px; font-size: 11px; color: var(--muted); text-shadow: 0 1px 2px #000; }
+.section { display: flex; flex-direction: column; gap: 8px; }
+.stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.stat-grid div { padding: 8px; border-radius: 6px; background: var(--bg); border: 1px solid var(--border); }
+.stat-grid dt { font-size: 11px; color: var(--muted); }
+.stat-grid dd { margin: 2px 0 0; font-size: 14px; font-weight: 600; }
+.warn-note { margin: 0; padding: 8px 10px; border-radius: var(--radius); background: var(--warn-bg); border: 1px solid var(--warn-border); color: #f7d9a0; font-size: 12px; }
+.dep-list, .dep-list ul { list-style: none; margin: 0; padding: 0; }
+.dep-row { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; }
+.dep-child { padding-left: 18px; }
+.dep-type { flex: 0 0 30px; font-size: 10px; font-weight: 700; color: var(--muted); }
+.dep-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-meta { flex: 0 0 auto; font-size: 11px; color: var(--muted); }
+.dot { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; }
+.dot-ok { background: #3fcf8e; }
+.dot-info { background: #6aa8ff; }
+.dot-warn { background: var(--warn); }
+
 /* ---------- settings ---------- */
 .settings { max-width: 720px; width: 100%; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
 .settings-head { display: flex; align-items: center; gap: 16px; }
@@ -146,5 +177,5 @@ button { cursor: pointer; }
 .setting h2 { margin: 0; font-size: 15px; font-weight: 600; }
 
 @media (max-width: 1200px) {
-  .browse-body { grid-template-columns: 220px minmax(0, 1fr) 300px; }
+  .browse-body { grid-template-columns: 220px minmax(0, 1fr) 360px; }
 }

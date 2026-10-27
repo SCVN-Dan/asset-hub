@@ -24,7 +24,6 @@ interface Props {
   source: AssetSource
   registry: HandlerRegistry
   language: Language
-  cacheDir: string
   excludedFolders: string[]
   /** Signed-in GitHub login, shown in the top bar. */
   login?: string
@@ -49,7 +48,6 @@ export function Browse({
   source,
   registry,
   language,
-  cacheDir,
   excludedFolders,
   login,
   initialRepo,
@@ -70,6 +68,7 @@ export function Browse({
   const [folder, setFolder] = useState('')
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string>()
+  const [thumbs, setThumbs] = useState<Record<string, string>>({})
 
   useEffect(() => {
     let cancelled = false
@@ -151,6 +150,22 @@ export function Browse({
     return ofType.filter((a) => isInFolder(a.path, folder) && (!q || a.name.toLowerCase().includes(q)))
   }, [ofType, folder, query])
   const selected = visible.find((a) => a.id === selectedId)
+  const live = useMemo(() => (source.isDemo || !repo || !branch ? undefined : { repo, branch, root }), [source, repo, branch, root])
+
+  // Thumbnails rendered earlier, keyed by the model's content hash.
+  useEffect(() => {
+    if (source.isDemo || !allAssets.length) return
+    let cancelled = false
+    void window.api.thumbs.get(allAssets.map((a) => a.sha)).then((found) => !cancelled && setThumbs(found))
+    return () => {
+      cancelled = true
+    }
+  }, [source, allAssets])
+
+  const saveThumb = (key: string, dataUrl: string) => {
+    setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
+    void window.api.thumbs.save(key, dataUrl)
+  }
 
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -277,6 +292,7 @@ export function Browse({
                   key={a.id}
                   asset={a}
                   handler={registry.get(a.type)}
+                  thumb={thumbs[a.sha]}
                   selected={a.id === selectedId}
                   onSelect={() => setSelectedId(a.id)}
                 />
@@ -285,7 +301,7 @@ export function Browse({
           )}
         </main>
 
-        <AssetDetails asset={selected} handler={selected && registry.get(selected.type)} cacheDir={cacheDir} />
+        <AssetDetails asset={selected} handler={selected && registry.get(selected.type)} live={live} onThumb={saveThumb} />
       </div>
     </div>
   )

@@ -83,7 +83,6 @@ export function App() {
           source={source}
           registry={registry}
           language={settings.language}
-          cacheDir={settings.cacheDir}
           excludedFolders={settings.excludedFolders}
           login={auth?.login}
           initialRepo={source.isDemo ? undefined : settings.lastRepo}

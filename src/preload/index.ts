@@ -31,6 +31,20 @@ const api: AssetHubApi = {
     listRepos: () => ipcRenderer.invoke(IPC.listRepos),
     listBranches: (repo) => ipcRenderer.invoke(IPC.listBranches, repo),
     listTree: (repo, branch) => ipcRenderer.invoke(IPC.listTree, repo, branch)
+  },
+  assets: {
+    resolve: (repo, branch, path, root) => ipcRenderer.invoke(IPC.resolveAsset, repo, branch, path, root),
+    readFile: (repo, branch, path) => ipcRenderer.invoke(IPC.readFile, repo, branch, path),
+    findByNames: (repo, branch, names, nearPath, root) => ipcRenderer.invoke(IPC.findByNames, repo, branch, names, nearPath, root),
+    onIndexProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: { done: number; total: number }) => listener(progress)
+      ipcRenderer.on(IPC.indexProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.indexProgress, handler)
+    }
+  },
+  thumbs: {
+    get: (keys) => ipcRenderer.invoke(IPC.getThumbs, keys),
+    save: (key, dataUrl) => ipcRenderer.invoke(IPC.saveThumb, key, dataUrl)
   }
 }
 

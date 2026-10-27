@@ -3,15 +3,16 @@ import { SourceError } from '../errors'
 import type { TreeEntry } from '../types'
 import { GitHubClient, nextLink, type FetchLike } from './client'
 import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
-import { GitHubAssetSource, type TreeCache } from './source'
+import { createDefaultRegistry } from '../index'
+import { GitHubAssetSource, type CommitCache } from './source'
 
-type Route = (url: string, body?: string) => { status?: number; json: unknown; headers?: Record<string, string> }
+type Route = (url: string, body?: string, headers?: Record<string, string>) => { status?: number; json?: unknown; bytes?: string; headers?: Record<string, string> }
 
 function fakeFetch(route: Route): { fetch: FetchLike; calls: string[] } {
   const calls: string[] = []
   const fetch: FetchLike = async (url, init) => {
     calls.push(`${init?.method ?? 'GET'} ${url}`)
-    const r = route(url, init?.body)
+    const r = route(url, init?.body, init?.headers)
     const status = r.status ?? 200
     const headers = new Map(Object.entries(r.headers ?? {}).map(([k, v]) => [k.toLowerCase(), v]))
     return {
@@ -19,7 +20,8 @@ function fakeFetch(route: Route): { fetch: FetchLike; calls: string[] } {
       ok: status >= 200 && status < 300,
       headers: { get: (n) => headers.get(n.toLowerCase()) ?? null },
       json: async () => r.json,
-      text: async () => JSON.stringify(r.json)
+      text: async () => JSON.stringify(r.json),
+      arrayBuffer: async () => new TextEncoder().encode(r.bytes ?? '').buffer as ArrayBuffer
     }
   }
   return { fetch, calls }
@@ -108,6 +110,25 @@ describe('GitHubClient', () => {
     expect(texts.size).toBe(120)
   })
 
+  it('splits and retries a batch on gateway timeouts', async () => {
+    let failures = 2
+    const { fetch, calls } = fakeFetch((_url, body) => {
+      if (failures-- > 0) return { status: 504, json: {} }
+      const query = JSON.parse(body!).query as string
+      const aliases = [...query.matchAll(/(f\d+): object/g)].map((m) => m[1])
+      return { json: { data: { repository: Object.fromEntries(aliases.map((a) => [a, { text: a }])) } } }
+    })
+    const texts = await new GitHubClient('t', fetch).getBlobTexts('o/r', 'c1', Array.from({ length: 30 }, (_, i) => `p${i}`))
+    expect(texts.size).toBe(30)
+    expect(calls.length).toBeGreaterThan(2)
+  }, 20000)
+
+  it('does not retry permanent errors', async () => {
+    const { fetch, calls } = fakeFetch(() => ({ status: 401, json: { message: 'Bad credentials' } }))
+    await expect(new GitHubClient('t', fetch).getBlobTexts('o/r', 'c1', ['a'])).rejects.toMatchObject({ code: 'unauthorized' })
+    expect(calls).toHaveLength(1)
+  })
+
   it('parses next links', () => {
     expect(nextLink(null)).toBeUndefined()
     expect(nextLink('<https://x/1>; rel="prev", <https://x/3>; rel="next"')).toBe('https://x/3')
@@ -124,7 +145,7 @@ describe('GitHubAssetSource', () => {
     { path: 'Sub', type: 'commit', sha: 'c9' }
   ]
 
-  function source(truncated = false, cache?: TreeCache, gitFallback?: () => Promise<TreeEntry[]>) {
+  function source(truncated = false, cache?: CommitCache, gitFallback?: () => Promise<TreeEntry[]>) {
     const { fetch, calls } = fakeFetch((url, body) => {
       if (url.includes('/git/ref/heads/')) return { json: { object: { sha: 'commit1' } } }
       if (url.includes('/git/trees/')) return { json: { truncated, tree } }
@@ -157,10 +178,10 @@ describe('GitHubAssetSource', () => {
   })
 
   it('serves repeat requests for the same commit from the cache', async () => {
-    const store = new Map<string, TreeEntry[]>()
-    const cache: TreeCache = {
-      get: async (r, c) => store.get(`${r}@${c}`),
-      set: async (r, c, e) => void store.set(`${r}@${c}`, e)
+    const store = new Map<string, unknown>()
+    const cache: CommitCache = {
+      get: async <T,>(k: string, r: string, c: string) => store.get(`${k}:${r}@${c}`) as T | undefined,
+      set: async (k, r, c, v) => void store.set(`${k}:${r}@${c}`, v)
     }
     const { src, calls } = source(false, cache)
     await src.listTree('o/r', 'main')
@@ -174,5 +195,83 @@ describe('GitHubAssetSource', () => {
     const fallback = async (): Promise<TreeEntry[]> => [{ path: 'Assets/From/Git.fbx', type: 'blob', sha: 'g1', size: 131 }]
     const entries = await source(true, undefined, fallback).src.listTree('o/r', 'main')
     expect(entries.map((e) => e.path)).toEqual(['Assets/From/Git.fbx'])
+  })
+})
+
+describe('GitHubAssetSource file access', () => {
+  const G = (n: number) => n.toString(16).padStart(32, '0')
+  const tree = [
+    { path: 'p/ProjectSettings/ProjectVersion.txt', type: 'blob', sha: 'pv', size: 20 },
+    { path: 'p/Assets/Hero.fbx', type: 'blob', sha: 'fbxsha', size: 500 },
+    { path: 'p/Assets/Hero.fbx.meta', type: 'blob', sha: 'm1', size: 400 },
+    { path: 'p/Assets/M.mat', type: 'blob', sha: 'm2', size: 300 },
+    { path: 'p/Assets/M.mat.meta', type: 'blob', sha: 'm3', size: 100 },
+    { path: 'p/Assets/T.png', type: 'blob', sha: 'pngsha', size: 131 },
+    { path: 'p/Assets/T.png.meta', type: 'blob', sha: 'm4', size: 100 },
+    { path: '.gitattributes', type: 'blob', sha: 'ga', size: 30 }
+  ]
+  const texts: Record<string, string> = {
+    '.gitattributes': '*.png filter=lfs\n',
+    'p/Assets/Hero.fbx.meta': `guid: ${G(1)}\n  externalObjects:\n  - first:\n      type: UnityEngine:Material\n      name: M\n    second: {fileID: 2100000, guid: ${G(2)}, type: 2}\n  materials:\n    materialImportMode: 2\n`,
+    'p/Assets/M.mat.meta': `guid: ${G(2)}\n`,
+    'p/Assets/T.png.meta': `guid: ${G(3)}\n`,
+    'p/Assets/M.mat': `  m_Name: M\n  m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}\n    m_TexEnvs:\n    - _BaseMap:\n        m_Texture: {fileID: 2800000, guid: ${G(3)}, type: 3}\n    m_Floats: []\n`
+  }
+  function make() {
+    const { fetch, calls } = fakeFetch((url, body, headers) => {
+      if (url.includes('/git/ref/heads/')) return { json: { object: { sha: 'c1' } } }
+      if (url.includes('/git/trees/')) return { json: { truncated: false, tree } }
+      if (url.endsWith('/graphql')) {
+        const query = JSON.parse(body!).query as string
+        const repository: Record<string, { text: string } | null> = {}
+        for (const m of query.matchAll(/(f\d+): object\(expression: "c1:([^"]+)"\)/g)) repository[m[1]] = m[2] in texts ? { text: texts[m[2]] } : null
+        return { json: { data: { repository } } }
+      }
+      if (url.endsWith('/git/blobs/fbxsha')) return { bytes: 'Kaydara FBX Binary' }
+      if (url.endsWith('/git/blobs/pngsha')) return { bytes: `version https://git-lfs.github.com/spec/v1\noid sha256:${'b'.repeat(64)}\nsize 9\n` }
+      if (url.endsWith('/info/lfs/objects/batch')) {
+        expect(headers?.Authorization).toMatch(/^Basic /)
+        return { json: { objects: [{ actions: { download: { href: 'https://lfs.example/obj', header: { 'X-Sig': '1' } } } }] } }
+      }
+      if (url === 'https://lfs.example/obj') {
+        expect(headers?.Authorization).toBeUndefined()
+        return { bytes: 'PNGBYTES!' }
+      }
+      return { status: 404, json: {} }
+    })
+    const registry = createDefaultRegistry()
+    const store = new Map<string, Uint8Array>()
+    const src = new GitHubAssetSource(new GitHubClient('t', fetch), {
+      shouldResolveLfs: () => false,
+      handlerFor: (e) => registry.classify(e),
+      blobCache: { get: async (k) => store.get(k), set: async (k, b) => void store.set(k, b) }
+    })
+    return { src, calls }
+  }
+
+  it('reads git blobs directly and LFS files through the batch API, then caches them', async () => {
+    const { src, calls } = make()
+    const dec = (b: Uint8Array) => new TextDecoder().decode(b)
+    expect(dec(await src.readFile('o/r', 'main', 'p/Assets/Hero.fbx'))).toBe('Kaydara FBX Binary')
+    expect(dec(await src.readFile('o/r', 'main', 'p/Assets/T.png'))).toBe('PNGBYTES!')
+    const before = calls.length
+    await src.readFile('o/r', 'main', 'p/Assets/T.png')
+    expect(calls.length).toBe(before)
+  })
+
+  it('resolves an FBX through the GUID index', async () => {
+    const { src } = make()
+    await src.listTree('o/r', 'main')
+    const progress: number[] = []
+    const report = await src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/', (p) => progress.push(p.done))
+    expect(report.kind).toBe('A')
+    expect(report.materials[0]).toMatchObject({ name: 'M', path: 'p/Assets/M.mat', shader: { label: 'Universal Render Pipeline/Lit' } })
+    expect(report.materials[0].textures[0]).toMatchObject({ prop: '_BaseMap', path: 'p/Assets/T.png' })
+    expect(progress.at(-1)).toBe(2) // material + texture metas; model metas are not indexed
+  })
+
+  it('finds files by name nearest to a path', async () => {
+    const { src } = make()
+    expect(await src.findByNames('o/r', 'main', ['t.PNG', 'nope.png'], 'p/Assets/Hero.fbx', 'p/')).toEqual({ 't.PNG': 'p/Assets/T.png', 'nope.png': null })
   })
 })
