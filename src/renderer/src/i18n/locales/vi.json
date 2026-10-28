@@ -350,6 +350,28 @@
       "low": "Chất lượng thấp"
     }
   },
+  "sprite": {
+    "title": "Sprite",
+    "mode": "Chế độ",
+    "modes": {
+      "single": "Single",
+      "multiple": "Multiple (sheet)",
+      "polygon": "Polygon"
+    },
+    "count": "Số sprite",
+    "used": "Sheet đã dùng",
+    "ppu": "Pixels per unit",
+    "border": "Viền 9-slice",
+    "packingTag": "Packing tag",
+    "outlines": "Sprite",
+    "slices": "9-slice",
+    "list_one": "{{count}} sprite",
+    "list_other": "{{count}} sprite",
+    "sliced": "9-slice",
+    "warn": {
+      "empty": "{{percent}}% sheet bỏ trống — xếp sát lại sẽ tiết kiệm bộ nhớ."
+    }
+  },
   "material": {
     "title": "Material",
     "shader": "Shader",

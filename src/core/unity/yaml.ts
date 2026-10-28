@@ -319,3 +319,71 @@ export function builtAudioBytes(seconds: number, sourceRate: number, sourceChann
   const kbps = (48 + 208 * (s?.quality ?? 1)) * (channels === 1 ? 0.6 : 1)
   return (seconds * kbps * 1000) / 8
 }
+
+/** 9-slice border in pixels (Unity stores it as x = left, y = bottom, z = right, w = top). */
+export interface SpriteBorder {
+  left: number
+  bottom: number
+  right: number
+  top: number
+}
+
+/** One sprite cut from a texture; the rect is in pixels from the bottom-left corner, as Unity stores it. */
+export interface SpriteRect {
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  border?: SpriteBorder
+}
+
+/** Sprite settings of a texture imported as Sprite (2D and UI), from its .meta. */
+export interface SpriteImport {
+  /** 1 Single, 2 Multiple (a sheet), 3 Polygon. */
+  mode: number
+  pixelsPerUnit?: number
+  /** Single mode: the whole texture's 9-slice border. */
+  border?: SpriteBorder
+  /** Multiple mode: the sprites cut from the sheet. */
+  sprites: SpriteRect[]
+  /** Legacy sprite packer tag. */
+  packingTag?: string
+}
+
+function parseBorder(line: string | undefined): SpriteBorder | undefined {
+  const m = /\{x: (-?[\d.]+), y: (-?[\d.]+), z: (-?[\d.]+), w: (-?[\d.]+)\}/.exec(line ?? '')
+  if (!m) return undefined
+  const [left, bottom, right, top] = m.slice(1).map(Number)
+  return left || bottom || right || top ? { left, bottom, right, top } : undefined
+}
+
+/** Undefined when the texture is not imported as a sprite. */
+export function parseSpriteMeta(metaText: string): SpriteImport | undefined {
+  const text = metaText.replace(/\r\n/g, '\n')
+  if (/^\s*textureType: (\d+)/m.exec(text)?.[1] !== '8') return undefined
+  const num = (src: string, key: string) => {
+    const v = new RegExp(`^\\s*${key}: (-?[\\d.]+)`, 'm').exec(src)?.[1]
+    return v === undefined ? undefined : Number(v)
+  }
+  // Each sheet entry starts with "- serializedVersion" at the sprites list's indent; nested lists sit deeper.
+  const list = /^( *)sprites:\n((?:\1 {0,2}- [\s\S]*?))(?=^\1\w)/m.exec(text)
+  const sprites: SpriteRect[] = []
+  if (list) {
+    const indent = list[1]
+    for (const entry of list[2].split(new RegExp(`^${indent} {0,2}- `, 'm')).slice(1)) {
+      const name = /^\s*name: (.*)$/m.exec(entry)?.[1]?.trim()
+      const rect = /rect:\n([\s\S]*?height: [\d.]+)/.exec(entry)?.[1] ?? ''
+      const [x, y, width, height] = ['x', 'y', 'width', 'height'].map((k) => num(rect, k))
+      if (name === undefined || width === undefined || height === undefined) continue
+      sprites.push({ name, x: x ?? 0, y: y ?? 0, width, height, border: parseBorder(/^\s*border: (.*)$/m.exec(entry)?.[1]) })
+    }
+  }
+  return {
+    mode: num(text, 'spriteMode') ?? 1,
+    pixelsPerUnit: num(text, 'spritePixelsToUnits'),
+    border: parseBorder(/^\s*spriteBorder: (.*)$/m.exec(text)?.[1]),
+    sprites,
+    packingTag: /^\s*spritePackingTag: (\S.*)$/m.exec(text)?.[1]?.trim() || undefined
+  }
+}

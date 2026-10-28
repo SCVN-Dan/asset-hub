@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type SpriteBorder, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
@@ -214,6 +214,54 @@ function MaterialSection({ material, look, stats }: { material?: MaterialRef; lo
             </li>
           ))}
         </ul>
+      )}
+    </section>
+  )
+}
+
+const SPRITE_MODES: Record<number, string> = { 1: 'single', 2: 'multiple', 3: 'polygon' }
+const borderText = (b: SpriteBorder) => `L${b.left} · B${b.bottom} · R${b.right} · T${b.top}`
+
+/** Sprite settings: mode, pixels per unit, 9-slice border, and the sprites cut from a sheet. */
+function SpriteSection({ info }: { info: ImageInfo }) {
+  const { t } = useTranslation()
+  const s = info.sprite!
+  // How much of a sheet its sprites use: a mostly empty sheet wastes memory in a playable.
+  const used = s.sprites.reduce((sum, r) => sum + r.width * r.height, 0) / Math.max(1, info.width * info.height)
+  const cells: Array<[string, string]> = [
+    [t('sprite.mode'), t(`sprite.modes.${SPRITE_MODES[s.mode] ?? 'single'}`)],
+    ...(s.sprites.length ? ([[t('sprite.count'), String(s.sprites.length)], [t('sprite.used'), `${Math.round(used * 100)}%`]] as Array<[string, string]>) : []),
+    ...(s.pixelsPerUnit ? ([[t('sprite.ppu'), String(s.pixelsPerUnit)]] as Array<[string, string]>) : []),
+    ...(s.border ? ([[t('sprite.border'), borderText(s.border)]] as Array<[string, string]>) : []),
+    ...(s.packingTag ? ([[t('sprite.packingTag'), s.packingTag]] as Array<[string, string]>) : [])
+  ]
+  return (
+    <section className="section">
+      <span className="label-caps">{t('sprite.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k} className={statClass(v)}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {s.sprites.length > 1 && used < 0.5 && <p className="warn-note">{t('sprite.warn.empty', { percent: Math.round((1 - used) * 100) })}</p>}
+      {s.sprites.length > 0 && (
+        <details className="sprite-list">
+          <summary className="small">{t('sprite.list', { count: s.sprites.length })}</summary>
+          <ol>
+            {s.sprites.map((r, i) => (
+              <li key={`${i}:${r.name}`} className="small">
+                <span className="dep-name">{r.name}</span>
+                <span className="muted">
+                  {r.width}×{r.height}
+                  {r.border && ` · ${t('sprite.sliced')}`}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </details>
       )}
     </section>
   )
@@ -510,6 +558,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       )}
 
       {imageInfo && <TextureSection info={imageInfo} />}
+      {imageInfo?.sprite && <SpriteSection info={imageInfo} />}
       {audioInfo && <AudioSection info={audioInfo} />}
       {handler?.preview.kind === 'material' && <MaterialSection material={report?.materials[0]} look={look} stats={materialStats} />}
 

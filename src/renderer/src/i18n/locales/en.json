@@ -365,6 +365,28 @@
       "low": "Low quality"
     }
   },
+  "sprite": {
+    "title": "Sprite",
+    "mode": "Mode",
+    "modes": {
+      "single": "Single",
+      "multiple": "Multiple (sheet)",
+      "polygon": "Polygon"
+    },
+    "count": "Sprites",
+    "used": "Sheet used",
+    "ppu": "Pixels per unit",
+    "border": "9-slice border",
+    "packingTag": "Packing tag",
+    "outlines": "Sprites",
+    "slices": "9-slice",
+    "list_one": "{{count}} sprite",
+    "list_other": "{{count}} sprites",
+    "sliced": "9-slice",
+    "warn": {
+      "empty": "{{percent}}% of the sheet is empty — a tighter sheet saves memory."
+    }
+  },
   "material": {
     "title": "Material",
     "shader": "Shader",
