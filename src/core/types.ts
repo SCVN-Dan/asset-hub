@@ -80,6 +80,8 @@ export interface AssetTypeHandler {
   materialsFromPrefabs?: boolean
   /** False when `resolveDependencies` never looks a GUID up (a texture is just itself + .meta). */
   usesGuids?: boolean
+  /** How a user takes it: a `.unitypackage` with its dependencies (default), or the file itself (a texture). */
+  delivery?: 'unitypackage' | 'file'
 }
 
 export interface RepoRef {

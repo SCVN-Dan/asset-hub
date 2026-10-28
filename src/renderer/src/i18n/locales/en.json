@@ -356,5 +356,10 @@
       "high": "High quality",
       "low": "Low quality"
     }
+  },
+  "download": {
+    "button": "Download",
+    "saving": "Saving…",
+    "saved": "Saved {{name}} ({{size}})."
   }
 }

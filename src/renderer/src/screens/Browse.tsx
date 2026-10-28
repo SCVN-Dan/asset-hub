@@ -780,6 +780,7 @@ export function Browse({
             asset={catalogSelected}
             thumb={catalogSelected && thumbs[catalogSelected.sha]}
             stats={catalogSelected && modelStats[catalogSelected.sha]}
+            delivery={catalogSelected && registry.get(catalogSelected.type)?.delivery}
             exporting={exportState.status === 'running'}
             onOpen={openLocation}
             onExport={(a) => void exportFromCatalog(a)}

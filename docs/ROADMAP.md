@@ -177,7 +177,7 @@ Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, prev
 
 | Loại | Preview | Dependency / thông số | State |
 |---|---|---|---|
-| **Texture** (png, jpg, tga, psd, gif, bmp; exr/hdr/tif liệt kê nhưng không vẽ) | Ảnh trực tiếp, nền caro / tối / sáng, vừa khung / 1:1; thumbnail lưới là chính ảnh (PSD, TGA tự giải mã) | Kích thước, dung lượng, định dạng, alpha; import settings từ `.meta` (loại, max size, override theo nền tảng, nén, mipmaps, sRGB) → **kích thước khi build**; cảnh báo playable (> 1024 px khi build, không nén, sprite bật mipmaps, > 4 MB); ✓/⚠ trên card chấm theo kích thước build; xuất gói = file + `.meta` | ✅ |
+| **Texture** (png, jpg, tga, psd, gif, bmp; exr/hdr/tif liệt kê nhưng không vẽ) | Ảnh trực tiếp, nền caro / tối / sáng, vừa khung / 1:1; thumbnail lưới là chính ảnh (PSD, TGA tự giải mã) | Kích thước, dung lượng, định dạng, alpha; import settings từ `.meta` (loại, max size, override theo nền tảng, nén, mipmaps, sRGB) → **kích thước khi build**; cảnh báo playable (> 1024 px khi build, không nén, sprite bật mipmaps, > 4 MB); ✓/⚠ trên card chấm theo kích thước build; **Tải về** file ảnh (không xuất gói) | ✅ |
 | **Material** (.mat) | Quả cầu three.js gán texture theo slot | Shader (built-in / package / custom), texture theo GUID — dùng lại `describeMaterials` | ⏳ |
 | **Audio** (wav, mp3, ogg) | Nghe thử + waveform trong app | Độ dài, sample rate, dung lượng; import settings (Load Type, Compression) → cảnh báo playable | ⏳ |
 | **Sprite / UI** (texture kiểu Sprite, atlas) | Ảnh + khung slice / sprite con | Sprite sheet từ `.meta` (spriteMode, rects) | ⏳ |
@@ -256,6 +256,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | Texture: thay Xuất gói / Thêm vào gói bằng nút **Tải về** (lưu file ảnh gốc, LFS lấy nội dung thật, có "Mở trong Finder") — cả ở Mọi branch. Handler khai báo cách giao: `delivery: 'file' \| 'unitypackage'`. |
 | 2026-10-28 | **Phase 6 — Texture xong**: handler mới (tab Texture tự sinh từ registry, xp_hero @ net-catch: 1.375 texture), thumbnail = chính ảnh, panel ảnh + import settings + kích thước khi build + cảnh báo playable, xếp hạng / lọc dùng chung, xuất gói file + `.meta` (không chờ chỉ mục GUID). Chỉ mục Mọi branch ghi kèm danh sách loại asset → tự quét lại một lần khi thêm loại. |
 | 2026-10-28 | **Phase 4.6 xong (phần chính)**: thông số model lưu theo SHA khi tạo thumbnail / mở model; card có ✓/⚠ + tris; sắp xếp Hợp playable nhất / Nhẹ nhất / Ít tris / Dùng nhiều nhất (giữ mức khớp tìm kiếm trước); lọc vừa ngân sách; nút Đo N kết quả; Mở trên GitHub; xuất gói ngay từ kết quả Mọi branch. Kịch bản demo: tìm "fish" trên 104 branch → đo 75 kết quả 44 s → chọn → xuất 1 click. |
 | 2026-10-28 | Ghi nhận góp ý: thêm **Phase 4.6 Playable-aware ranking** (làm tiếp), Phase 6 đổi thành **Thêm loại asset** (Texture ưu tiên 1, Material, Audio, Sprite/UI, Prefab tĩnh, Animation clip), mục "Ý đã cân nhắc nhưng không làm". |

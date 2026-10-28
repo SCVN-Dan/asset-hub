@@ -35,6 +35,7 @@ const api: AssetHubApi = {
   assets: {
     resolve: (repo, branch, path, root, mode) => ipcRenderer.invoke(IPC.resolveAsset, repo, branch, path, root, mode),
     readFile: (repo, branch, path, background) => ipcRenderer.invoke(IPC.readFile, repo, branch, path, background),
+    saveFile: (repo, branch, path) => ipcRenderer.invoke(IPC.saveFile, repo, branch, path),
     findByNames: (repo, branch, names, nearPath, root) => ipcRenderer.invoke(IPC.findByNames, repo, branch, names, nearPath, root),
     onIndexProgress: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, progress: { done: number; total: number }) => listener(progress)

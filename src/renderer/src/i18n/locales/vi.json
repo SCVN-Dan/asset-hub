@@ -341,5 +341,10 @@
       "high": "Chất lượng cao",
       "low": "Chất lượng thấp"
     }
+  },
+  "download": {
+    "button": "Tải về",
+    "saving": "Đang lưu…",
+    "saved": "Đã lưu {{name}} ({{size}})."
   }
 }

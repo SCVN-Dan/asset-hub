@@ -32,6 +32,7 @@ export const IPC = {
   exportPackage: 'export:unitypackage',
   exportProgress: 'export:progress',
   showItemInFolder: 'shell:show-item',
+  saveFile: 'assets:save-file',
   catalogScan: 'catalog:scan',
   catalogPause: 'catalog:pause',
   catalogResume: 'catalog:resume',
@@ -147,6 +148,8 @@ export interface AssetHubApi {
     onIndexProgress(listener: (progress: { done: number; total: number }) => void): () => void
     /** Materials that prefabs put on this model; `near` reads only related prefabs. */
     findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: PrefabScope, excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
+    /** Asks where to save, then writes the file itself (real contents for LFS files). */
+    saveFile(repo: string, branch: string, path: string): Promise<IpcResult<{ canceled: boolean; path?: string; bytes?: number }>>
     /** Bytes read so far by findPrefabMaterials. */
     onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
   }

@@ -8,6 +8,7 @@ import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
 import { ImageViewer, type ImageInfo } from './ImageViewer'
+import { DownloadButton } from './DownloadButton'
 
 interface Props {
   asset: Asset | undefined
@@ -329,7 +330,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{asset.name}</h2>
-        {live && handler?.resolveDependencies && (
+        {live && handler?.delivery === 'file' && <DownloadButton repo={live.repo} branch={live.branch} path={live.root + asset.path} />}
+        {live && handler?.resolveDependencies && handler.delivery !== 'file' && (
           <div className="field-row">
             <button type="button" className="btn btn-primary" onClick={onExport} disabled={exporting}>
               {t('export.exportOne')}

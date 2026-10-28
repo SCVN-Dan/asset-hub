@@ -1,3 +1,4 @@
+import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell } from 'electron'
 import { createDefaultRegistry, SourceError, type RepoRef } from '@core/index'
@@ -276,8 +277,26 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       return { canceled: false, ...result }
     })
   )
+  /** Files this app wrote, the only ones "Show in Finder" may reveal besides packages. */
+  const saved = new Set<string>()
+  ipcMain.handle(IPC.saveFile, (event, repo: unknown, branch: unknown, path: unknown) =>
+    wrapForeground(async () => {
+      const src = requireSession()
+      const repoPath = String(path)
+      const name = repoPath.split('/').pop() || 'file'
+      const ext = name.includes('.') ? name.split('.').pop()! : ''
+      const win = BrowserWindow.fromWebContents(event.sender)
+      const options = { defaultPath: join(app.getPath('downloads'), name), filters: ext ? [{ name: ext.toUpperCase(), extensions: [ext] }] : [] }
+      const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+      if (choice.canceled || !choice.filePath) return { canceled: true }
+      const bytes = await src.readFile(String(repo), String(branch), repoPath)
+      await writeFile(choice.filePath, bytes)
+      saved.add(choice.filePath)
+      return { canceled: false, path: choice.filePath, bytes: bytes.byteLength }
+    })
+  )
   ipcMain.handle(IPC.showItemInFolder, (_e, path: unknown) => {
-    if (typeof path === 'string' && path.endsWith('.unitypackage')) shell.showItemInFolder(path)
+    if (typeof path === 'string' && (path.endsWith('.unitypackage') || saved.has(path))) shell.showItemInFolder(path)
   })
   const requireCatalog = (): CatalogService => {
     if (!session) throw new SourceError('unauthorized', 'Not signed in')

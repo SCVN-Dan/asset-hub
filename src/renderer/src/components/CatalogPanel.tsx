@@ -4,6 +4,7 @@ import { formatBytes, shortPath, type CatalogAsset, type CatalogLocation } from 
 import type { CatalogStatus } from '@shared/ipc'
 import type { SearchScope } from '../useCatalog'
 import { summaryIssues, type StatsSummary } from '@core/checks/playable'
+import { DownloadButton } from './DownloadButton'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 
@@ -147,6 +148,8 @@ interface DetailsProps {
   asset?: CatalogAsset
   thumb?: string
   stats?: StatsSummary
+  /** `file`: offer a download instead of a package export (textures). */
+  delivery?: 'unitypackage' | 'file'
   exporting: boolean
   onOpen(repo: string, branch: string, path: string): void
   /** Exports the file as found on its main branch, without opening that branch. */
@@ -154,7 +157,7 @@ interface DetailsProps {
 }
 
 /** Right panel for a result found in other branches / repos. */
-export function CatalogDetails({ asset, thumb, stats, exporting, onOpen, onExport }: DetailsProps) {
+export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpen, onExport }: DetailsProps) {
   const { t } = useTranslation()
   if (!asset) {
     return (
@@ -177,13 +180,16 @@ export function CatalogDetails({ asset, thumb, stats, exporting, onOpen, onExpor
           <button type="button" className="btn btn-primary" onClick={() => onOpen(first.repo, first.branches[0], first.path)}>
             {t('catalog.open', { branch: first.branches[0] })}
           </button>
-          <button type="button" className="btn" disabled={exporting} onClick={() => onExport(asset)}>
-            {t('export.exportOne')}
-          </button>
+          {delivery !== 'file' && (
+            <button type="button" className="btn" disabled={exporting} onClick={() => onExport(asset)}>
+              {t('export.exportOne')}
+            </button>
+          )}
           <button type="button" className="btn" onClick={() => void window.api.openExternal(githubUrl(first.repo, first.branches[0], first.path))}>
             {t('details.openGitHub')}
           </button>
         </div>
+        {delivery === 'file' && <DownloadButton repo={first.repo} branch={first.branches[0]} path={first.path} />}
         {stats && <StatsLine stats={stats} />}
         <p className="muted small" style={{ margin: 0 }}>
           {t('catalog.openHint')}

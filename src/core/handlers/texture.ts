@@ -10,6 +10,8 @@ export const textureHandler: AssetTypeHandler = {
   badge: 'TEX',
   match: (entry) => TEXTURE_EXT.test(entry.path),
   usesGuids: false,
+  // Artists just want the image: saved as a plain file, no package.
+  delivery: 'file',
   resolveDependencies: async (path, ctx) => {
     const meta = `${path}.meta`
     const hasMeta = ctx.byPath.has(meta)
