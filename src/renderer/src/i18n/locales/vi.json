@@ -64,7 +64,11 @@
     "types": "Loại asset",
     "branchNoPrefix": "Branch",
     "defaultBranch": "mặc định",
-    "loadingBranches": "Đang tải branch…"
+    "loadingBranches": "Đang tải branch…",
+    "mergeCopies": "Gộp file giống hệt",
+    "merged_other": "đã gộp {{count}} bản trùng",
+    "copiesTitle": "{{count}} bản giống hệt trong project",
+    "generatingThumb": "Đang tạo thumbnail…"
   },
   "details": {
     "label": "Chi tiết asset",
@@ -78,7 +82,8 @@
     "type": "Loại",
     "deps": "Dependency",
     "copyPath": "Copy đường dẫn",
-    "copied": "Đã copy"
+    "copied": "Đã copy",
+    "copies_other": "File giống hệt ở {{count}} vị trí"
   },
   "settings": {
     "title": "Cài đặt",

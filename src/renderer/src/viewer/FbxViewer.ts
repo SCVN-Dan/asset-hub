@@ -64,9 +64,19 @@ export class FbxViewer {
     this.loop()
   }
 
-  /** Parses the FBX; texture names inside it are served from `textures` (keyed by lower-case file name). */
-  load(fbx: ArrayBuffer, textures: ReadonlyMap<string, TextureFile>): void {
+  /**
+   * Parses the FBX; texture names inside it are served from `textures` (keyed
+   * by lower-case file name). Resolves once those textures have loaded (or
+   * after a short timeout), so a snapshot taken then shows them.
+   */
+  load(fbx: ArrayBuffer, textures: ReadonlyMap<string, TextureFile>): Promise<void> {
     const manager = new THREE.LoadingManager()
+    let started = false
+    const loaded = new Promise<void>((resolve) => {
+      manager.onLoad = () => resolve()
+      setTimeout(resolve, 4000)
+    })
+    manager.onStart = () => (started = true)
     manager.setURLModifier((url) => textures.get(baseLower(url))?.url ?? TRANSPARENT_PNG)
     manager.addHandler(/\.tga$/i, new TGALoader(manager))
     const model = new FBXLoader(manager).parse(fbx, '')
@@ -74,6 +84,7 @@ export class FbxViewer {
     this.scene.add(model)
     this.frameModel()
     if (model.animations.length) this.mixer = new THREE.AnimationMixer(model)
+    return started ? loaded : Promise.resolve()
   }
 
   /** Puts .mat textures onto the FBX materials with matching names. */

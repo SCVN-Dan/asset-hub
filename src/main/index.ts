@@ -39,11 +39,15 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   const userData = app.getPath('userData')
+  // Not "cache": on case-insensitive disks that is Chromium's own "Cache" folder,
+  // which Chromium cleans up on launch — deleting thumbnails and downloads.
+  const cacheDir = join(userData, 'AssetHubCache')
   const settings = new SettingsStore(join(userData, 'settings.json'), {
     language: 'en',
-    cacheDir: join(userData, 'cache'),
+    cacheDir,
     excludedFolders: DEFAULT_EXCLUDED_FOLDERS
   })
+  if (settings.get().cacheDir.toLowerCase() === join(userData, 'cache').toLowerCase()) settings.set({ cacheDir })
 
   ipcMain.handle(IPC.getSettings, () => settings.get())
   ipcMain.handle(IPC.setSettings, (_event, patch: unknown) => settings.set(patch))

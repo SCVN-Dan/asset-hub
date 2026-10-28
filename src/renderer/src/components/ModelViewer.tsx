@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { imageSize, type ModelStats } from '@core/checks/playable'
-import { baseName, extractFbxTextureNames, type DependencyReport } from '@core/index'
+import type { ModelStats } from '@core/checks/playable'
+import { extractFbxTextureNames, type DependencyReport } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type MaterialSlot, type TextureFile, type ViewPreset } from '../viewer/FbxViewer'
+import { DRAWABLE, fetchTextureFile } from '../viewer/textures'
 
 export interface LiveContext {
   repo: string
@@ -21,10 +22,7 @@ interface Props {
   onThumb(dataUrl: string): void
 }
 
-/** Formats three.js can display; others (PSD, EXR…) are listed but not drawn. */
-const DRAWABLE = /\.(png|jpe?g|tga|bmp|gif|webp)$/i
 const MAX_TEXTURES = 16
-const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
 
 type Status = 'loading' | 'ready' | 'error'
 
@@ -48,14 +46,8 @@ export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
     const wanted = [...new Set(paths)].filter((p) => DRAWABLE.test(p) && !files.current.has(p)).slice(0, MAX_TEXTURES)
     await Promise.all(
       wanted.map(async (p) => {
-        try {
-          const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, p))
-          const ext = p.split('.').pop()!.toLowerCase()
-          const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[ext] ?? 'application/octet-stream' }))
-          files.current.set(p, { name: baseName(p), url, bytes: bytes.byteLength, ...imageSize(p, bytes) })
-        } catch {
-          // A texture that fails to download just renders untextured.
-        }
+        const file = await fetchTextureFile(live, p)
+        if (file) files.current.set(p, file)
       })
     )
   }
@@ -64,7 +56,7 @@ export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
     const v = viewer.current
     if (!v) return
     callbacks.current.onStats(v.stats(fileBytes.current, [...files.current.values()]))
-    setTimeout(() => !v.isDisposed() && callbacks.current.onThumb(v.snapshot()), 700)
+    setTimeout(() => !v.isDisposed() && callbacks.current.onThumb(v.snapshot()), 300)
   }
 
   useEffect(() => {
@@ -90,7 +82,8 @@ export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
         await fetchTextures(Object.values(found).filter((p): p is string => !!p))
         if (cancelled) return
         const byName = new Map([...ownFiles.values()].map((f) => [f.name.toLowerCase(), f]))
-        v.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, byName)
+        await v.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, byName)
+        if (cancelled) return
         setClips(v.stats(0, []).animations)
         setStatus('ready')
         publish()

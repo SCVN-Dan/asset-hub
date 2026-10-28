@@ -19,6 +19,9 @@ interface Props {
   exporting: boolean
   onTogglePack(): void
   onExport(): void
+  /** Byte-identical copies of this file, including itself. */
+  copies?: Asset[]
+  onSelectCopy(id: string): void
 }
 
 type Deps = { status: 'idle' } | { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; report: DependencyReport }
@@ -43,7 +46,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
@@ -249,6 +252,21 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               </p>
             </>
           )}
+        </section>
+      )}
+
+      {copies && copies.length > 1 && (
+        <section className="section">
+          <span className="label-caps">{t('details.copies', { count: copies.length })}</span>
+          <ul className="copy-list">
+            {copies.map((c) => (
+              <li key={c.id}>
+                <button type="button" className="copy-item" aria-current={c.id === asset.id} onClick={() => onSelectCopy(c.id)} title={c.path}>
+                  {c.path}
+                </button>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

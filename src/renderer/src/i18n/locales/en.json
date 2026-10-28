@@ -66,7 +66,12 @@
     "types": "Asset types",
     "branchNoPrefix": "Branches",
     "defaultBranch": "default",
-    "loadingBranches": "Loading branches…"
+    "loadingBranches": "Loading branches…",
+    "mergeCopies": "Merge identical files",
+    "merged_one": "{{count}} identical copy merged",
+    "merged_other": "{{count}} identical copies merged",
+    "copiesTitle": "{{count}} identical copies in this project",
+    "generatingThumb": "Rendering thumbnail…"
   },
   "details": {
     "label": "Asset details",
@@ -80,7 +85,9 @@
     "type": "Type",
     "deps": "Dependencies",
     "copyPath": "Copy path",
-    "copied": "Copied"
+    "copied": "Copied",
+    "copies_one": "Identical file in {{count}} place",
+    "copies_other": "Identical file in {{count}} places"
   },
   "settings": {
     "title": "Settings",

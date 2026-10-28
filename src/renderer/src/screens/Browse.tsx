@@ -14,10 +14,11 @@ import {
   type TreeEntry
 } from '@core/index'
 import type { Language } from '@shared/settings'
-import { AssetCard } from '../components/AssetCard'
+import { AssetCard, SkeletonCard } from '../components/AssetCard'
 import { AssetDetails } from '../components/AssetDetails'
 import { ExportBar, type ExportOptions, type ExportState, type PackItem } from '../components/ExportBar'
 import { unwrap } from '../remoteSource'
+import { useThumbnailQueue } from '../useThumbnailQueue'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
@@ -40,6 +41,9 @@ interface Props {
 }
 
 const ALL = 'all'
+/** Cards rendered per step while scrolling. */
+const PAGE = 60
+const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
 
 /** PNG preview for Unity's import dialog, from a cached thumbnail data URL. */
 async function thumbToPng(dataUrl: string, size = 128): Promise<Uint8Array | undefined> {
@@ -90,6 +94,9 @@ export function Browse({
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string>()
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  const [mergeCopies, setMergeCopies] = useState(true)
+  const [limit, setLimit] = useState(PAGE)
+  const sentinel = useRef<HTMLDivElement>(null)
   const [pack, setPack] = useState<PackItem[]>([])
   const [exportOptions, setExportOptions] = useState<ExportOptions>({ layout: 'source', skipByName: false })
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
@@ -184,7 +191,55 @@ export function Browse({
     const q = query.trim().toLowerCase()
     return ofType.filter((a) => isInFolder(a.path, folder) && (!q || a.name.toLowerCase().includes(q)))
   }, [ofType, folder, query])
+  // Same blob SHA = byte-identical file; with merging on, one card stands for all copies.
+  const copiesBySha = useMemo(() => {
+    const map = new Map<string, Asset[]>()
+    for (const a of ofType) map.set(a.sha, [...(map.get(a.sha) ?? []), a])
+    return map
+  }, [ofType])
+  const shown = useMemo(() => {
+    if (!mergeCopies) return visible
+    const seen = new Set<string>()
+    return visible.filter((a) => !seen.has(a.sha) && (seen.add(a.sha), true))
+  }, [visible, mergeCopies])
+  const merged = visible.length - shown.length
   const selected = visible.find((a) => a.id === selectedId)
+
+  useEffect(() => setLimit(PAGE), [shown])
+  // Render more cards as the end of the grid scrolls into view.
+  useEffect(() => {
+    const el = sentinel.current
+    if (!el) return
+    const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && setLimit((l) => l + PAGE), { rootMargin: '600px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [shown, limit])
+
+  // Arrow keys move the selection through the grid (Up/Down jump a row).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!ARROWS.has(e.key) || e.altKey || e.metaKey || e.ctrlKey || !shown.length) return
+      const target = e.target as HTMLElement
+      if (target.closest('input, select, textarea, .picker-pop, .viewer')) return
+      const grid = document.querySelector('.grid')
+      const cols = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 1
+      const index = shown.findIndex((a) => a.id === selectedId)
+      const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -cols : cols
+      const next = index < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, index + step))
+      e.preventDefault()
+      setSelectedId(shown[next].id)
+      if (next >= limit) setLimit(next + PAGE)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [shown, selectedId, limit])
+
+  useEffect(() => {
+    if (!selectedId) return
+    const card = document.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(selectedId)}"]`)
+    card?.scrollIntoView({ block: 'nearest' })
+    if (document.activeElement?.classList.contains('asset-card')) card?.focus({ preventScroll: true })
+  }, [selectedId])
   const live = useMemo(() => (source.isDemo || !repo || !branch ? undefined : { repo, branch, root }), [source, repo, branch, root])
 
   // Thumbnails rendered earlier, keyed by the model's content hash.
@@ -227,6 +282,7 @@ export function Browse({
     setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
     void window.api.thumbs.save(key, dataUrl)
   }
+  const thumbQueue = useThumbnailQueue(live, saveThumb)
 
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -329,6 +385,10 @@ export function Browse({
               <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={setFolder} />
             )}
           </nav>
+          <label className="check">
+            <input type="checkbox" checked={mergeCopies} onChange={(e) => setMergeCopies(e.target.checked)} />
+            {t('browse.mergeCopies')}
+          </label>
           {hiddenCount > 0 && (
             <p className="muted small" style={{ margin: 0 }}>
               {t('browse.hidden', { count: hiddenCount, folders: excludedFolders.join(', ') })}
@@ -339,11 +399,25 @@ export function Browse({
         <main className="content">
           <div className="content-head">
             <h1>{folder || t('browse.allFolders')}</h1>
-            <span className="muted small">{t('browse.assetCount', { count: visible.length })}</span>
+            <span className="muted small">
+              {t('browse.assetCount', { count: shown.length })}
+              {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
+            </span>
           </div>
           {repos.status === 'error' && <ErrorNote error={repos.error} />}
           {repos.status === 'ready' && repoList.length === 0 && <p className="empty">{t('browse.noRepos')}</p>}
-          {tree.status === 'loading' && repo && <p className="empty">{t('browse.loading')}</p>}
+          {tree.status === 'loading' && repo && (
+            <>
+              <p className="muted small" role="status" style={{ margin: 0 }}>
+                {t('browse.loading')}
+              </p>
+              <div className="grid">
+                {Array.from({ length: 12 }, (_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            </>
+          )}
           {tree.status === 'error' && <ErrorNote error={tree.error} />}
           {tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
           {(pack.length > 0 || exportState.status !== 'idle') && (
@@ -358,19 +432,29 @@ export function Browse({
               onDismiss={() => setExportState({ status: 'idle' })}
             />
           )}
-          {tree.status === 'ready' && visible.length > 0 && (
-            <div className="grid">
-              {visible.map((a) => (
-                <AssetCard
-                  key={a.id}
-                  asset={a}
-                  handler={registry.get(a.type)}
-                  thumb={thumbs[a.sha]}
-                  selected={a.id === selectedId}
-                  onSelect={() => setSelectedId(a.id)}
-                />
-              ))}
-            </div>
+          {tree.status === 'ready' && shown.length > 0 && (
+            <>
+              <div className="grid">
+                {shown.slice(0, limit).map((a) => (
+                  <AssetCard
+                    key={a.id}
+                    asset={a}
+                    handler={registry.get(a.type)}
+                    thumb={thumbs[a.sha]}
+                    generating={thumbQueue.busy.has(a.sha)}
+                    copies={mergeCopies ? copiesBySha.get(a.sha)?.length : undefined}
+                    selected={a.id === selectedId || (!!selected && mergeCopies && selected.sha === a.sha)}
+                    onSelect={() => setSelectedId(a.id)}
+                    onVisible={
+                      live && registry.get(a.type)?.preview.kind === 'three'
+                        ? (on) => (on ? !thumbs[a.sha] && thumbQueue.request(a.sha, root + a.path) : thumbQueue.cancel(a.sha))
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+              {limit < shown.length && <div ref={sentinel} className="grid-sentinel" />}
+            </>
           )}
         </main>
 
@@ -384,6 +468,8 @@ export function Browse({
           exporting={exportState.status === 'running'}
           onTogglePack={() => selected && togglePack(selected)}
           onExport={() => selected && void runExport([packItem(selected)])}
+          copies={selected ? copiesBySha.get(selected.sha) : undefined}
+          onSelectCopy={setSelectedId}
         />
       </div>
     </div>
