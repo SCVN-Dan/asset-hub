@@ -89,6 +89,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       (entry) => registry.classify(entry) !== undefined,
       (path) => registry.classify({ path, type: 'blob', sha: '' })?.id,
       () => foreground > 0,
+      registry.all().map((h) => h.id).join(','),
       (status: CatalogStatus) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.catalogProgress, status))
     )
     session = { source, catalog, status: { signedIn: true, login: user.login, method, persisted } }

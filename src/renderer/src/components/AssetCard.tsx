@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type AssetTypeHandler } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import { StatsLine } from './CatalogPanel'
-import { CubeIcon } from './Icons'
+import { CubeIcon, ImageIcon } from './Icons'
 
 interface Props {
   asset: Asset
@@ -50,7 +50,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       title={asset.path}
     >
       <span className="asset-thumb">
-        {thumb ? <img className="asset-img" src={thumb} alt="" loading="lazy" /> : <CubeIcon size={56} />}
+        {thumb ? <img className="asset-img" src={thumb} alt="" loading="lazy" /> : handler?.preview.kind === 'image' ? <ImageIcon size={52} /> : <CubeIcon size={56} />}
         {handler && <span className="type-badge">{handler.badge}</span>}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
         {generating && !thumb && <span className="thumb-spinner" aria-label={t('browse.generatingThumb')} />}

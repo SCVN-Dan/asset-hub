@@ -6,7 +6,8 @@
   },
   "assetTypes": {
     "all": "All",
-    "fbx": "FBX"
+    "fbx": "FBX",
+    "texture": "Texture"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -310,5 +311,50 @@
     "fits": "Within the playable budget",
     "tris": "{{n}} tris",
     "bones": "{{count}} bones"
+  },
+  "texture": {
+    "title": "Texture",
+    "size": "Size",
+    "file": "File",
+    "alpha": "Alpha",
+    "type": "Type",
+    "built": "Built size",
+    "compression": "Compression",
+    "mipmaps": "Mipmaps",
+    "srgb": "sRGB",
+    "yes": "Yes",
+    "no": "No",
+    "fit": "Fit",
+    "actual": "1:1",
+    "backdrop": {
+      "checker": "Checker",
+      "dark": "Dark",
+      "light": "Light"
+    },
+    "cannotShow": "Cannot show this image: {{message}}",
+    "overrides": "Platform overrides: {{list}}",
+    "noMeta": "No .meta file: Unity will use default import settings.",
+    "warn": {
+      "size": "Imports at {{size}} px — above {{limit}} px for playables.",
+      "uncompressed": "Not compressed: large in the build.",
+      "spriteMips": "Mipmaps are on for a sprite — usually wasted memory.",
+      "bytes": "File is {{size}} — above {{limit}} of textures for playables."
+    },
+    "types": {
+      "default": "Default",
+      "normal": "Normal map",
+      "gui": "Editor GUI",
+      "cookie": "Cookie",
+      "lightmap": "Lightmap",
+      "cursor": "Cursor",
+      "sprite": "Sprite",
+      "single": "Single channel"
+    },
+    "compressions": {
+      "none": "None",
+      "normal": "Normal",
+      "high": "High quality",
+      "low": "Low quality"
+    }
   }
 }

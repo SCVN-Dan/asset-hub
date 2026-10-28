@@ -10,6 +10,7 @@ export const fbxHandler: AssetTypeHandler = {
   badge: 'FBX',
   match: (entry) => FBX_EXT.test(entry.path),
   resolveDependencies: resolveFbxDependencies,
+  materialsFromPrefabs: true,
   preview: {
     kind: 'three',
     // Rendered in the renderer with three.js; nothing to prepare here.

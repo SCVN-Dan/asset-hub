@@ -76,6 +76,10 @@ export interface AssetTypeHandler {
   getStats?(asset: Asset): Promise<AssetStats>
   checks?: AssetCheck[]
   preview: PreviewProvider
+  /** Models whose materials may be set on prefabs (FBX): offers the prefab material search. */
+  materialsFromPrefabs?: boolean
+  /** False when `resolveDependencies` never looks a GUID up (a texture is just itself + .meta). */
+  usesGuids?: boolean
 }
 
 export interface RepoRef {

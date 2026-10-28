@@ -70,3 +70,11 @@ export const InfoIcon =({ size = 16 }: IconProps) => (
     <path d="M12 11v5M12 8v.01" />
   </svg>
 )
+
+export const ImageIcon = ({ size = 24 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+    <circle cx="9" cy="9.5" r="1.6" />
+    <path d="m20.5 16-5-5-8.5 8.5" />
+  </svg>
+)

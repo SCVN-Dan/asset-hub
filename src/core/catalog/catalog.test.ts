@@ -61,5 +61,9 @@ describe('RepoCatalog', () => {
     const back = RepoCatalog.parse('org/hero', data)
     expect([...back.files()].map((f) => f.path)).toEqual(['Assets/A.fbx'])
     expect(RepoCatalog.parse('org/hero', { version: 0 }).branches).toEqual([])
+    // Made before textures were indexed: branches kept, commits listed again.
+    const old = RepoCatalog.parse('org/hero', data, 'fbx,texture')
+    expect(old.branches.map((b) => b.name)).toEqual(['main'])
+    expect(old.pending().map((b) => b.name)).toEqual(['main'])
   })
 })

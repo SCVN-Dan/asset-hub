@@ -242,3 +242,12 @@ button { cursor: pointer; }
 .fit-no { color: #f7d9a0; background: var(--warn-bg); }
 .ranking-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: -6px 0 0; }
 .ranking-bar .select { height: 32px; font-size: 13px; }
+
+/* Texture viewer */
+.image-viewer .image-scroll { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 44px 12px 12px; }
+.image-viewer[data-actual='true'] .image-scroll { display: block; overflow: auto; }
+.image-viewer[data-actual='false'] .image-canvas { max-width: 100%; max-height: 100%; object-fit: contain; }
+.image-canvas { display: block; image-rendering: auto; }
+.backdrop-dark { background: #14171d; }
+.backdrop-light { background: #e9ecf1; }
+.backdrop-checker { background-color: #2a2f3a; background-image: linear-gradient(45deg, #3a4150 25%, transparent 25%), linear-gradient(-45deg, #3a4150 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #3a4150 75%), linear-gradient(-45deg, transparent 75%, #3a4150 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }

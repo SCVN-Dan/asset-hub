@@ -39,6 +39,8 @@ export class CatalogService {
     private readonly typeOf: (path: string) => string | undefined,
     /** True while the user waits on something; scanning steps aside until it is done. */
     private readonly busy: () => boolean,
+    /** Asset types indexed (handler ids), so adding a type re-lists every branch once. */
+    private readonly types: string,
     private readonly emit: (status: CatalogStatus) => void
   ) {}
 
@@ -188,8 +190,8 @@ export class CatalogService {
     let catalog = this.catalogs.get(repo)
     if (!catalog) {
       catalog = readFile(join(this.dir(), fileName(repo)), 'utf8').then(
-        (text) => RepoCatalog.parse(repo, JSON.parse(text)),
-        () => RepoCatalog.empty(repo)
+        (text) => RepoCatalog.parse(repo, JSON.parse(text), this.types),
+        () => RepoCatalog.empty(repo, this.types)
       )
       this.catalogs.set(repo, catalog)
     }

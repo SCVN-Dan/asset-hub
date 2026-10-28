@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveContext } from './components/ModelViewer'
 import type { StatsSummary } from '@core/checks/playable'
 import { renderThumbnail } from './viewer/backgroundThumb'
+import { renderImageThumbnail } from './viewer/imageThumb'
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
@@ -14,6 +15,8 @@ interface Job {
   order: number
   /** Repo + branch to read from, when not the open branch (results from other branches). */
   ctx?: LiveContext
+  /** How it is drawn: a 3D model, or an image file as it is. */
+  kind: 'three' | 'image'
 }
 
 /**
@@ -41,7 +44,7 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
       const ctx = job.ctx ?? liveRef.current
       if (!ctx) continue
       active.current.add(job.key)
-      void renderThumbnail(ctx, job.path)
+      void (job.kind === 'image' ? renderImageThumbnail(ctx, job.path) : renderThumbnail(ctx, job.path))
         .then(({ url, stats }) => onThumbRef.current(job.key, url, stats))
         .catch(() => failed.current.set(job.key, Date.now()))
         .finally(() => {
@@ -64,11 +67,11 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
   }, [paused, pump])
 
   const request = useCallback(
-    (key: string, path: string, order: number, ctx?: LiveContext) => {
+    (key: string, path: string, order: number, ctx?: LiveContext, kind: 'three' | 'image' = 'three') => {
       if (!(ctx ?? liveRef.current) || active.current.has(key) || Date.now() - (failed.current.get(key) ?? -Infinity) < RETRY_MS) return
       const rest = queue.current.filter((j) => j.key !== key)
       const at = rest.findIndex((j) => j.order > order)
-      rest.splice(at < 0 ? rest.length : at, 0, { key, path, order, ctx })
+      rest.splice(at < 0 ? rest.length : at, 0, { key, path, order, ctx, kind })
       queue.current = rest
       pump()
     },

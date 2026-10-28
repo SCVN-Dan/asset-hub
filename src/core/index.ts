@@ -1,4 +1,5 @@
 import { fbxHandler } from './handlers/fbx'
+import { textureHandler } from './handlers/texture'
 import { HandlerRegistry } from './registry'
 
 export * from './types'
@@ -16,7 +17,7 @@ export * from './search/search'
 
 /** Registry with every built-in asset type. Add new handlers here. */
 export function createDefaultRegistry(): HandlerRegistry {
-  return new HandlerRegistry().register(fbxHandler)
+  return new HandlerRegistry().register(fbxHandler).register(textureHandler)
 }
 export * from './catalog/catalog'
 export * from './checks/playable'

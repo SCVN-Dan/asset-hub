@@ -2,6 +2,7 @@ import { imageSize } from '@core/checks/playable'
 import { baseName, decodePsd, guessTextureRole, isPsd } from '@core/index'
 import { unwrap } from '../remoteSource'
 import type { LiveContext } from '../components/ModelViewer'
+import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
 import type { MaterialSlot, TextureFile } from './FbxViewer'
 
 /** Formats the preview can display (PSD through its own decoder); others (EXR, TIFF…) are listed but not drawn. */
@@ -47,4 +48,59 @@ export function guessedSlots(files: readonly TextureFile[]): MaterialSlot[] {
     if (role) slots.push({ material: '*', prop: ROLE_PROP[role], file })
   }
   return slots
+}
+
+/** A decoded image ready to draw, with what the texture panel reports about it. */
+export interface DecodedImage {
+  bitmap: ImageBitmap
+  width: number
+  height: number
+  /** Some pixel is not fully opaque. */
+  hasAlpha: boolean
+  format: string
+}
+
+/** Format by content (a PSD saved as .png is still a PSD), else by extension. */
+function formatOf(path: string, bytes: Uint8Array): string {
+  if (isPsd(bytes)) return 'PSD'
+  if (bytes[0] === 0x89 && bytes[1] === 0x50) return 'PNG'
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'JPEG'
+  return (path.split('.').pop() ?? '').toUpperCase()
+}
+
+/** Samples the image for transparency on a small copy (enough to tell, cheap for large textures). */
+function sampleAlpha(bitmap: ImageBitmap): boolean {
+  const w = Math.min(128, bitmap.width)
+  const h = Math.min(128, bitmap.height)
+  const canvas = new OffscreenCanvas(w, h)
+  const g = canvas.getContext('2d')!
+  g.drawImage(bitmap, 0, 0, w, h)
+  const px = g.getImageData(0, 0, w, h).data
+  for (let i = 3; i < px.length; i += 4) if (px[i] < 255) return true
+  return false
+}
+
+/** Decodes PNG / JPEG / GIF / BMP / WebP through the browser, PSD and TGA through our own decoders. */
+export async function decodeImage(path: string, bytes: Uint8Array): Promise<DecodedImage> {
+  const format = formatOf(path, bytes)
+  let bitmap: ImageBitmap
+  if (format === 'PSD') {
+    const img = decodePsd(bytes)
+    if (!img) throw new Error('Unsupported PSD')
+    bitmap = await createImageBitmap(new ImageData(img.data as Uint8ClampedArray<ArrayBuffer>, img.width, img.height))
+  } else if (format === 'TGA') {
+    // parse() returns raw pixel data (typed as a texture in three's typings).
+    const tga = new TGALoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer) as unknown as {
+      data: Uint8Array
+      width: number
+      height: number
+      flipY?: boolean
+    }
+    const data = new Uint8ClampedArray(tga.data.buffer, tga.data.byteOffset, tga.width * tga.height * 4) as Uint8ClampedArray<ArrayBuffer>
+    bitmap = await createImageBitmap(new ImageData(data, tga.width, tga.height), { imageOrientation: tga.flipY ? 'flipY' : 'from-image' })
+  } else {
+    if (!DRAWABLE.test(path) && format !== 'PNG' && format !== 'JPEG') throw new Error(`${format} cannot be previewed`)
+    bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>]))
+  }
+  return { bitmap, width: bitmap.width, height: bitmap.height, hasAlpha: sampleAlpha(bitmap), format }
 }

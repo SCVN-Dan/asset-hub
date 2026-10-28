@@ -6,7 +6,8 @@
   },
   "assetTypes": {
     "all": "Tất cả",
-    "fbx": "FBX"
+    "fbx": "FBX",
+    "texture": "Texture"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -295,5 +296,50 @@
     "fits": "Vừa ngân sách playable",
     "tris": "{{n}} tris",
     "bones": "{{count}} bones"
+  },
+  "texture": {
+    "title": "Texture",
+    "size": "Kích thước",
+    "file": "File",
+    "alpha": "Alpha",
+    "type": "Loại",
+    "built": "Khi build",
+    "compression": "Nén",
+    "mipmaps": "Mipmaps",
+    "srgb": "sRGB",
+    "yes": "Có",
+    "no": "Không",
+    "fit": "Vừa khung",
+    "actual": "1:1",
+    "backdrop": {
+      "checker": "Ô caro",
+      "dark": "Tối",
+      "light": "Sáng"
+    },
+    "cannotShow": "Không hiển thị được ảnh: {{message}}",
+    "overrides": "Override theo nền tảng: {{list}}",
+    "noMeta": "Không có file .meta: Unity sẽ dùng import settings mặc định.",
+    "warn": {
+      "size": "Import ở {{size}} px — vượt {{limit}} px cho playable.",
+      "uncompressed": "Không nén: nặng khi build.",
+      "spriteMips": "Sprite đang bật mipmaps — thường tốn bộ nhớ vô ích.",
+      "bytes": "File {{size}} — vượt {{limit}} texture cho playable."
+    },
+    "types": {
+      "default": "Default",
+      "normal": "Normal map",
+      "gui": "Editor GUI",
+      "cookie": "Cookie",
+      "lightmap": "Lightmap",
+      "cursor": "Cursor",
+      "sprite": "Sprite",
+      "single": "Single channel"
+    },
+    "compressions": {
+      "none": "Không nén",
+      "normal": "Thường",
+      "high": "Chất lượng cao",
+      "low": "Chất lượng thấp"
+    }
   }
 }

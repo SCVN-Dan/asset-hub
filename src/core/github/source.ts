@@ -273,6 +273,7 @@ export class GitHubAssetSource implements AssetSource {
     const entry = snap.byPath.get(path)
     const handler = entry && this.options.handlerFor?.(entry)
     if (!entry || !handler?.resolveDependencies) throw new SourceError('notFound', `No dependency resolver for ${path}`)
+    if (handler.usesGuids === false) return handler.resolveDependencies(path, this.depContext(repo, snap, root, new Map()))
     if (mode !== 'full' && !snap.guids) {
       const ctx = await this.quickContext(repo, snap, root, path)
       if (ctx) {

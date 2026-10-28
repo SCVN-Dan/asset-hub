@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { checkPlayableBudget, summarizeStats, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, type ModelStats, type StatsSummary } from '@core/checks/playable'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
+import { ImageViewer, type ImageInfo } from './ImageViewer'
 
 interface Props {
   asset: Asset | undefined
@@ -44,6 +45,61 @@ type Deps = { status: 'idle' } | { status: 'loading' } | { status: 'error'; erro
 
 function Dot({ tone }: { tone: 'ok' | 'warn' | 'info' }) {
   return <span className={`dot dot-${tone}`} aria-hidden="true" />
+}
+
+const TEXTURE_TYPES: Record<number, string> = { 0: 'default', 1: 'normal', 2: 'gui', 4: 'cookie', 6: 'lightmap', 7: 'cursor', 8: 'sprite', 10: 'single' }
+const COMPRESSION: Record<number, string> = { 0: 'none', 1: 'normal', 2: 'high', 3: 'low' }
+
+/** Size, format and Unity import settings of a texture, with what matters for playables. */
+function TextureSection({ info }: { info: ImageInfo }) {
+  const { t } = useTranslation()
+  const imp = info.import
+  const built = imp ? importedTextureSize(info.width, info.height, imp) : Math.max(info.width, info.height)
+  const warnings: string[] = []
+  if (built > PLAYABLE_BUDGET.textureSize) warnings.push(t('texture.warn.size', { size: built, limit: PLAYABLE_BUDGET.textureSize }))
+  if (imp?.compression === 0) warnings.push(t('texture.warn.uncompressed'))
+  if (imp?.textureType === 8 && imp.mipmaps) warnings.push(t('texture.warn.spriteMips'))
+  if (info.bytes > PLAYABLE_BUDGET.textureBytes) warnings.push(t('texture.warn.bytes', { size: formatBytes(info.bytes), limit: formatBytes(PLAYABLE_BUDGET.textureBytes) }))
+  const cells: Array<[string, string]> = [
+    [t('texture.size'), `${info.width} × ${info.height}`],
+    [t('texture.file'), `${formatBytes(info.bytes)} · ${info.format}`],
+    [t('texture.alpha'), info.hasAlpha ? t('texture.yes') : t('texture.no')],
+    ...(imp
+      ? ([
+          [t('texture.type'), t(`texture.types.${TEXTURE_TYPES[imp.textureType ?? 0] ?? 'default'}`)],
+          [t('texture.built'), `${built} px${imp.maxTextureSize ? ` (max ${imp.maxTextureSize})` : ''}`],
+          [t('texture.compression'), t(`texture.compressions.${COMPRESSION[imp.compression ?? 1] ?? 'normal'}`)],
+          [t('texture.mipmaps'), imp.mipmaps ? t('texture.yes') : t('texture.no')],
+          [t('texture.srgb'), imp.sRGB === false ? t('texture.no') : t('texture.yes')]
+        ] as Array<[string, string]>)
+      : [])
+  ]
+  return (
+    <section className="section">
+      <span className="label-caps">{t('texture.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {imp && imp.overrides.length > 0 && (
+        <p className="muted small" style={{ margin: 0 }}>
+          {t('texture.overrides', { list: imp.overrides.map((o) => `${o.target}${o.maxTextureSize ? ` ${o.maxTextureSize}` : ''}`).join(', ') })}
+        </p>
+      )}
+      {!imp && <p className="muted small" style={{ margin: 0 }}>{t('texture.noMeta')}</p>}
+      {warnings.length > 0 && (
+        <ul className="warn-note warn-list">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
 }
 
 /** Stat cells worth showing: counts that are zero (no bones, no clips) or trivial (one mesh) are left out. */
@@ -122,6 +178,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
+  /** For a texture: what the image viewer found. */
+  const [imageInfo, setImageInfo] = useState<ImageInfo>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
   const [prefab, setPrefab] = useState<PrefabSearch>({ status: 'idle' })
@@ -157,6 +215,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   useEffect(() => {
     searchToken.current++
     setStats(undefined)
+    setImageInfo(undefined)
     setCopied(false)
     setProgress(undefined)
     setPrefab({ status: 'idle' })
@@ -169,7 +228,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     setDeps({ status: 'loading' })
     // Materials found on prefabs in an earlier search come back without downloading anything.
     // Only says whether remembered prefabs use it; loading their materials is up to the user.
-    void window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, 'known', excludedFolders).then((result) => {
+    if (handler.materialsFromPrefabs)
+      void window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, 'known', excludedFolders).then((result) => {
       if (cancelled || !result.ok || !result.data.prefabs.length) return
       setPrefab({ status: 'known', result: result.data })
     })
@@ -258,6 +318,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
+      ) : live && repoPath && handler?.preview.kind === 'image' ? (
+        <ImageViewer key={repoPath} live={live} path={repoPath} onInfo={setImageInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : (
         <div className="preview-box">
           <CubeIcon size={72} />
@@ -305,7 +367,9 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         </section>
       )}
 
-      {handler?.resolveDependencies && (
+      {imageInfo && <TextureSection info={imageInfo} />}
+
+      {handler?.resolveDependencies && handler.preview.kind === 'three' && (
         <section className="section">
           <span className="label-caps">{t('details.deps')}</span>
           {!live && <p className="note">{t('deps.needsRepo')}</p>}
@@ -387,7 +451,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         </section>
       )}
 
-      {live && report && (
+      {live && report && handler?.materialsFromPrefabs && (
         <section className="section">
           <span className="label-caps">{t('prefab.title')}</span>
           {prefab.status === 'known' && (

@@ -27,6 +27,7 @@ import { FolderTree } from '../components/FolderTree'
 import { CubeIcon, GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 import { SearchBox } from '../components/SearchBox'
+import { DRAWABLE } from '../viewer/textures'
 import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
 import { rankForPlayable, summaryIssues, type SortMode, type StatsSummary } from '@core/checks/playable'
@@ -51,6 +52,8 @@ const ALL = 'all'
 const PAGE = 60
 /** Models bigger than this are only rendered when opened, not for grid thumbnails. */
 const THUMB_MAX_BYTES = 40 * 1024 * 1024
+/** Images are decoded on the page: very large PSDs would stall it, so they are only drawn when opened. */
+const IMAGE_THUMB_MAX_BYTES = 24 * 1024 * 1024
 /** Unity project folder of a repo path (the part before "Assets/"), for textures looked up next to it. */
 const projectRootOf = (path: string) => {
   const i = path.indexOf('Assets/')
@@ -332,7 +335,11 @@ export function Browse({
     const atBranch = catalogBranch && at.branches.includes(catalogBranch) ? catalogBranch : at.branches[0]
     return { path: at.path, ctx: { repo: at.repo, branch: atBranch, root: projectRootOf(at.path) } }
   }
-  const canRender = (a: Asset) => registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
+  const previewKind = (a: Asset) => registry.get(a.type)?.preview.kind
+  /** Thumbnails: models up to THUMB_MAX_BYTES, images the browser (or our PSD / TGA decoders) can draw. */
+  const canRender = (a: Asset) =>
+    (previewKind(a) === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES) || (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES)
+  const kindOf = (a: Asset) => (previewKind(a) === 'image' ? 'image' : 'three')
 
   /** Renders (and so measures) every listed model not measured yet, top of the list first. */
   const measureAll = () => {
@@ -340,8 +347,8 @@ export function Browse({
       if (!canRender(a)) return
       if (inCatalog) {
         const src = catalogSource(a as CatalogAsset)
-        thumbQueue.request(a.sha, src.path, 10_000 + i, src.ctx)
-      } else thumbQueue.request(a.sha, root + a.path, 10_000 + i)
+        thumbQueue.request(a.sha, src.path, 10_000 + i, src.ctx, kindOf(a))
+      } else thumbQueue.request(a.sha, root + a.path, 10_000 + i, undefined, kindOf(a))
     })
   }
 
@@ -703,7 +710,7 @@ export function Browse({
                             if (!on) return thumbQueue.cancel(a.sha)
                             if (thumbs[a.sha] && modelStats[a.sha]) return
                             const src = catalogSource(a)
-                            thumbQueue.request(a.sha, src.path, i, src.ctx)
+                            thumbQueue.request(a.sha, src.path, i, src.ctx, kindOf(a))
                           }
                         : undefined
                     }
@@ -757,7 +764,7 @@ export function Browse({
                     stats={modelStats[a.sha]}
                     onVisible={
                       live && thumbsLoaded && canRender(a)
-                        ? (on) => (on ? (!thumbs[a.sha] || !modelStats[a.sha]) && thumbQueue.request(a.sha, root + a.path, i) : thumbQueue.cancel(a.sha))
+                        ? (on) => (on ? (!thumbs[a.sha] || !modelStats[a.sha]) && thumbQueue.request(a.sha, root + a.path, i, undefined, kindOf(a)) : thumbQueue.cancel(a.sha))
                         : undefined
                     }
                   />

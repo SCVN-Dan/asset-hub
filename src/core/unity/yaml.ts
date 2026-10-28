@@ -106,3 +106,57 @@ export function guessTextureRole(fileName: string): TextureRole | undefined {
   // Masks, roughness, metallic, AO… are not drawn by the preview.
   return undefined
 }
+
+/** Import settings of a texture, from its .meta (TextureImporter). */
+export interface TextureImport {
+  /** 0 Default, 1 Normal map, 2 Editor GUI, 4 Cookie, 6 Lightmap, 7 Cursor, 8 Sprite, 10 Single channel. */
+  textureType?: number
+  /** Largest size Unity imports at, for the default platform. */
+  maxTextureSize?: number
+  /** 0 None, 1 Normal quality, 2 High quality, 3 Low quality. */
+  compression?: number
+  sRGB?: boolean
+  mipmaps?: boolean
+  alphaIsTransparency?: boolean
+  /** Per-platform overrides that are switched on. */
+  overrides: Array<{ target: string; maxTextureSize?: number; compression?: number }>
+}
+
+export function parseTextureMeta(metaText: string): TextureImport {
+  const text = metaText.replace(/\r\n/g, '\n')
+  const platformStart = text.search(/^\s*platformSettings:/m)
+  const head = platformStart < 0 ? text : text.slice(0, platformStart)
+  const num = (src: string, key: string) => {
+    const v = new RegExp(`^\\s*${key}: (-?\\d+)`, 'm').exec(src)?.[1]
+    return v === undefined ? undefined : Number(v)
+  }
+  const flag = (src: string, key: string) => {
+    const v = num(src, key)
+    return v === undefined ? undefined : v !== 0
+  }
+  const blocks = platformStart < 0 ? [] : text.slice(platformStart).split(/^\s*- (?=serializedVersion|buildTarget)/m).slice(1)
+  const platforms = blocks.map((b) => ({
+    target: /buildTarget: (\S+)/.exec(b)?.[1] ?? '',
+    maxTextureSize: num(b, 'maxTextureSize'),
+    compression: num(b, 'textureCompression'),
+    overridden: flag(b, 'overridden') ?? false
+  }))
+  const defaults = platforms.find((p) => p.target === 'DefaultTexturePlatform')
+  return {
+    textureType: num(head, 'textureType'),
+    maxTextureSize: defaults?.maxTextureSize ?? num(head, 'maxTextureSize'),
+    compression: defaults?.compression ?? num(head, 'textureCompression'),
+    sRGB: flag(head, 'sRGBTexture'),
+    mipmaps: flag(head, 'enableMipMap'),
+    alphaIsTransparency: flag(head, 'alphaIsTransparency'),
+    overrides: platforms.filter((p) => p.overridden && p.target !== 'DefaultTexturePlatform').map(({ target, maxTextureSize, compression }) => ({ target, maxTextureSize, compression }))
+  }
+}
+
+/** Size a texture ends up at in a build: its larger side, capped by the import max size (a platform override wins). */
+export function importedTextureSize(width: number, height: number, imp: TextureImport, platforms: readonly string[] = ['WebGL', 'Android', 'iPhone']): number {
+  const side = Math.max(width, height)
+  const override = imp.overrides.find((o) => platforms.includes(o.target) && o.maxTextureSize)
+  const cap = override?.maxTextureSize ?? imp.maxTextureSize
+  return cap ? Math.min(side, cap) : side
+}

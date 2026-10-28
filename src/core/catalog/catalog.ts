@@ -17,6 +17,8 @@ export interface CatalogBranch {
 export interface RepoCatalogData {
   version: 1
   repo: string
+  /** Asset types listed (handler ids); a catalog made for other types starts over. */
+  types?: string
   defaultBranch?: string
   /** When the branch list was last read (ms since epoch). */
   checkedAt?: number
@@ -47,15 +49,17 @@ export class RepoCatalog {
     this.reindex()
   }
 
-  static empty(repo: string): RepoCatalog {
-    return new RepoCatalog({ version: 1, repo, branches: [], paths: [], blobs: [], commits: {} })
+  static empty(repo: string, types?: string): RepoCatalog {
+    return new RepoCatalog({ version: 1, repo, types, branches: [], paths: [], blobs: [], commits: {} })
   }
 
-  /** Accepts what was read from disk; anything unexpected starts over. */
-  static parse(repo: string, raw: unknown): RepoCatalog {
+  /** Accepts what was read from disk; anything unexpected, or made for other asset types, starts over. */
+  static parse(repo: string, raw: unknown, types?: string): RepoCatalog {
     const d = raw as Partial<RepoCatalogData> | undefined
     if (d?.version !== 1 || d.repo !== repo || !Array.isArray(d.paths) || !Array.isArray(d.blobs) || !d.commits || !Array.isArray(d.branches))
-      return RepoCatalog.empty(repo)
+      return RepoCatalog.empty(repo, types)
+    // New asset types: the branch list is kept, every commit is listed again.
+    if ((d.types ?? 'fbx') !== (types ?? 'fbx')) return new RepoCatalog({ ...(d as RepoCatalogData), types, paths: [], blobs: [], commits: {}, failed: {} })
     return new RepoCatalog(d as RepoCatalogData)
   }
 

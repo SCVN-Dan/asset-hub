@@ -41,8 +41,11 @@ export interface StatsSummary {
   materials: number
   fileBytes: number
   textureBytes: number
-  /** Largest texture side in pixels. */
+  /** Largest texture side in pixels (for a texture asset: as built, after the import max size). */
   maxTextureSize: number
+  /** For a texture asset: its size in pixels (no triangles). */
+  width?: number
+  height?: number
   /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
   source: 'thumb' | 'viewer'
 }
@@ -109,7 +112,7 @@ export function rankForPlayable<T>(
             ? [summaryIssues(s).length, size, -usedOf(item)]
             : mode === 'smallest'
               ? [size, s.triangles]
-              : [s.triangles, size]
+              : [s.width ? 1 : 0, s.triangles, size] // textures (no triangles) after models
     return { item, index, keys: [-matchOf(item), ...keys] }
   })
   keyed.sort((a, b) => {
