@@ -24,8 +24,9 @@
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
+| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | 🔄 đang làm |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
-| C | 6 | ~~Render pipeline & Shader Mapping~~ — gộp vào Phase 5 | — | — |
+| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | ⏳ |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
@@ -147,6 +148,20 @@ Mục tiêu: tìm được asset khi không biết nó ở repo / branch nào. C
 | "Còn ở đâu" theo GUID (cùng asset nhưng đã sửa nội dung) | ⏳ |
 | Index SQLite + FTS (thay cho JSON khi dữ liệu lớn) | ⏳ |
 
+## Phase 4.6 — Playable-aware ranking (Mốc B, ưu tiên cho demo AX Hero)
+Mục tiêu: tìm ra 20 model "boat" thì biết ngay cái nào **đáng dùng lại** cho playable, không phải mở từng cái. (Ý từ góp ý "Asset Reuse Intelligence", 2026-10-28.)
+
+| Việc | State |
+|---|---|
+| Lưu thông số model theo SHA khi render thumbnail nền hoặc mở viewer (tris, vertices, bones, clips, material, texture, dung lượng) — dùng chung mọi branch | ⏳ |
+| Huy hiệu trên card: `2.1k tris · 1.2 MB` + ✓ vừa ngân sách / ⚠ vượt | ⏳ |
+| Sắp xếp: phù hợp playable nhất, nhẹ nhất, ít tris nhất, nhiều playable dùng nhất (số branch/repo từ catalog) | ⏳ |
+| Lọc "chỉ asset vừa ngân sách playable" | ⏳ |
+| Dung lượng gồm cả dependency (texture, material) khi đã resolve | ⏳ |
+| Nút "Mở trên GitHub" cho file đang xem | ⏳ |
+| Xuất `.unitypackage` ngay từ kết quả Mọi branch / Mọi repo (không phải chuyển branch) | ⏳ |
+| Preset ngân sách theo network quảng cáo (vd. 5 MB / 2 MB) thay cho một bộ số mặc định | ⏳ |
+
 ## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
 Chỉ làm khi cần. Unity tự xử lý import; phần này giúp biết trước những gì Unity sẽ ghi đè hoặc thiếu.
 
@@ -157,17 +172,41 @@ Chỉ làm khi cần. Unity tự xử lý import; phần này giúp biết trư�
 | Chỉnh `.mat` khi xuất (Shader Mapping đơn giản): đổi shader GUID + tên property theo bảng mapping — không cần Unity | ⏳ |
 | ~~Unity Companion, import vào thư mục đang chọn (#11), undo ghi đè~~ — tạm hoãn: chỉ cần nếu sau này muốn chạy Render Pipeline Converter tự động | — |
 
-## Phase 6 — ~~Render pipeline & Shader Mapping~~ (gộp vào Phase 5)
-Phần còn giá trị (cảnh báo pipeline, chỉnh `.mat` khi xuất) đã chuyển sang Phase 5.
+## Phase 6 — Thêm loại asset ngoài FBX (Mốc C)
+Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, preview, dependency, thông số, check. Core (catalog, tìm kiếm, GUID, xuất gói) dùng chung, không sửa. (Render pipeline & Shader Mapping cũ đã gộp vào Phase 5.)
+
+| Loại | Preview | Dependency / thông số | State |
+|---|---|---|---|
+| **Texture** (png, jpg, tga, psd, exr…) | Ảnh trực tiếp (PSD đã có decoder) | Kích thước, dung lượng, alpha; import settings từ `.meta` (max size, compression, sRGB) → cảnh báo playable (> 1024 px, không nén) | ⏳ ưu tiên 1 |
+| **Material** (.mat) | Quả cầu three.js gán texture theo slot | Shader (built-in / package / custom), texture theo GUID — dùng lại `describeMaterials` | ⏳ |
+| **Audio** (wav, mp3, ogg) | Nghe thử + waveform trong app | Độ dài, sample rate, dung lượng; import settings (Load Type, Compression) → cảnh báo playable | ⏳ |
+| **Sprite / UI** (texture kiểu Sprite, atlas) | Ảnh + khung slice / sprite con | Sprite sheet từ `.meta` (spriteMode, rects) | ⏳ |
+| **Prefab tĩnh** (mesh + material, không particle) | Dựng lại từ FBX + material trong prefab bằng three.js; ảnh Unity render sẵn nếu có | Prefab con, mesh, material, script (cảnh báo script custom không mang theo được) | ⏳ |
+| **Animation clip** (.anim, clip trong FBX) | Phát trên model rig phù hợp | Độ dài, số curve | ⏳ |
+| Particle System prefab | → Phase 9 | | ⏳ |
+
+Ghi chú chung:
+- Tab loại asset trên sidebar sinh từ registry → thêm handler là có tab, đếm, lọc.
+- Catalog Mọi branch chỉ lưu tên + path + SHA nên thêm loại không làm chỉ mục nặng đáng kể; khi lên hàng trăm nghìn file → SQLite (Phase 4.5).
+- Thông số lưu theo SHA như Phase 4.6 để ranking dùng chung cho mọi loại.
+
+## Ý đã cân nhắc nhưng không làm (2026-10-28)
+| Ý | Lý do |
+|---|---|
+| Import thẳng vào Unity, chế độ Safe / Review Import, Companion | Hộp thoại Import Package của Unity đã xử lý trùng GUID và chọn file; app chỉ xuất `.unitypackage` kèm đủ dependency |
+| Tự đổi GUID hàng loạt | Phải cập nhật mọi reference, dễ hỏng project |
+| SQLite ngay từ đầu | Chỉ mục JSON hiện đủ nhanh (3,8 MB / 104 branch); chuyển khi lên hàng trăm nghìn asset |
+| Thumbnail prefab do Unity Editor tạo cho MVP | Cần máy có Unity + license; để Phase 7/9 (CI render sẵn) |
 
 ## Phase 7 — Polish & mở rộng (Mốc D)
 | Việc | State |
 |---|---|
 | Device Flow qua GitHub App cá nhân (test) | ⏳ |
 | Tìm kiếm bước 2: chỉ mục dùng chung cho team — GitHub Action định kỳ quét repo, đẩy chỉ mục + thumbnail vào repo riêng (vd. `supercent-io/asset-index`); app chỉ tải về, tìm tức thì | ⏳ |
-| Tìm bằng hình ảnh / mô tả (embedding thumbnail) | ⏳ |
+| Tìm bằng hình ảnh / mô tả (embedding thumbnail) — "tìm ngữ nghĩa" bước 2, sau nhóm từ khoá đã có | ⏳ |
+| "Còn ở đâu" theo GUID (cùng asset nhưng đã sửa nội dung) | ⏳ |
+| Thumbnail prefab / particle do Unity batchmode render sẵn trên CI, lưu theo SHA | ⏳ |
 | #7 Bộ sưu tập / yêu thích / tag | ⏳ |
-| #9 `AudioHandler` + `SpriteHandler` (preview audio, sprite/UI 2D) | ⏳ |
 | pHash cảnh báo texture gần giống | ⏳ |
 | GitHub Actions dựng manifest + thumbnail sẵn | ⏳ |
 
@@ -217,6 +256,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | Ghi nhận góp ý: thêm **Phase 4.6 Playable-aware ranking** (làm tiếp), Phase 6 đổi thành **Thêm loại asset** (Texture ưu tiên 1, Material, Audio, Sprite/UI, Prefab tĩnh, Animation clip), mục "Ý đã cân nhắc nhưng không làm". |
 | 2026-10-28 | **Mở file nhanh, tải từng phần**: đo bằng `ASSETHUB_TRACE=1` → chậm do phải dựng chỉ mục GUID cả branch (31–186 s) trước khi trả dependency. Giờ: (1) hiện ngay những gì đã biết (~2–4 s), dòng chưa rõ ghi "đang kiểm tra…"; (2) tra GUID theo nhu cầu qua GraphQL — đoán theo tên material trước, rồi thư mục gần nhất, theo loại file (.mat / texture / shader), song song; (3) chỉ mục đầy đủ dựng nền ngay khi mở branch. Lần đầu tuyệt đối (cache trống): 186 s → hiện sau 3,8 s, đủ sau 18 s; branch đã học: ~2 s. Prefab không tự tải nữa: chỉ báo "dùng trong N prefab đã biết" + nút tải. Thumbnail đọc file ở chế độ nền (nhường file đang mở). |
 | 2026-10-28 | **Phase 4.5 xong**: tìm trên Mọi branch / Mọi repo. Chỉ mục nền gộp theo SHA; 104 branch của xp_hero: 6.947 FBX trong 200 s lần đầu, ~3 s các lần sau. Cây quá lớn (truncated) tải gộp nhiều commit trong 1 lần git, dùng repo cache riêng để không chặn việc đang xem. Ưu tiên tải thứ đang chọn: quét nền + thumbnail tạm dừng khi model đang mở còn tải; thumbnail render từ trên xuống theo lưới (cả kết quả ở branch khác); lọc theo repo / branch; "Cũng có ở N branch khác" + bấm để mở. Đóng gói `.dmg` dời về Phase 10 (cuối). |
 | 2026-10-28 | Gọn panel chi tiết: bỏ Storage / Blob SHA / Size / badge kiểu material / dòng "import would copy"; ẩn shader built-in & package (Unity có sẵn); gộp texture dùng cho nhiều slot thành 1 dòng; ẩn thông số = 0 (bones, clips) hoặc 1 mesh; gộp cảnh báo ngân sách thành 1 ô; bỏ cảnh báo "thiếu texture/material" trùng với dòng "not in repo"; đường dẫn + nút Copy cùng 1 hàng. |
