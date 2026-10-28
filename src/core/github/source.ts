@@ -1,5 +1,5 @@
 import { closestPath, describeMaterials, type DepContext } from '../deps/fbx'
-import type { DependencyReport, PrefabMaterialsResult, PrefabUsage } from '../deps/types'
+import type { DependencyReport, PrefabMaterialsResult, PrefabScope, PrefabUsage } from '../deps/types'
 import { SourceError } from '../errors'
 import { baseName } from '../registry'
 import type { AssetSource } from '../source'
@@ -140,7 +140,7 @@ export class GitHubAssetSource implements AssetSource {
     branch: string,
     path: string,
     root: string,
-    scope: 'near' | 'all',
+    scope: PrefabScope,
     excludedFolders: readonly string[],
     onProgress?: (p: IndexProgress) => void
   ): Promise<PrefabMaterialsResult> {
@@ -157,7 +157,7 @@ export class GitHubAssetSource implements AssetSource {
     const ranked = prefabs
       .map((e) => ({ e, score: folderAffinity(path, e.path, root) }))
       .sort((a, b) => b.score - a.score || (a.e.size ?? 0) - (b.e.size ?? 0))
-    let candidates = ranked.filter((r) => !(r.e.sha in known))
+    let candidates = scope === 'cached' ? [] : ranked.filter((r) => !(r.e.sha in known))
     if (scope === 'near') {
       let budget = NEAR_BUDGET
       candidates = candidates.filter((r) => r.score > 0 && (budget -= r.e.size ?? 0) >= 0)

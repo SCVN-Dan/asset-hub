@@ -103,6 +103,12 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     }
     let cancelled = false
     setDeps({ status: 'loading' })
+    // Materials found on prefabs in an earlier search come back without downloading anything.
+    void window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, 'cached', excludedFolders).then((result) => {
+      if (cancelled || !result.ok || !result.data.prefabs.length) return
+      setPrefab({ status: 'ready', result: result.data })
+      onPrefabFiles(repoPath, result.data.files)
+    })
     window.api.assets.resolve(live.repo, live.branch, repoPath, live.root).then(
       (result) => {
         if (cancelled) return

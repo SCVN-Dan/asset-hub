@@ -412,6 +412,10 @@ describe('findPrefabMaterials', () => {
     await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'near', [])
     expect(prefabReads()).toHaveLength(1) // cached by prefab SHA
 
+    const remembered = await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'cached', [])
+    expect(remembered.prefabs.map((p) => p.path)).toEqual(['p/Assets/Game/Prefabs/Fish/FishModel.prefab'])
+    expect(prefabReads()).toHaveLength(1) // 'cached' never downloads
+
     const all = await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'all', [])
     expect(prefabReads().at(-1)).toEqual(['far'])
     expect(all).toMatchObject({ scanned: 2, remaining: 0 })

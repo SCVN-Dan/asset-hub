@@ -173,7 +173,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
         String(branch),
         String(path),
         String(root),
-        scope === 'all' ? 'all' : 'near',
+        scope === 'all' || scope === 'cached' ? scope : 'near',
         Array.isArray(excluded) ? excluded.map(String) : [],
         (progress) => {
           if (!event.sender.isDestroyed()) event.sender.send(IPC.prefabProgress, progress)

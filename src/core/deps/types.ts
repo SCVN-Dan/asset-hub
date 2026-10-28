@@ -37,6 +37,9 @@ export type DependencyWarning =
   | 'noMeta'
   | 'noMaterials'
 
+/** `cached` answers only from prefabs read before (no downloads); `near` reads related folders; `all` reads every prefab. */
+export type PrefabScope = 'cached' | 'near' | 'all'
+
 /** A prefab that uses a model, and the materials its renderers put on that model. */
 export interface PrefabUsage {
   path: string
@@ -44,7 +47,7 @@ export interface PrefabUsage {
 }
 
 export interface PrefabMaterialsResult {
-  scope: 'near' | 'all'
+  scope: PrefabScope
   prefabs: PrefabUsage[]
   /** Prefabs checked for this answer (scanned now or known from earlier scans). */
   scanned: number

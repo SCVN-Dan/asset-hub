@@ -1,4 +1,4 @@
-import type { DependencyReport, PrefabMaterialsResult, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { DependencyReport, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { Settings } from './settings'
 
 export const IPC = {
@@ -120,7 +120,7 @@ export interface AssetHubApi {
     /** Progress of the one-off GUID index build for a commit. */
     onIndexProgress(listener: (progress: { done: number; total: number }) => void): () => void
     /** Materials that prefabs put on this model; `near` reads only related prefabs. */
-    findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: 'near' | 'all', excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
+    findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: PrefabScope, excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
     /** Bytes read so far by findPrefabMaterials. */
     onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
   }
