@@ -42,6 +42,7 @@ export function imageSize(name: string, bytes: Uint8Array): { width: number; hei
   const lower = name.toLowerCase()
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   if (bytes.length > 24 && bytes[0] === 0x89 && bytes[1] === 0x50) return { width: dv.getUint32(16), height: dv.getUint32(20) }
+  if (bytes.length > 26 && bytes[0] === 0x38 && bytes[1] === 0x42 && bytes[2] === 0x50 && bytes[3] === 0x53) return { width: dv.getUint32(18), height: dv.getUint32(14) } // PSD, whatever its name
   if (lower.endsWith('.tga') && bytes.length > 18) return { width: dv.getUint16(12, true), height: dv.getUint16(14, true) }
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
     for (let i = 2; i + 9 < bytes.length; ) {

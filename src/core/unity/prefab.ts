@@ -90,17 +90,25 @@ const GENERIC_FOLDERS = new Set(
  * distinctive folder names they share (Models/ASMR-Fish ↔ Prefabs/ASMR-Fish → 1).
  */
 export function folderAffinity(modelPath: string, prefabPath: string, root: string): number {
+  // "XP Hero", "XP-Hero" and "xp_hero" are the same folder name.
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
   const names = (p: string) =>
     new Set(
       p
         .slice(root.length)
         .split('/')
-        .slice(0, -1)
-        .map((s) => s.toLowerCase())
-        .filter((s) => !GENERIC_FOLDERS.has(s))
+        // Assets/<top folder> is shared by almost everything, so it says nothing.
+        .slice(2, -1)
+        .filter((s) => !GENERIC_FOLDERS.has(s.toLowerCase()))
+        .map(norm)
+        .filter(Boolean)
     )
   const a = names(modelPath)
   let score = 0
   for (const n of names(prefabPath)) if (a.has(n)) score++
+  // File names sharing a word (Fish_new.prefab ↔ Fish_Dirty.fbx) count once too.
+  const words = (p: string) => new Set((p.split('/').pop() ?? '').replace(/\.[^.]+$/, '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2))
+  const modelWords = words(modelPath)
+  if ([...words(prefabPath)].some((w) => modelWords.has(w))) score++
   return score
 }

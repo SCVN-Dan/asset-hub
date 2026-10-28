@@ -70,7 +70,13 @@ describe('modelMaterials', () => {
 describe('folderAffinity', () => {
   it('counts distinctive folder names shared with the model', () => {
     const fbx = 'p/Assets/Game/Models/ASMR-Fish/Fish.fbx'
-    expect(folderAffinity(fbx, 'p/Assets/Game/Prefabs/ASMR-Fish/FishModel.prefab', 'p/')).toBe(2)
+    expect(folderAffinity(fbx, 'p/Assets/Game/Prefabs/ASMR-Fish/FishModel.prefab', 'p/')).toBe(1)
     expect(folderAffinity(fbx, 'p/Assets/Other/Prefabs/Car.prefab', 'p/')).toBe(0)
+  })
+
+  it('treats spaces, dashes and underscores in folder names alike, and shared file-name words', () => {
+    const fbx = 'p/Assets/Supercent/XP Hero/FBXs/Character/Animal/Fish_Dirty.fbx'
+    expect(folderAffinity(fbx, 'p/Assets/Supercent/Creative/XP-Hero/ASMR-Fish/FBXs/Fish/Fish_new.prefab', 'p/')).toBe(2)
+    expect(folderAffinity(fbx, 'p/Assets/Supercent/Creative/Level/Car.prefab', 'p/')).toBe(0)
   })
 })

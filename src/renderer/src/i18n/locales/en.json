@@ -167,7 +167,7 @@
     "needsRepo": "Dependencies need a GitHub repository.",
     "resolving": "Resolving materials and textures…",
     "indexing": "Indexing project GUIDs (first time for this commit): {{done}} / {{total}}",
-    "missing": "missing",
+    "missing": "not in repo",
     "byName": "by name",
     "embedded": "Textures named inside the FBX",
     "files_one": "An import would copy {{count}} file (with .meta).",

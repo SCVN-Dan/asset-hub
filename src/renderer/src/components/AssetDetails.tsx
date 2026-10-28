@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, type ModelStats } from '@core/checks/playable'
-import { formatBytes, type Asset, type AssetTypeHandler, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
@@ -413,7 +413,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
             {copies.map((c) => (
               <li key={c.id}>
                 <button type="button" className="copy-item" aria-current={c.id === asset.id} onClick={() => onSelectCopy(c.id)} title={c.path}>
-                  {c.path}
+                  {shortPath(c.path)}
                 </button>
               </li>
             ))}
@@ -423,7 +423,9 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
       <dl className="kv">
         <dt>{t('details.path')}</dt>
-        <dd className="mono small">{asset.path}</dd>
+        <dd className="mono small" title={asset.path}>
+          {shortPath(asset.path)}
+        </dd>
         <dt>{t('details.size')}</dt>
         <dd>{formatBytes(asset.size)}</dd>
         <dt>{t('details.storage')}</dt>

@@ -162,7 +162,7 @@
     "needsRepo": "Dependency cần repo GitHub.",
     "resolving": "Đang tìm material và texture…",
     "indexing": "Đang lập chỉ mục GUID của project (lần đầu cho commit này): {{done}} / {{total}}",
-    "missing": "thiếu",
+    "missing": "không có trong repo",
     "byName": "theo tên",
     "embedded": "Texture được nhắc trong FBX",
     "files_other": "Import sẽ copy {{count}} file (kèm .meta).",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildFolderTree, formatBytes, isInFolder } from './index'
+import { buildFolderTree, formatBytes, isInFolder, shortPath } from './index'
 import type { Asset } from './types'
 
 const asset = (path: string): Asset => ({ id: path, type: 'fbx', path, name: path.split('/').pop()!, sha: 'x', lfs: false })
@@ -30,5 +30,12 @@ describe('formatBytes', () => {
     expect(formatBytes(512)).toBe('512 B')
     expect(formatBytes(1536)).toBe('1.5 KB')
     expect(formatBytes(4_812_330)).toBe('4.6 MB')
+  })
+})
+
+describe('shortPath', () => {
+  it('drops the first two folders', () => {
+    expect(shortPath('Assets/Supercent/XP Hero/FBXs/Fish_Dirty.fbx')).toBe('../XP Hero/FBXs/Fish_Dirty.fbx')
+    expect(shortPath('Assets/Hero.fbx')).toBe('Assets/Hero.fbx')
   })
 })

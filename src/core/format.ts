@@ -1,5 +1,11 @@
 const UNITS = ['B', 'KB', 'MB', 'GB']
 
+/** Project path without its first two folders, which are the same for most assets: Assets/Supercent/X/a.fbx → ../X/a.fbx. */
+export function shortPath(path: string): string {
+  const parts = path.split('/')
+  return parts.length > 3 ? `../${parts.slice(2).join('/')}` : path
+}
+
 export function formatBytes(bytes: number | undefined): string {
   if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '—'
   let value = bytes

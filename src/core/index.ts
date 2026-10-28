@@ -11,6 +11,7 @@ export * from './unity'
 export * from './unity/yaml'
 export * from './deps/types'
 export * from './deps/fbx'
+export * from './image/psd'
 
 /** Registry with every built-in asset type. Add new handlers here. */
 export function createDefaultRegistry(): HandlerRegistry {
