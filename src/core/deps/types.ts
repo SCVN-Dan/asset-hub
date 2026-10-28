@@ -17,6 +17,8 @@ export interface TextureRef {
   /** How it was found: by GUID (exact) or by file name (heuristic, needs confirmation). */
   matchedBy: 'guid' | 'name'
   missing: boolean
+  /** Not found yet, but the project was not fully searched: may still turn up. */
+  unsure?: boolean
   size?: number
 }
 
@@ -27,6 +29,8 @@ export interface MaterialRef {
   guid?: string
   path?: string
   missing: boolean
+  /** Not found yet, but the project was not fully searched: may still turn up. */
+  unsure?: boolean
   shader?: ShaderRef
   textures: TextureRef[]
 }
@@ -39,8 +43,11 @@ export type DependencyWarning =
   | 'noMeta'
   | 'noMaterials'
 
-/** `cached` answers only from prefabs read before (no downloads); `near` reads related folders; `all` reads every prefab. */
-export type PrefabScope = 'cached' | 'near' | 'all'
+/**
+ * `known` only names prefabs read before that use the model (nothing loaded);
+ * `cached` also loads their materials; `near` reads related folders; `all` reads every prefab.
+ */
+export type PrefabScope = 'known' | 'cached' | 'near' | 'all'
 
 /** A prefab that uses a model, and the materials its renderers put on that model. */
 export interface PrefabUsage {
@@ -67,6 +74,8 @@ export interface DependencyReport {
   materials: MaterialRef[]
   /** Textures referenced by name inside the FBX itself. */
   embeddedTextures: TextureRef[]
+  /** Answered from the files nearest the model only; a full answer follows. */
+  partial?: boolean
   warnings: DependencyWarning[]
   /**
    * .mat files next to an FBX that has no materials of its own — a guess, since

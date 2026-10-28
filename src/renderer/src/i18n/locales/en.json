@@ -192,7 +192,8 @@
     },
     "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
     "suggestedUse": "Use",
-    "suggestedOn": "Using ✓"
+    "suggestedOn": "Using ✓",
+    "checking": "checking…"
   },
   "export": {
     "title": "Export",
@@ -241,7 +242,11 @@
     "found_other": "Used by {{count}} prefabs — the first one’s material is shown in the preview; all are added to exports.",
     "applied": "Preview uses {{name}}.",
     "scanAll_one": "Scan {{count}} more prefab ({{size}})",
-    "scanAll_other": "Scan {{count}} more prefabs ({{size}})"
+    "scanAll_other": "Scan {{count}} more prefabs ({{size}})",
+    "known_one": "Used by {{count}} prefab seen before ({{names}}).",
+    "known_other": "Used by {{count}} prefabs seen before ({{names}}).",
+    "load": "Load their materials",
+    "loading": "Loading materials…"
   },
   "search": {
     "related": "Also showing related names: {{names}}",

@@ -50,6 +50,21 @@ app.on('second-instance', () => {
   win?.focus()
 })
 
+/** ASSETHUB_TRACE=1 logs how long each IPC request takes, to find what holds up loading. */
+if (process.env.ASSETHUB_TRACE) {
+  const handle = ipcMain.handle.bind(ipcMain)
+  const t0 = Date.now()
+  ipcMain.handle = (channel, listener) =>
+    handle(channel, async (event, ...args) => {
+      const start = Date.now()
+      try {
+        return await listener(event, ...args)
+      } finally {
+        console.log(`[ipc] +${((start - t0) / 1000).toFixed(1)}s ${channel} ${JSON.stringify(args).slice(0, 90)} ${Date.now() - start}ms`)
+      }
+    })
+}
+
 app.whenReady().then(() => {
   const userData = app.getPath('userData')
   // Not "cache": on case-insensitive disks that is Chromium's own "Cache" folder,

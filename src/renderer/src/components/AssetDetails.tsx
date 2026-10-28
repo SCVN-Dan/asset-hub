@@ -32,7 +32,11 @@ interface Props {
   onViewerLoading?(loading: boolean): void
 }
 
-type PrefabSearch = { status: 'idle' } | { status: 'running'; scope: 'near' | 'all' } | { status: 'ready'; result: PrefabMaterialsResult } | { status: 'error'; error: unknown }
+type PrefabSearch =
+  | { status: 'idle' }
+  /** Remembered prefabs use this model; their materials load when asked. */
+  | { status: 'known'; result: PrefabMaterialsResult }
+  | { status: 'running'; scope: 'cached' | 'near' | 'all' } | { status: 'ready'; result: PrefabMaterialsResult } | { status: 'error'; error: unknown }
 
 type Deps = { status: 'idle' } | { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; report: DependencyReport }
 
@@ -61,10 +65,10 @@ function MaterialRows({ m }: { m: MaterialRef }) {
   return (
     <li>
       <div className="dep-row" title={m.path}>
-        <Dot tone={m.missing ? 'warn' : 'ok'} />
+        <Dot tone={m.unsure ? 'info' : m.missing ? 'warn' : 'ok'} />
         <span className="dep-type">MAT</span>
         <span className="dep-name">{m.name}</span>
-        <span className="dep-meta">{m.missing ? t('deps.missing') : ''}</span>
+        <span className="dep-meta">{m.unsure ? t('deps.checking') : m.missing ? t('deps.missing') : ''}</span>
       </div>
       {/* Built-in and package shaders come with Unity: nothing to do, so not listed. */}
       {m.shader?.kind === 'project' && (
@@ -98,7 +102,7 @@ function mergeSlots(textures: readonly TextureRef[]): TextureRef[] {
 
 function TextureRow({ tex }: { tex: TextureRef }) {
   const { t } = useTranslation()
-  const tone = tex.missing ? 'warn' : tex.matchedBy === 'name' ? 'info' : 'ok'
+  const tone = tex.unsure ? 'info' : tex.missing ? 'warn' : tex.matchedBy === 'name' ? 'info' : 'ok'
   return (
     <li className="dep-row dep-child" title={tex.path}>
       <Dot tone={tone} />
@@ -107,7 +111,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
         {tex.prop && tex.prop !== tex.name && <span className="muted">{tex.prop} · </span>}
         {tex.missing ? tex.name : tex.path!.split('/').pop()}
       </span>
-      <span className="dep-meta">{tex.missing ? t('deps.missing') : tex.matchedBy === 'name' ? t('deps.byName') : formatBytes(tex.size)}</span>
+      <span className="dep-meta">{tex.unsure ? t('deps.checking') : tex.missing ? t('deps.missing') : tex.matchedBy === 'name' ? t('deps.byName') : formatBytes(tex.size)}</span>
     </li>
   )
 }
@@ -162,24 +166,33 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     let cancelled = false
     setDeps({ status: 'loading' })
     // Materials found on prefabs in an earlier search come back without downloading anything.
-    void window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, 'cached', excludedFolders).then((result) => {
+    // Only says whether remembered prefabs use it; loading their materials is up to the user.
+    void window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, 'known', excludedFolders).then((result) => {
       if (cancelled || !result.ok || !result.data.prefabs.length) return
-      setPrefab({ status: 'ready', result: result.data })
-      onPrefabFiles(repoPath, result.data.files)
+      setPrefab({ status: 'known', result: result.data })
     })
-    window.api.assets.resolve(live.repo, live.branch, repoPath, live.root).then(
-      (result) => {
-        if (cancelled) return
-        try {
-          const report = unwrap(result)
-          setDeps({ status: 'ready', report })
-          onReport(repoPath, report)
-        } catch (error) {
-          setDeps({ status: 'error', error })
+    // Shown in steps: what is known at once, then nearby files, then the whole branch if still needed.
+    const NEXT = { instant: 'quick', quick: 'full', full: undefined } as const
+    const load = (mode: 'instant' | 'quick' | 'full'): Promise<void> =>
+      window.api.assets.resolve(live.repo, live.branch, repoPath, live.root, mode).then(
+        (result) => {
+          if (cancelled) return
+          try {
+            const report = unwrap(result)
+            setDeps({ status: 'ready', report })
+            onReport(repoPath, report)
+            const next = NEXT[mode]
+            if (report.partial && next) void load(next)
+          } catch (error) {
+            // A failed later step keeps the earlier answer on screen.
+            if (mode === 'instant') setDeps({ status: 'error', error })
+          }
+        },
+        (error: unknown) => {
+          if (!cancelled && mode === 'instant') setDeps({ status: 'error', error: new RemoteError({ code: 'unknown', message: String(error) }) })
         }
-      },
-      (error: unknown) => !cancelled && setDeps({ status: 'error', error: new RemoteError({ code: 'unknown', message: String(error) }) })
-    )
+      )
+    void load('instant')
     return () => {
       cancelled = true
     }
@@ -203,7 +216,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     if (repoPath) onPrefabFiles(repoPath, s?.files ?? [])
   }
 
-  const searchPrefabs = async (scope: 'near' | 'all') => {
+  const searchPrefabs = async (scope: 'cached' | 'near' | 'all') => {
     if (!live || !repoPath) return
     const token = ++searchToken.current
     setPrefab({ status: 'running', scope })
@@ -372,6 +385,18 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       {live && report && (
         <section className="section">
           <span className="label-caps">{t('prefab.title')}</span>
+          {prefab.status === 'known' && (
+            <>
+              <p className="muted small" style={{ margin: 0 }}>
+                {t('prefab.known', { count: prefab.result.prefabs.length, names: prefab.result.prefabs.slice(0, 3).map((p) => p.path.split('/').pop()).join(', ') })}
+              </p>
+              <div>
+                <button type="button" className="btn" onClick={() => void searchPrefabs('cached')}>
+                  {t('prefab.load')}
+                </button>
+              </div>
+            </>
+          )}
           {prefab.status === 'idle' && (
             <>
               <p className="muted small" style={{ margin: 0 }}>
@@ -386,7 +411,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           )}
           {prefab.status === 'running' && (
             <div className="note">
-              {t(prefab.scope === 'all' ? 'prefab.scanningAll' : 'prefab.scanning')}
+              {t(prefab.scope === 'all' ? 'prefab.scanningAll' : prefab.scope === 'cached' ? 'prefab.loading' : 'prefab.scanning')}
               {prefabProgress && prefabProgress.total > 0 && (
                 <>
                   {' '}

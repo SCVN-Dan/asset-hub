@@ -1,4 +1,4 @@
-import { closestPath, describeMaterials, type DepContext } from '../deps/fbx'
+import { closestPath, describeMaterials, type DepContext, type GuidKind } from '../deps/fbx'
 import type { DependencyReport, PrefabMaterialsResult, PrefabScope, PrefabUsage } from '../deps/types'
 import { SourceError } from '../errors'
 import { baseName } from '../registry'
@@ -48,6 +48,103 @@ interface Snapshot {
   byPath: Map<string, TreeEntry>
   byName: Map<string, string[]>
   guids?: Map<string, string>
+  /** On-demand GUID lookups while the full index is not built yet. */
+  lazy?: LazyGuids
+}
+
+/** Timing lines for ASSETHUB_TRACE=1 runs. */
+const trace = (line: string) => {
+  if (typeof process !== 'undefined' && process.env?.ASSETHUB_TRACE) console.log(`[src] ${line}`)
+}
+
+/** .meta files of each kind, for lookups that only need one kind. */
+const KIND_PATTERN: Record<GuidKind, RegExp> = {
+  material: /\.mat\.meta$/i,
+  texture: /\.(png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture)\.meta$/i,
+  shader: /\.(shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i,
+  any: /\.meta$/i
+}
+/** .meta files read by one quick lookup before it gives up and leaves the rest to the full index. */
+const LOOKUP_BUDGET = 640
+/** One GraphQL request reads 40 files in about a second; four run side by side. */
+const LOOKUP_CHUNK = 160
+const LOOKUP_PARALLEL = 4
+
+/**
+ * GUID → path answered on demand: GUIDs whose .meta was read before (on any
+ * branch) are known at once; for the others, .meta files of the expected kind
+ * are read nearest-folder-first, a chunk at a time, until they are found.
+ */
+class LazyGuids {
+  readonly known = new Map<string, string>()
+  private unread: TreeEntry[]
+  /** One lookup per kind reads at a time, so two never fetch the same files; kinds read in parallel. */
+  private readonly locks = new Map<GuidKind, Promise<unknown>>()
+
+  constructor(
+    metas: readonly TreeEntry[],
+    private readonly bySha: Record<string, string>,
+    private readonly read: (entries: readonly TreeEntry[]) => Promise<Map<string, string>>
+  ) {
+    this.unread = []
+    for (const m of metas) {
+      const guid = bySha[m.sha]
+      if (guid === undefined) this.unread.push(m)
+      else if (guid) this.known.set(guid, m.path.slice(0, -'.meta'.length))
+    }
+  }
+
+  /** Every .meta read: a GUID not known now is not in the commit. */
+  get complete(): boolean {
+    return this.unread.length === 0
+  }
+
+  /**
+   * Reads .meta files of `kind` until every GUID is known or the budget runs
+   * out: files named like `hints` first (an FBX names its materials), then
+   * the folders nearest the model.
+   */
+  find(guids: readonly string[], kind: GuidKind, nearPath: string, hints: readonly string[] = []): Promise<void> {
+    const wanted = () => [...new Set(guids)].filter((g) => !this.known.has(g))
+    if (!wanted().length || this.complete) return Promise.resolve()
+    const run = (this.locks.get(kind) ?? Promise.resolve()).then(async () => {
+      trace(`guid lookup ${kind}: ${wanted().length} wanted, ${this.unread.length} unread`)
+      const near = nearPath.split('/')
+      const affinity = (p: string) => {
+        const parts = p.split('/')
+        let i = 0
+        while (i < near.length && i < parts.length && near[i] === parts[i]) i++
+        return i
+      }
+      const named = new Set(hints.map((h) => h.toLowerCase()))
+      const stem = (p: string) => baseName(p).replace(/\.meta$/i, '').replace(/\.[^.]+$/, '').toLowerCase()
+      const candidates = this.unread
+        .filter((m) => KIND_PATTERN[kind].test(m.path))
+        .map((m) => ({ m, score: (named.has(stem(m.path)) ? 1000 : 0) + affinity(m.path) }))
+        .sort((a, b) => b.score - a.score)
+        .map((c) => c.m)
+      let budget = LOOKUP_BUDGET
+      for (let i = 0; i < candidates.length && budget > 0 && wanted().length; ) {
+        const chunk = candidates.slice(i, i + Math.min(LOOKUP_CHUNK, budget))
+        i += chunk.length
+        budget -= chunk.length
+        const started = Date.now()
+        const texts = await this.read(chunk)
+        for (const m of chunk) {
+          const text = texts.get(m.sha)
+          if (text === undefined) continue
+          const guid = metaGuid(text) ?? ''
+          this.bySha[m.sha] = guid
+          if (guid) this.known.set(guid, m.path.slice(0, -'.meta'.length))
+        }
+        trace(`guid lookup ${kind}: read ${chunk.length} .meta (${texts.size} ok) in ${Date.now() - started}ms, ${wanted().length} still wanted`)
+        const read = new Set(chunk.filter((m) => texts.has(m.sha)).map((m) => m.sha))
+        this.unread = this.unread.filter((m) => !read.has(m.sha))
+      }
+    })
+    this.locks.set(kind, run.catch(() => undefined))
+    return run
+  }
 }
 
 /** .meta files worth indexing: anything a model, material or shader can reference. */
@@ -159,13 +256,76 @@ export class GitHubAssetSource implements AssetSource {
   }
 
   /** Dependencies of one asset, via its handler. Builds the GUID index first (cached per commit). */
-  async resolve(repo: string, branch: string, path: string, root: string, onProgress?: (p: IndexProgress) => void): Promise<DependencyReport> {
+  /**
+   * Dependencies of one asset. `quick` answers from the .meta files nearest the
+   * model when the branch's GUID index is not built yet (seconds instead of
+   * a full index); the report is then `partial` and `full` gives the final one.
+   */
+  async resolve(
+    repo: string,
+    branch: string,
+    path: string,
+    root: string,
+    onProgress?: (p: IndexProgress) => void,
+    mode: 'instant' | 'quick' | 'full' = 'full'
+  ): Promise<DependencyReport> {
     const snap = await this.snapshot(repo, branch)
     const entry = snap.byPath.get(path)
     const handler = entry && this.options.handlerFor?.(entry)
     if (!entry || !handler?.resolveDependencies) throw new SourceError('notFound', `No dependency resolver for ${path}`)
+    if (mode !== 'full' && !snap.guids) {
+      const ctx = await this.quickContext(repo, snap, root, path)
+      if (ctx) {
+        // `instant` answers with GUIDs already known only; the rest shows as still being checked.
+        const report = await handler.resolveDependencies(path, mode === 'instant' ? { ...ctx, prepare: undefined } : ctx)
+        if (mode === 'quick') await this.saveLearned(repo)
+        return report
+      }
+    }
     const guids = await this.guidIndex(repo, snap, onProgress)
     return handler.resolveDependencies(path, this.depContext(repo, snap, root, guids))
+  }
+
+  /**
+   * Starts building the branch's GUID index in the background (when it is not
+   * cached), so dependencies of the next model opened are answered at once.
+   */
+  async warmGuidIndex(repo: string, branch: string): Promise<void> {
+    const snap = await this.snapshot(repo, branch)
+    if (snap.guids) return
+    await this.guidIndex(repo, snap)
+  }
+
+  /** A context that looks GUIDs up on demand; undefined when the full index is cached and cheaper. */
+  private async quickContext(repo: string, snap: Snapshot, root: string, nearPath: string): Promise<DepContext | undefined> {
+    if (await this.options.cache?.get('guids', repo, snap.commit)) return undefined
+    if (!snap.lazy) {
+      const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
+      snap.lazy = new LazyGuids(
+        snap.entries.filter((e) => e.type === 'blob' && INDEXED.test(e.path)),
+        bySha,
+        // Small reads: GraphQL answers in about a second, a git fetch costs several seconds each time.
+        async (entries) => {
+          const size = Math.ceil(entries.length / LOOKUP_PARALLEL)
+          const slices = Array.from({ length: LOOKUP_PARALLEL }, (_, i) => entries.slice(i * size, (i + 1) * size)).filter((p) => p.length)
+          const parts = await Promise.all(slices.map((part) => this.client.getBlobTexts(repo, snap.commit, part.map((e) => e.path))))
+          const texts = new Map(parts.flatMap((m) => [...m]))
+          return new Map(entries.flatMap((e) => (texts.has(e.path) ? [[e.sha, texts.get(e.path)!] as const] : [])))
+        }
+      )
+    }
+    const lazy = snap.lazy
+    return {
+      ...this.depContext(repo, snap, root, lazy.known),
+      prepare: (guids, kind, hints) => lazy.find(guids, kind, nearPath, hints),
+      unsure: (guid) => !lazy.complete && !lazy.known.has(guid)
+    }
+  }
+
+  /** Stores GUIDs learned by quick lookups, so other branches and launches reuse them. */
+  private async saveLearned(repo: string): Promise<void> {
+    const bySha = await this.sharedCache(SHA_KIND, repo)
+    await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha).catch(() => {})
   }
 
   /**
@@ -184,7 +344,6 @@ export class GitHubAssetSource implements AssetSource {
     onProgress?: (p: IndexProgress) => void
   ): Promise<PrefabMaterialsResult> {
     const snap = await this.snapshot(repo, branch)
-    const guids = await this.guidIndex(repo, snap)
     const metaText = (await this.readTexts(repo, snap, [`${path}.meta`])).get(`${path}.meta`)
     const modelGuid = metaText ? metaGuid(metaText) : undefined
     if (!modelGuid) throw new SourceError('notFound', `${path} has no .meta GUID`)
@@ -196,6 +355,19 @@ export class GitHubAssetSource implements AssetSource {
     const ranked = prefabs
       .map((e) => ({ e, score: folderAffinity(path, e.path, root) }))
       .sort((a, b) => b.score - a.score || (a.e.size ?? 0) - (b.e.size ?? 0))
+    // Just which remembered prefabs use it: no material lookups, nothing downloaded.
+    if (scope === 'known') {
+      const unchecked = prefabs.filter((e) => !(e.sha in known))
+      return {
+        scope,
+        prefabs: ranked.filter(({ e }) => known[e.sha]?.[modelGuid]?.length).map(({ e }) => ({ path: e.path, materials: [] })),
+        scanned: prefabs.length - unchecked.length,
+        remaining: unchecked.length,
+        remainingBytes: unchecked.reduce((s, e) => s + (e.size ?? 0), 0),
+        files: [],
+        warnings: []
+      }
+    }
     let candidates = scope === 'cached' ? [] : ranked.filter((r) => !(r.e.sha in known))
     if (scope === 'near') {
       let budget = NEAR_BUDGET
@@ -203,7 +375,15 @@ export class GitHubAssetSource implements AssetSource {
     }
 
     if (candidates.length) await this.scanPrefabs(repo, snap, candidates, known, ranked, modelGuid, scope, onProgress)
-    return this.prefabAnswer(repo, snap, root, guids, prefabs, ranked, known, modelGuid, scope)
+    // Materials need GUID → path only when some prefab uses the model: no index work otherwise.
+    const used = ranked.some(({ e }) => known[e.sha]?.[modelGuid]?.length)
+    const quick = used ? await this.quickContext(repo, snap, root, path) : undefined
+    let answer = await this.prefabAnswer(repo, snap, root, quick, prefabs, ranked, known, modelGuid, scope)
+    if (quick) await this.saveLearned(repo)
+    // Something was not found nearby: settle it with the full index.
+    if (answer.prefabs.some((p) => p.materials.some((m) => m.unsure || m.textures.some((t) => t.unsure))))
+      answer = await this.prefabAnswer(repo, snap, root, undefined, prefabs, ranked, known, modelGuid, scope)
+    return answer
   }
 
   /** Reads candidate prefabs (skipping ones another scan has read meanwhile) into the shared cache. */
@@ -255,21 +435,23 @@ export class GitHubAssetSource implements AssetSource {
     repo: string,
     snap: Snapshot,
     root: string,
-    guids: Map<string, string>,
+    /** On-demand lookups; without it the full GUID index is used (and built if needed). */
+    quick: DepContext | undefined,
     prefabs: TreeEntry[],
     ranked: Array<{ e: TreeEntry; score: number }>,
     known: Record<string, Record<string, string[]>>,
     modelGuid: string,
     scope: PrefabScope
   ): Promise<PrefabMaterialsResult> {
-    const ctx = this.depContext(repo, snap, root, guids)
+    const used = ranked.some(({ e }) => known[e.sha]?.[modelGuid]?.length)
+    const ctx = quick ?? (used ? this.depContext(repo, snap, root, await this.guidIndex(repo, snap)) : undefined)
     const usages: PrefabUsage[] = []
     const files = new Set<string>()
     const warnings = new Set<PrefabMaterialsResult['warnings'][number]>()
     for (const { e } of ranked) {
       const mats = known[e.sha]?.[modelGuid]
       if (!mats?.length) continue
-      const described = await describeMaterials(mats.map((guid) => ({ guid })), ctx)
+      const described = await describeMaterials(mats.map((guid) => ({ guid })), ctx!)
       described.files.forEach((f) => files.add(f))
       described.warnings.forEach((w) => warnings.add(w))
       usages.push({ path: e.path, materials: described.materials })

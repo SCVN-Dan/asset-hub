@@ -19,10 +19,10 @@ async function psdToPng(bytes: Uint8Array): Promise<Blob | undefined> {
 }
 
 /** Downloads one texture from the repo and serves it through a blob URL (revoke it when done). */
-export async function fetchTextureFile(live: LiveContext, path: string): Promise<TextureFile | undefined> {
+export async function fetchTextureFile(live: LiveContext, path: string, background = false): Promise<TextureFile | undefined> {
   if (!DRAWABLE.test(path)) return undefined
   try {
-    const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path))
+    const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path, background))
     // Judged by content: .psd files, and PSD files saved with a .png name, become PNG for the browser.
     const blob = isPsd(bytes) ? await psdToPng(bytes) : new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[path.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream' })
     if (!blob) return undefined

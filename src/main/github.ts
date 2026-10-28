@@ -190,13 +190,28 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
 
   ipcMain.handle(IPC.listRepos, () => wrap(() => requireSession().listRepos()))
   ipcMain.handle(IPC.listBranches, (_e, repo: string) => wrap(() => requireSession().listBranches(String(repo))))
-  ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) => wrapForeground(() => requireSession().listTree(String(repo), String(branch))))
+  ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) =>
+    wrapForeground(async () => {
+      const src = requireSession()
+      const entries = await src.listTree(String(repo), String(branch))
+      // Build the branch's GUID index in the background, so opening a model finds its dependencies at once.
+      setTimeout(() => void src.warmGuidIndex(String(repo), String(branch)).catch(() => {}), 1500)
+      return entries
+    })
+  )
 
-  ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string) =>
+  ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string, mode: unknown) =>
     wrapForeground(() =>
-      requireSession().resolve(String(repo), String(branch), String(path), String(root), (progress) => {
-        if (!event.sender.isDestroyed()) event.sender.send(IPC.indexProgress, progress)
-      })
+      requireSession().resolve(
+        String(repo),
+        String(branch),
+        String(path),
+        String(root),
+        (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send(IPC.indexProgress, progress)
+        },
+        mode === 'instant' || mode === 'quick' ? mode : 'full'
+      )
     )
   )
   ipcMain.handle(IPC.findPrefabMaterials, (event, repo: string, branch: string, path: string, root: string, scope: unknown, excluded: unknown) =>
@@ -206,7 +221,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
         String(branch),
         String(path),
         String(root),
-        scope === 'all' || scope === 'cached' ? scope : 'near',
+        scope === 'all' || scope === 'cached' || scope === 'known' ? scope : 'near',
         Array.isArray(excluded) ? excluded.map(String) : [],
         (progress) => {
           if (!event.sender.isDestroyed()) event.sender.send(IPC.prefabProgress, progress)
@@ -214,7 +229,15 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       )
     )
   )
-  ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string) => wrapForeground(() => requireSession().readFile(String(repo), String(branch), String(path))))
+  ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string, background: unknown) =>
+    background === true
+      ? wrap(async () => {
+          // Grid thumbnails step aside while the user waits on something.
+          while (foreground > 0) await new Promise((r) => setTimeout(r, 150))
+          return requireSession().readFile(String(repo), String(branch), String(path))
+        })
+      : wrapForeground(() => requireSession().readFile(String(repo), String(branch), String(path)))
+  )
   ipcMain.handle(IPC.findByNames, (_e, repo: string, branch: string, names: unknown, nearPath: string, root: string) =>
     wrapForeground(() =>
       requireSession().findByNames(String(repo), String(branch), Array.isArray(names) ? names.map(String) : [], String(nearPath), String(root))

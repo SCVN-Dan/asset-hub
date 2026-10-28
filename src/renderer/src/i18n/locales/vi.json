@@ -186,7 +186,8 @@
     },
     "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
     "suggestedUse": "Dùng",
-    "suggestedOn": "Đang dùng ✓"
+    "suggestedOn": "Đang dùng ✓",
+    "checking": "đang kiểm tra…"
   },
   "export": {
     "title": "Xuất",
@@ -226,7 +227,11 @@
     "none_other": "Không có prefab nào dùng FBX này trong {{count}} prefab đã kiểm tra.",
     "found_other": "Được dùng bởi {{count}} prefab — material đầu tiên hiện trong preview, tất cả được kèm khi xuất.",
     "applied": "Preview đang dùng {{name}}.",
-    "scanAll_other": "Quét thêm {{count}} prefab ({{size}})"
+    "scanAll_other": "Quét thêm {{count}} prefab ({{size}})",
+    "known_one": "Dùng trong {{count}} prefab đã biết ({{names}}).",
+    "known_other": "Dùng trong {{count}} prefab đã biết ({{names}}).",
+    "load": "Tải material của prefab",
+    "loading": "Đang tải material…"
   },
   "search": {
     "related": "Hiện cả tên liên quan: {{names}}",

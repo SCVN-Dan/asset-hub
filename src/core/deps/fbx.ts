@@ -9,11 +9,21 @@ export interface DepContext {
   root: string
   byPath: ReadonlyMap<string, TreeEntry>
   pathForGuid(guid: string): string | undefined
+  /**
+   * Looks these GUIDs up before `pathForGuid` is asked for them, reading only
+   * the .meta files of that kind nearest the model. Absent when every GUID is known already.
+   */
+  prepare?(guids: readonly string[], kind: GuidKind, nameHints?: readonly string[]): Promise<void>
+  /** True when a GUID was not found but the project was not fully searched. */
+  unsure?(guid: string): boolean
   /** Repo paths of files with this name (case-insensitive). */
   pathsByName(name: string): readonly string[]
   readTexts(paths: readonly string[]): Promise<Map<string, string>>
   readBytes(path: string): Promise<Uint8Array>
 }
+
+/** What a GUID is expected to point at, so a lookup only reads .meta files of that kind. */
+export type GuidKind = 'material' | 'texture' | 'shader' | 'any'
 
 const MAX_SUGGESTED = 8
 
@@ -58,22 +68,32 @@ export async function describeMaterials(
     files.add(p)
     if (ctx.byPath.has(`${p}.meta`)) files.add(`${p}.meta`)
   }
+  // An FBX names the materials it expects: a .mat of that name is the likely match.
+  await ctx.prepare?.(refs.map((m) => m.guid), 'material', refs.flatMap((m) => (m.name ? [m.name] : [])))
   const matPaths = new Map<string, string>()
   for (const m of refs) {
     const p = ctx.pathForGuid(m.guid)
     if (p) matPaths.set(m.guid, p)
   }
   const matTexts = await ctx.readTexts([...new Set(matPaths.values())])
+  const parsedByPath = new Map([...new Set(matPaths.values())].map((p) => [p, parseMaterial(matTexts.get(p) ?? '')]))
+  // Everything the materials point at, looked up together.
+  const parsedAll = [...parsedByPath.values()]
+  await Promise.all([
+    ctx.prepare?.(parsedAll.flatMap((p) => p.textures.map((t) => t.guid)), 'texture'),
+    ctx.prepare?.(parsedAll.flatMap((p) => (p.shader && !BUILTIN_SHADER_GUIDS.has(p.shader.guid) && !KNOWN_PACKAGE_SHADERS[p.shader.guid] ? [p.shader.guid] : [])), 'shader'),
+    ctx.prepare?.(parsedAll.flatMap((p) => (p.parentGuid ? [p.parentGuid] : [])), 'material')
+  ])
   const shaderFiles: string[] = []
   const parents: string[] = []
   const materials: MaterialRef[] = refs.map((m) => {
     const path = matPaths.get(m.guid)
     if (!path) {
       warnings.add('missingMaterial')
-      return { name: m.name ?? m.guid.slice(0, 8), guid: m.guid, missing: true, textures: [] }
+      return { name: m.name ?? m.guid.slice(0, 8), guid: m.guid, missing: true, unsure: ctx.unsure?.(m.guid), textures: [] }
     }
     addWithMeta(path)
-    const parsed = parseMaterial(matTexts.get(path) ?? '')
+    const parsed = parsedByPath.get(path)!
     const shader = parsed.shader ? classifyShader(parsed.shader.guid, ctx) : undefined
     if (shader?.kind === 'project') {
       warnings.add('customShader')
@@ -92,7 +112,7 @@ export async function describeMaterials(
       const tp = ctx.pathForGuid(t.guid)
       if (!tp) {
         warnings.add('missingTexture')
-        return { prop: t.prop, guid: t.guid, name: t.prop, matchedBy: 'guid', missing: true }
+        return { prop: t.prop, guid: t.guid, name: t.prop, matchedBy: 'guid', missing: true, unsure: ctx.unsure?.(t.guid) }
       }
       addWithMeta(tp)
       return { prop: t.prop, guid: t.guid, path: tp, name: baseName(tp), matchedBy: 'guid', missing: false, size: entrySize(ctx.byPath.get(tp)) }
@@ -102,6 +122,11 @@ export async function describeMaterials(
   // Parents of variants bring their own textures and shaders.
   if (parents.length) {
     const parentTexts = await ctx.readTexts(parents)
+    const parsedParents = parents.map((p) => parseMaterial(parentTexts.get(p) ?? ''))
+    await Promise.all([
+      ctx.prepare?.(parsedParents.flatMap((p) => p.textures.map((t) => t.guid)), 'texture'),
+      ctx.prepare?.(parsedParents.flatMap((p) => (p.shader ? [p.shader.guid] : [])), 'shader')
+    ])
     for (const p of parents) {
       const parsed = parseMaterial(parentTexts.get(p) ?? '')
       for (const t of parsed.textures) {
@@ -141,8 +166,10 @@ async function shaderDependencies(start: readonly string[], ctx: DepContext): Pr
         if (hit) refs.add(hit)
       }
       if (/\.shader(sub)?graph$/i.test(file)) {
-        for (const m of text.matchAll(/"guid"\s*:\s*"([0-9a-f]{32})"/g)) {
-          const p = ctx.pathForGuid(m[1])
+        const guids = [...text.matchAll(/"guid"\s*:\s*"([0-9a-f]{32})"/g)].map((m) => m[1])
+        await ctx.prepare?.(guids, 'any')
+        for (const g of guids) {
+          const p = ctx.pathForGuid(g)
           if (p) refs.add(p)
         }
       }
@@ -226,13 +253,26 @@ export async function resolveFbxDependencies(fbxPath: string, ctx: DepContext): 
       return d === dir || d === `${dir}/Materials` || d === `${parent}/Materials`
     })
     const metas = await ctx.readTexts(near.slice(0, MAX_SUGGESTED).map((p) => `${p}.meta`))
-    for (const p of near.slice(0, MAX_SUGGESTED)) {
+    const picks = near.slice(0, MAX_SUGGESTED).flatMap((p) => {
       const guid = metaGuid(metas.get(`${p}.meta`) ?? '')
-      if (!guid) continue
-      const d = await describeMaterials([{ guid, name: baseName(p).replace(/\.mat$/, '') }], { ...ctx, pathForGuid: (g) => (g === guid ? p : ctx.pathForGuid(g)) })
-      if (d.materials[0] && !d.materials[0].missing) suggested.push({ material: d.materials[0], files: d.files })
+      return guid ? [{ guid, path: p }] : []
+    })
+    // Described together, so their textures and shaders are looked up in one go.
+    const byGuid = new Map(picks.map((s) => [s.guid, s.path]))
+    const sub: DepContext = { ...ctx, pathForGuid: (g) => byGuid.get(g) ?? ctx.pathForGuid(g) }
+    const all = await describeMaterials(
+      picks.map((s) => ({ guid: s.guid, name: baseName(s.path).replace(/\.mat$/, '') })),
+      sub
+    )
+    // Each suggestion carries only the files its own material needs (with .meta).
+    for (const material of all.materials) {
+      if (material.missing || !material.path) continue
+      const own = [material.path, ...material.textures.flatMap((t) => (t.path ? [t.path] : [])), ...(material.shader?.path ? [material.shader.path] : [])]
+      suggested.push({ material, files: own.flatMap((f) => (ctx.byPath.has(`${f}.meta`) ? [f, `${f}.meta`] : [f])) })
     }
   }
 
-  return { kind, materials, embeddedTextures, suggested, warnings: [...warnings], files: [...files] }
+  const unsure = (m: MaterialRef) => m.unsure || m.textures.some((t) => t.unsure)
+  const partial = materials.some(unsure) || suggested.some((s) => unsure(s.material))
+  return { kind, materials, embeddedTextures, suggested, partial: partial || undefined, warnings: [...warnings], files: [...files] }
 }

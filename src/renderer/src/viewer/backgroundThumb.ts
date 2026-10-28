@@ -27,11 +27,11 @@ function offscreenHost(): HTMLDivElement {
  * which then replaces this thumbnail.
  */
 export async function renderThumbnail(live: LiveContext, path: string): Promise<string> {
-  const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path))
+  const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path, true))
   const names = extractFbxTextureNames(bytes)
   const found = names.length ? unwrap(await window.api.assets.findByNames(live.repo, live.branch, names, path, live.root)) : {}
   const paths = [...new Set(Object.values(found).filter((p): p is string => !!p))].slice(0, MAX_TEXTURES)
-  const files = (await Promise.all(paths.map((p) => fetchTextureFile(live, p)))).filter((f): f is TextureFile => !!f)
+  const files = (await Promise.all(paths.map((p) => fetchTextureFile(live, p, true)))).filter((f): f is TextureFile => !!f)
   const viewer = new FbxViewer(offscreenHost())
   try {
     await viewer.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, new Map(files.map((f) => [f.name.toLowerCase(), f])))

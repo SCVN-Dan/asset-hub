@@ -132,8 +132,13 @@ export interface AssetHubApi {
   }
   assets: {
     /** Materials, textures and shaders of one asset. Repo paths throughout. */
-    resolve(repo: string, branch: string, path: string, root: string): Promise<IpcResult<DependencyReport>>
-    readFile(repo: string, branch: string, path: string): Promise<IpcResult<Uint8Array>>
+    /**
+     * `instant` answers with what is known already, `quick` also searches nearby
+     * files (both may be `partial`); `full` waits for the branch's GUID index.
+     */
+    resolve(repo: string, branch: string, path: string, root: string, mode?: 'instant' | 'quick' | 'full'): Promise<IpcResult<DependencyReport>>
+    /** `background` reads (grid thumbnails) wait while the user is loading something. */
+    readFile(repo: string, branch: string, path: string, background?: boolean): Promise<IpcResult<Uint8Array>>
     findByNames(repo: string, branch: string, names: string[], nearPath: string, root: string): Promise<IpcResult<Record<string, string | null>>>
     /** Progress of the one-off GUID index build for a commit. */
     onIndexProgress(listener: (progress: { done: number; total: number }) => void): () => void
