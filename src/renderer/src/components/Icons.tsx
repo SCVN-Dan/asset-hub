@@ -79,6 +79,12 @@ export const SphereIcon = ({ size = 24 }: IconProps) => (
   </svg>
 )
 
+export const AudioIcon = ({ size = 24 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2" />
+  </svg>
+)
+
 export const ImageIcon = ({ size = 24 }: IconProps) => (
   <svg {...base(size)}>
     <rect x="3.5" y="4.5" width="17" height="15" rx="2" />

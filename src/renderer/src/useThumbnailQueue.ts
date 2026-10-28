@@ -4,10 +4,11 @@ import type { StatsSummary } from '@core/checks/playable'
 import { renderThumbnail } from './viewer/backgroundThumb'
 import { renderImageThumbnail } from './viewer/imageThumb'
 import { renderMaterialThumbnail } from './viewer/materialThumb'
+import { renderAudioThumbnail } from './viewer/audio'
 
-export type ThumbKind = 'three' | 'material' | 'image'
+export type ThumbKind = 'three' | 'material' | 'image' | 'audio'
 
-const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail }
+const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail }
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
@@ -20,7 +21,7 @@ interface Job {
   order: number
   /** Repo + branch to read from, when not the open branch (results from other branches). */
   ctx?: LiveContext
-  /** How it is drawn: a 3D model, a material on a sphere, or an image file as it is. */
+  /** How it is drawn: a 3D model, a material on a sphere, an image file as it is, or a clip's waveform. */
   kind: ThumbKind
 }
 

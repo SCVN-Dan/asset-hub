@@ -26,7 +26,7 @@
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
 | B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn preset ngân sách, dung lượng gồm dependency) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
-| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | 🔄 Texture, Material xong |
+| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | 🔄 Texture, Material, Audio xong |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
@@ -179,7 +179,7 @@ Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, prev
 |---|---|---|---|
 | **Texture** (png, jpg, tga, psd, gif, bmp; exr/hdr/tif liệt kê nhưng không vẽ) | Ảnh trực tiếp, nền caro / tối / sáng, vừa khung / 1:1; thumbnail lưới là chính ảnh (PSD, TGA tự giải mã) | Kích thước, dung lượng, định dạng, alpha; import settings từ `.meta` (loại, max size, override theo nền tảng, nén, mipmaps, sRGB) → **kích thước khi build**; cảnh báo playable (> 1024 px khi build, không nén, sprite bật mipmaps, > 4 MB); ✓/⚠ trên card chấm theo kích thước build; **Tải về** file ảnh (không xuất gói) | ✅ |
 | **Material** (.mat) | Quả cầu / hộp / mặt phẳng three.js, gán texture theo slot + màu (`_BaseColor` / `_Color` / `_TintColor`), trong suốt / cutout, emission, độ bóng; material trong suốt (VFX) mặc định hiện trên mặt phẳng; thumbnail lưới = quả cầu | Shader (built-in theo tên / package URP / custom), texture + material cha (variant) theo GUID — dùng lại `describeMaterials`, GUID của chính `.mat` lấy từ `.meta`; panel: shader, bề mặt, màu, số texture + dung lượng, texture lớn nhất khi build, cảnh báo playable; xuất `.unitypackage` (mat + texture + shader custom) | ✅ |
-| **Audio** (wav, mp3, ogg) | Nghe thử + waveform trong app | Độ dài, sample rate, dung lượng; import settings (Load Type, Compression) → cảnh báo playable | ⏳ |
+| **Audio** (wav, mp3, ogg; aif / tracker liệt kê) | Phát trong app trên waveform: bấm để tua, Space phát / dừng, lặp, **Tự phát** khi chọn clip khác (nhớ giữa các lần mở); thumbnail lưới = waveform | Độ dài, kênh, sample rate gốc (đọc header WAV / OGG / MP3 vì Web Audio tự resample), import settings từ `.meta` (Load type, nén + quality, sample rate override, Force To Mono, override theo nền tảng — WebGL ưu tiên) → **dung lượng ước tính khi build**; cảnh báo playable (> 1 MB khi build, > 60 s, PCM, clip dài Decompress on load, âm ngắn stereo); card ghi độ dài + ≈ dung lượng; **Tải về** file như texture | ✅ |
 | **Sprite / UI** (texture kiểu Sprite, atlas) | Ảnh + khung slice / sprite con | Sprite sheet từ `.meta` (spriteMode, rects) | ⏳ |
 | **Prefab tĩnh** (mesh + material, không particle) | Dựng lại từ FBX + material trong prefab bằng three.js; ảnh Unity render sẵn nếu có | Prefab con, mesh, material, script (cảnh báo script custom không mang theo được) | ⏳ |
 | **Animation clip** (.anim, clip trong FBX) | Phát trên model rig phù hợp | Độ dài, số curve | ⏳ |
@@ -249,6 +249,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-28 | **Phase 6 — Audio xong**: handler audio (tab Audio tự sinh, xp_hero @ net-catch: 249 clip), player + waveform, panel Audio với import settings và dung lượng ước tính khi build, cảnh báo playable riêng cho audio (không dùng ngân sách file model), xếp hạng dùng chung, Tải về. Resolver "file + .meta" tách thành `resolveSelf` dùng chung cho texture + audio. Header khớp `afinfo` trên 10 file thật; parser `.meta` kiểm trên 12 file thật. 98 test. |
 | 2026-10-28 | **Phase 6 — Material xong**: handler `.mat` (tab Material tự sinh, xp_hero @ net-catch: 2.578 file), preview quả cầu / hộp / mặt phẳng với texture + màu + trong suốt / cutout + emission, thumbnail lưới, panel Material (shader, bề mặt, màu, texture, cảnh báo playable), xếp hạng dùng chung (card ghi "N texture" thay cho tris), xuất gói kèm texture + shader custom. Kiểm parser trên 40 `.mat` thật (URP, built-in, particle, Unity 5). 91 test. |
 | 2026-10-27 | Khởi tạo project, viết PLAN + ROADMAP. |
 | 2026-10-27 | Thêm prototype UI 3 màn hình trên canvas. |

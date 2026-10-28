@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, type DependencyReport, type MaterialLook, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
@@ -9,6 +9,8 @@ import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
 import { ImageViewer, type ImageInfo } from './ImageViewer'
 import { MaterialViewer } from './MaterialViewer'
+import { AudioViewer } from './AudioViewer'
+import { audioStats, formatDuration, type DecodedAudio } from '../viewer/audio'
 import { DownloadButton } from './DownloadButton'
 
 interface Props {
@@ -81,7 +83,7 @@ function TextureSection({ info }: { info: ImageInfo }) {
       <span className="label-caps">{t('texture.title')}</span>
       <dl className="stat-grid">
         {cells.map(([k, v]) => (
-          <div key={k}>
+          <div key={k} className={statClass(v)}>
             <dt>{k}</dt>
             <dd>{v}</dd>
           </div>
@@ -103,6 +105,68 @@ function TextureSection({ info }: { info: ImageInfo }) {
     </section>
   )
 }
+
+const LOAD_TYPES: Record<number, string> = { 0: 'decompress', 1: 'compressed', 2: 'streaming' }
+const AUDIO_FORMATS: Record<number, string> = { 0: 'PCM', 1: 'Vorbis', 2: 'ADPCM', 3: 'MP3', 7: 'AAC' }
+
+/** Length, channels, rate and Unity import settings of a clip, with what matters for playables. */
+function AudioSection({ info }: { info: DecodedAudio }) {
+  const { t } = useTranslation()
+  const imp = info.import
+  const s = imp ? effectiveAudioImport(imp) : undefined
+  const stats = audioStats(info)
+  const mono = imp?.forceToMono && info.channels > 1
+  const rate = s?.sampleRateSetting === 2 && s.sampleRateOverride && s.sampleRateOverride < info.sampleRate ? s.sampleRateOverride : undefined
+  const format = s?.compressionFormat ?? 1
+  const warnings = summaryIssues(stats).map((i) =>
+    t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value, limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit })
+  )
+  if (format === 0 && info.duration > 5) warnings.push(t('audio.warn.pcm'))
+  if ((s?.loadType ?? 0) === 0 && info.duration > 10) warnings.push(t('audio.warn.decompress'))
+  if (info.channels > 1 && !imp?.forceToMono && info.duration < 5) warnings.push(t('audio.warn.mono'))
+  const cells: Array<[string, string]> = [
+    [t('audio.length'), formatDuration(info.duration)],
+    [t('audio.channels'), `${t(info.channels === 1 ? 'audio.mono' : 'audio.stereo')}${mono ? ` → ${t('audio.mono')}` : ''}`],
+    [t('audio.rate'), `${(info.sampleRate / 1000).toLocaleString()} kHz${rate ? ` → ${(rate / 1000).toLocaleString()} kHz` : ''}`],
+    [t('audio.file'), `${formatBytes(info.bytes)} · ${info.format}`],
+    ...(imp
+      ? ([
+          [t('audio.loadType'), t(`audio.loadTypes.${LOAD_TYPES[s?.loadType ?? 0] ?? 'decompress'}`)],
+          [t('audio.compression'), `${AUDIO_FORMATS[format] ?? format}${(format === 1 || format === 3) && s?.quality !== undefined ? ` ${Math.round(s.quality * 100)}%` : ''}`]
+        ] as Array<[string, string]>)
+      : []),
+    [t('audio.built'), `≈ ${formatBytes(stats.fileBytes)}`]
+  ]
+  return (
+    <section className="section">
+      <span className="label-caps">{t('audio.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k} className={statClass(v)}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {imp && imp.overrides.length > 0 && (
+        <p className="muted small" style={{ margin: 0 }}>
+          {t('audio.overrides', { list: imp.overrides.map((o) => `${o.target}${o.compressionFormat !== undefined ? ` ${AUDIO_FORMATS[o.compressionFormat] ?? o.compressionFormat}` : ''}`).join(', ') })}
+        </p>
+      )}
+      {!imp && <p className="muted small" style={{ margin: 0 }}>{t('audio.noMeta')}</p>}
+      {warnings.length > 0 && (
+        <ul className="warn-note warn-list">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Long values (shader name, load type) take a whole row so they stay on one line. */
+const statClass = (v: ReactNode) => (typeof v === 'string' && v.length > 18 ? 'stat-wide' : undefined)
 
 const SURFACES = { opaque: 'opaque', cutout: 'cutout', transparent: 'transparent' } as const
 const toHex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')
@@ -133,7 +197,7 @@ function MaterialSection({ material, look, stats }: { material?: MaterialRef; lo
       <span className="label-caps">{t('material.title')}</span>
       <dl className="stat-grid">
         {cells.map(([k, v]) => (
-          <div key={k}>
+          <div key={k} className={statClass(v)}>
             <dt>{k}</dt>
             <dd>{v}</dd>
           </div>
@@ -235,6 +299,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [imageInfo, setImageInfo] = useState<ImageInfo>()
   /** For a material: its colour / surface, and what its textures weigh. */
   const [look, setLook] = useState<MaterialLook>()
+  /** For an audio clip: what the player decoded. */
+  const [audioInfo, setAudioInfo] = useState<DecodedAudio>()
   const [materialStats, setMaterialStats] = useState<StatsSummary>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
@@ -273,6 +339,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     setStats(undefined)
     setImageInfo(undefined)
     setLook(undefined)
+    setAudioInfo(undefined)
     setMaterialStats(undefined)
     setCopied(false)
     setProgress(undefined)
@@ -390,6 +457,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
+      ) : live && repoPath && handler?.preview.kind === 'audio' ? (
+        <AudioViewer key={repoPath} live={live} path={repoPath} onInfo={setAudioInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : live && repoPath && handler?.preview.kind === 'image' ? (
         <ImageViewer key={repoPath} live={live} path={repoPath} onInfo={setImageInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : (
@@ -441,6 +510,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       )}
 
       {imageInfo && <TextureSection info={imageInfo} />}
+      {audioInfo && <AudioSection info={audioInfo} />}
       {handler?.preview.kind === 'material' && <MaterialSection material={report?.materials[0]} look={look} stats={materialStats} />}
 
       {/* A texture is just itself: nothing to list. */}

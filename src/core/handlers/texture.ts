@@ -1,3 +1,4 @@
+import { resolveSelf } from '../deps/self'
 import type { AssetTypeHandler } from '../types'
 
 /** Image files Unity imports as textures. EXR / HDR / TIFF are listed, though the preview cannot draw them. */
@@ -12,18 +13,7 @@ export const textureHandler: AssetTypeHandler = {
   usesGuids: false,
   // Artists just want the image: saved as a plain file, no package.
   delivery: 'file',
-  resolveDependencies: async (path, ctx) => {
-    const meta = `${path}.meta`
-    const hasMeta = ctx.byPath.has(meta)
-    return {
-      kind: 'none',
-      materials: [],
-      embeddedTextures: [],
-      suggested: [],
-      warnings: hasMeta ? [] : ['noMeta'],
-      files: hasMeta ? [path, meta] : [path]
-    }
-  },
+  resolveDependencies: resolveSelf,
   preview: {
     kind: 'image',
     // Drawn in the renderer; nothing to prepare here.

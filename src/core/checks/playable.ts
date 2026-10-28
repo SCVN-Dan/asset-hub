@@ -11,7 +11,7 @@ export interface ModelStats {
 }
 
 export interface BudgetIssue {
-  key: 'triangles' | 'textureSize' | 'textureBytes' | 'fileBytes' | 'bones'
+  key: 'triangles' | 'textureSize' | 'textureBytes' | 'fileBytes' | 'bones' | 'audioBytes' | 'audioLength'
   value: number
   limit: number
 }
@@ -22,7 +22,10 @@ export const PLAYABLE_BUDGET = {
   textureSize: 1024,
   textureBytes: 4 * 1024 * 1024,
   fileBytes: 5 * 1024 * 1024,
-  bones: 60
+  bones: 60,
+  /** One audio clip: playables carry a few short sounds and one music loop. */
+  audioBytes: 1024 * 1024,
+  audioSeconds: 60
 }
 
 export function checkPlayableBudget(stats: ModelStats, budget = PLAYABLE_BUDGET): BudgetIssue[] {
@@ -46,6 +49,8 @@ export interface StatsSummary {
   /** For a texture asset: its size in pixels (no triangles). */
   width?: number
   height?: number
+  /** For an audio clip: its length in seconds (no triangles); `fileBytes` is then its estimated size in a build. */
+  duration?: number
   /** For a material: how many textures it uses (no triangles). */
   textureCount?: number
   /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
@@ -71,8 +76,13 @@ export function summaryIssues(s: StatsSummary, budget = PLAYABLE_BUDGET): Budget
   if (s.triangles > budget.triangles) issues.push({ key: 'triangles', value: s.triangles, limit: budget.triangles })
   if (s.maxTextureSize > budget.textureSize) issues.push({ key: 'textureSize', value: s.maxTextureSize, limit: budget.textureSize })
   if (s.textureBytes > budget.textureBytes) issues.push({ key: 'textureBytes', value: s.textureBytes, limit: budget.textureBytes })
-  if (s.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: s.fileBytes, limit: budget.fileBytes })
+  // An audio clip is judged by its own, smaller budget below.
+  if (s.duration === undefined && s.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: s.fileBytes, limit: budget.fileBytes })
   if (s.bones > budget.bones) issues.push({ key: 'bones', value: s.bones, limit: budget.bones })
+  if (s.duration !== undefined) {
+    if (s.fileBytes > budget.audioBytes) issues.push({ key: 'audioBytes', value: s.fileBytes, limit: budget.audioBytes })
+    if (s.duration > budget.audioSeconds) issues.push({ key: 'audioLength', value: Math.round(s.duration), limit: budget.audioSeconds })
+  }
   return issues
 }
 
@@ -114,7 +124,7 @@ export function rankForPlayable<T>(
             ? [summaryIssues(s).length, size, -usedOf(item)]
             : mode === 'smallest'
               ? [size, s.triangles]
-              : [s.width || s.textureCount !== undefined ? 1 : 0, s.triangles, size] // textures and materials (no triangles) after models
+              : [s.width || s.textureCount !== undefined || s.duration !== undefined ? 1 : 0, s.triangles, size] // textures, materials and audio (no triangles) after models
     return { item, index, keys: [-matchOf(item), ...keys] }
   })
   keyed.sort((a, b) => {

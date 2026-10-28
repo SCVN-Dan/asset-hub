@@ -8,7 +8,8 @@
     "all": "Tất cả",
     "fbx": "FBX",
     "texture": "Texture",
-    "material": "Material"
+    "material": "Material",
+    "audio": "Audio"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -159,7 +160,9 @@
     "textureSize": "Có texture {{value}} px — vượt {{limit}} px cho playable.",
     "textureBytes": "Tổng texture {{value}} — vượt {{limit}}.",
     "fileBytes": "FBX nặng {{value}} — vượt {{limit}}.",
-    "bones": "{{value}} bone — vượt {{limit}}."
+    "bones": "{{value}} bone — vượt {{limit}}.",
+    "audioBytes": "Khoảng {{value}} khi build — vượt {{limit}} cho một clip trong playable.",
+    "audioLength": "Dài {{value}} s — vượt {{limit}} s cho playable."
   },
   "deps": {
     "needsRepo": "Dependency cần repo GitHub.",
@@ -363,6 +366,38 @@
       "cube": "Hộp",
       "plane": "Mặt phẳng"
     }
+  },
+  "audio": {
+    "title": "Audio",
+    "length": "Độ dài",
+    "channels": "Kênh",
+    "mono": "Mono",
+    "stereo": "Stereo",
+    "rate": "Sample rate",
+    "file": "File",
+    "loadType": "Load type",
+    "compression": "Nén",
+    "built": "Dung lượng khi build",
+    "loadTypes": {
+      "decompress": "Decompress on load",
+      "compressed": "Compressed in memory",
+      "streaming": "Streaming"
+    },
+    "overrides": "Override theo nền tảng: {{list}}",
+    "noMeta": "Không có file .meta: Unity sẽ dùng import settings mặc định (Vorbis 100%).",
+    "play": "▶ Phát",
+    "pause": "❚❚ Dừng",
+    "loop": "Lặp",
+    "seek": "Waveform — bấm để tua",
+    "cannotPlay": "Không phát được clip này: {{message}}",
+    "warn": {
+      "pcm": "Không nén (PCM): nặng khi build — nên dùng Vorbis hoặc ADPCM.",
+      "decompress": "Clip dài mà Decompress on load: tốn nhiều bộ nhớ — nên dùng Compressed in memory hoặc Streaming.",
+      "mono": "Âm ngắn dạng stereo: bật Force To Mono sẽ giảm một nửa dung lượng."
+    },
+    "unsupported": "Định dạng này không phát được trong app.",
+    "autoPlay": "Tự phát",
+    "autoPlayHint": "Phát ngay khi chọn clip khác"
   },
   "download": {
     "button": "Tải về",

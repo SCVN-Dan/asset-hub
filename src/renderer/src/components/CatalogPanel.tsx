@@ -4,6 +4,7 @@ import { formatBytes, shortPath, type CatalogAsset, type CatalogLocation } from 
 import type { CatalogStatus } from '@shared/ipc'
 import type { SearchScope } from '../useCatalog'
 import { summaryIssues, type StatsSummary } from '@core/checks/playable'
+import { formatDuration } from '../viewer/audio'
 import { DownloadButton } from './DownloadButton'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
@@ -214,12 +215,14 @@ export function StatsLine({ stats, short = false }: { stats: StatsSummary; short
       <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>
       {stats.width ? (
         <span>{`${stats.width}×${stats.height}`}</span>
+      ) : stats.duration !== undefined ? (
+        <span>{formatDuration(stats.duration)}</span>
       ) : stats.textureCount !== undefined ? (
         <span>{t('ranking.textures', { count: stats.textureCount })}</span>
       ) : (
         <span>{t('ranking.tris', { n: compact(stats.triangles) })}</span>
       )}
-      {(!short || stats.width || stats.textureCount !== undefined) && <span>{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
+      {(!short || stats.width || stats.textureCount !== undefined || stats.duration !== undefined) && <span>{stats.duration !== undefined && '≈ '}{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
       {!short && stats.bones > 0 && <span>{t('ranking.bones', { count: stats.bones })}</span>}
     </span>
   )

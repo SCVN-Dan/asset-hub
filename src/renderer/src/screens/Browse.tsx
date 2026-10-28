@@ -54,6 +54,9 @@ const PAGE = 60
 const THUMB_MAX_BYTES = 40 * 1024 * 1024
 /** Images are decoded on the page: very large PSDs would stall it, so they are only drawn when opened. */
 const IMAGE_THUMB_MAX_BYTES = 24 * 1024 * 1024
+/** Clips the browser decodes; their waveform is the thumbnail. */
+const PLAYABLE_AUDIO = /\.(wav|mp3|ogg)$/i
+const AUDIO_THUMB_MAX_BYTES = 24 * 1024 * 1024
 /** Unity project folder of a repo path (the part before "Assets/"), for textures looked up next to it. */
 const projectRootOf = (path: string) => {
   const i = path.indexOf('Assets/')
@@ -340,8 +343,12 @@ export function Browse({
   const canRender = (a: Asset) =>
     (previewKind(a) === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES) ||
     previewKind(a) === 'material' ||
-    (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES)
-  const kindOf = (a: Asset): ThumbKind => (previewKind(a) === 'image' ? 'image' : previewKind(a) === 'material' ? 'material' : 'three')
+    (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES) ||
+    (previewKind(a) === 'audio' && PLAYABLE_AUDIO.test(a.path) && (a.size ?? 0) <= AUDIO_THUMB_MAX_BYTES)
+  const kindOf = (a: Asset): ThumbKind => {
+    const kind = previewKind(a)
+    return kind === 'image' || kind === 'material' || kind === 'audio' ? kind : 'three'
+  }
 
   /** Renders (and so measures) every listed model not measured yet, top of the list first. */
   const measureAll = () => {

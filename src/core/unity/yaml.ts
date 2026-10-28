@@ -236,3 +236,86 @@ export function importedTextureSize(width: number, height: number, imp: TextureI
   const cap = override?.maxTextureSize ?? imp.maxTextureSize
   return cap ? Math.min(side, cap) : side
 }
+
+/** One set of audio import settings (the default, or a platform's override). */
+export interface AudioImportSettings {
+  /** 0 Decompress On Load, 1 Compressed In Memory, 2 Streaming. */
+  loadType?: number
+  /** 0 PCM, 1 Vorbis, 2 ADPCM, 3 MP3, 7 AAC… */
+  compressionFormat?: number
+  /** 0–1, for Vorbis / MP3. */
+  quality?: number
+  /** 0 Preserve, 1 Optimize, 2 Override (sampleRateOverride). */
+  sampleRateSetting?: number
+  sampleRateOverride?: number
+}
+
+/** Import settings of an audio clip, from its .meta (AudioImporter). */
+export interface AudioImport extends AudioImportSettings {
+  forceToMono?: boolean
+  preload?: boolean
+  loadInBackground?: boolean
+  /** Per-platform overrides, by platform name. */
+  overrides: Array<AudioImportSettings & { target: string }>
+}
+
+/** platformSettingOverrides are keyed by BuildTargetGroup number. */
+const AUDIO_PLATFORMS: Record<string, string> = { '1': 'Standalone', '4': 'iPhone', '7': 'Android', '13': 'WebGL' }
+
+function audioSettings(block: string): AudioImportSettings {
+  const num = (key: string) => {
+    const v = new RegExp(`^\\s*${key}: (-?[\\d.]+)`, 'm').exec(block)?.[1]
+    return v === undefined ? undefined : Number(v)
+  }
+  return {
+    loadType: num('loadType'),
+    compressionFormat: num('compressionFormat'),
+    quality: num('quality'),
+    sampleRateSetting: num('sampleRateSetting'),
+    sampleRateOverride: num('sampleRateOverride')
+  }
+}
+
+export function parseAudioMeta(metaText: string): AudioImport {
+  const text = metaText.replace(/\r\n/g, '\n')
+  const defaults = /^ {2}defaultSettings:\n((?: {4}.*\n?)*)/m.exec(text)?.[1] ?? ''
+  const overridesBlock = /^ {2}platformSettingOverrides:\n((?: {4}.*\n?)*)/m.exec(text)?.[1] ?? ''
+  const overrides = overridesBlock
+    .split(/^ {4}(?=\S)/m)
+    .slice(1)
+    .map((b) => {
+      const id = /^(\S+):/.exec(b)?.[1] ?? ''
+      return { target: AUDIO_PLATFORMS[id] ?? id, ...audioSettings(b) }
+    })
+  // Top-level flags sit at two spaces, outside defaultSettings.
+  const flag = (key: string) => {
+    const v = new RegExp(`^ {2}${key}: (\\d+)`, 'm').exec(text)?.[1]
+    return v === undefined ? undefined : v !== '0'
+  }
+  return { ...audioSettings(defaults), forceToMono: flag('forceToMono'),
+    // Newer importers keep preloadAudioData inside defaultSettings.
+    preload: flag('preloadAudioData') ?? (/preloadAudioData: (\d+)/.exec(defaults) ? !/preloadAudioData: 0/.test(defaults) : undefined), loadInBackground: flag('loadInBackground'), overrides }
+}
+
+/** Settings a build uses: the first matching platform override, else the defaults. */
+export function effectiveAudioImport(imp: AudioImport, platforms: readonly string[] = ['WebGL', 'Android', 'iPhone']): AudioImportSettings {
+  const override = platforms.map((p) => imp.overrides.find((o) => o.target === p)).find(Boolean)
+  return override ?? imp
+}
+
+/**
+ * Rough size of a clip in a build, from its length and import settings —
+ * what matters for playables, not the source file (a 2 MB WAV may build to
+ * 150 KB of Vorbis). Compressed bitrates are estimates.
+ */
+export function builtAudioBytes(seconds: number, sourceRate: number, sourceChannels: number, imp: AudioImport | undefined): number {
+  const s = imp ? effectiveAudioImport(imp) : undefined
+  const rate = s?.sampleRateSetting === 2 && s.sampleRateOverride ? Math.min(sourceRate, s.sampleRateOverride) : sourceRate
+  const channels = imp?.forceToMono ? 1 : sourceChannels
+  // Unity's default for a new clip is Vorbis at 100%.
+  const format = s?.compressionFormat ?? 1
+  if (format === 0) return seconds * rate * channels * 2
+  if (format === 2) return (seconds * rate * channels) / 2
+  const kbps = (48 + 208 * (s?.quality ?? 1)) * (channels === 1 ? 0.6 : 1)
+  return (seconds * kbps * 1000) / 8
+}

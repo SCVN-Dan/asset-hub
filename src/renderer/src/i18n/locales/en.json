@@ -8,7 +8,8 @@
     "all": "All",
     "fbx": "FBX",
     "texture": "Texture",
-    "material": "Material"
+    "material": "Material",
+    "audio": "Audio"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -164,7 +165,9 @@
     "textureSize": "A texture is {{value}} px — above {{limit}} px for playables.",
     "textureBytes": "Textures total {{value}} — above {{limit}}.",
     "fileBytes": "FBX is {{value}} — above {{limit}}.",
-    "bones": "{{value}} bones — above {{limit}}."
+    "bones": "{{value}} bones — above {{limit}}.",
+    "audioBytes": "About {{value}} in a build — above {{limit}} for one clip in a playable.",
+    "audioLength": "{{value}} s long — above {{limit}} s for a playable."
   },
   "deps": {
     "needsRepo": "Dependencies need a GitHub repository.",
@@ -378,6 +381,38 @@
       "cube": "Cube",
       "plane": "Plane"
     }
+  },
+  "audio": {
+    "title": "Audio",
+    "length": "Length",
+    "channels": "Channels",
+    "mono": "Mono",
+    "stereo": "Stereo",
+    "rate": "Sample rate",
+    "file": "File",
+    "loadType": "Load type",
+    "compression": "Compression",
+    "built": "Size in build",
+    "loadTypes": {
+      "decompress": "Decompress on load",
+      "compressed": "Compressed in memory",
+      "streaming": "Streaming"
+    },
+    "overrides": "Platform overrides: {{list}}",
+    "noMeta": "No .meta file: Unity will use default import settings (Vorbis 100%).",
+    "play": "▶ Play",
+    "pause": "❚❚ Pause",
+    "loop": "Loop",
+    "seek": "Waveform — click to jump",
+    "cannotPlay": "Cannot play this clip: {{message}}",
+    "warn": {
+      "pcm": "Not compressed (PCM): large in the build — use Vorbis or ADPCM.",
+      "decompress": "Long clip decompressed on load: uses a lot of memory — use Compressed in memory or Streaming.",
+      "mono": "Short stereo sound: Force To Mono halves its size."
+    },
+    "unsupported": "This format cannot be played here.",
+    "autoPlay": "Auto play",
+    "autoPlayHint": "Play each clip as soon as it is selected"
   },
   "download": {
     "button": "Download",
