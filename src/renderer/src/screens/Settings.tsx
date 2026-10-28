@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthStatus } from '@shared/ipc'
 import type { Settings as AppSettings, Language } from '@shared/settings'
+import { BUDGET_KEYS, BUDGET_PRESETS, budgetFor, type BudgetPreset, type PlayableBudget } from '@core/checks/playable'
 import { ChevronLeftIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 
@@ -18,6 +19,66 @@ const parseFolders = (text: string) =>
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
+
+/** How each limit is shown and typed: bytes as MB or KB. */
+const UNITS: Record<keyof PlayableBudget, { unit: string; scale: number }> = {
+  triangles: { unit: 'tris', scale: 1 },
+  textureSize: { unit: 'px', scale: 1 },
+  textureBytes: { unit: 'MB', scale: 1024 * 1024 },
+  fileBytes: { unit: 'MB', scale: 1024 * 1024 },
+  bones: { unit: '', scale: 1 },
+  audioBytes: { unit: 'KB', scale: 1024 },
+  audioSeconds: { unit: 's', scale: 1 }
+}
+
+/** Preset choice, and the limits it stands for (editable for the custom preset). */
+function BudgetSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
+  const { t } = useTranslation()
+  const preset = settings.budgetPreset ?? 'standard'
+  const budget = budgetFor(preset, settings.customBudget)
+  const setLimit = (key: keyof PlayableBudget, text: string) => {
+    const value = Number(text) * UNITS[key].scale
+    if (Number.isFinite(value) && value > 0 && value !== budget[key]) onChange({ customBudget: { ...settings.customBudget, [key]: value } })
+  }
+  return (
+    <section className="setting">
+      <h2>
+        <label htmlFor="budget">{t('budget.preset')}</label>
+      </h2>
+      <span className="muted small">{t('budget.presetHint')}</span>
+      <select id="budget" className="select" value={preset} onChange={(e) => onChange({ budgetPreset: e.target.value as BudgetPreset })}>
+        {BUDGET_PRESETS.map((p) => (
+          <option key={p} value={p}>
+            {t(`budget.presets.${p}`)}
+          </option>
+        ))}
+      </select>
+      <dl className="stat-grid">
+        {BUDGET_KEYS.map((key) => (
+          <div key={`${preset}:${key}`}>
+            <dt>{t(`budget.limits.${key}`)}</dt>
+            <dd>
+              {preset === 'custom' ? (
+                <input
+                  className="input budget-input"
+                  type="number"
+                  min={0}
+                  step="any"
+                  defaultValue={+(budget[key] / UNITS[key].scale).toFixed(2)}
+                  onBlur={(e) => setLimit(key, e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && setLimit(key, e.currentTarget.value)}
+                />
+              ) : (
+                +(budget[key] / UNITS[key].scale).toFixed(2)
+              )}{' '}
+              {UNITS[key].unit}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
 
 export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props) {
   const { t } = useTranslation()
@@ -64,6 +125,8 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
           <LangToggle value={settings.language} onChange={(language: Language) => onChange({ language })} />
         </div>
       </section>
+
+      <BudgetSetting settings={settings} onChange={onChange} />
 
       <section className="setting">
         <h2>

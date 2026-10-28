@@ -46,3 +46,15 @@ describe('playable ranking', () => {
     expect(isStatsSummary({ triangles: 1 })).toBe(false)
   })
 })
+
+import { budgetFor, TIGHT_BUDGET } from './playable'
+
+describe('budget presets', () => {
+  it('judges the same asset by the chosen budget', () => {
+    const s = { triangles: 10_000, vertices: 0, bones: 0, clips: 0, materials: 0, fileBytes: 2 * 1024 * 1024, textureBytes: 0, maxTextureSize: 800, source: 'viewer' as const }
+    expect(summaryIssues(s, budgetFor('standard'))).toEqual([])
+    expect(summaryIssues(s, budgetFor('tight')).map((i) => i.key)).toEqual(['triangles', 'textureSize', 'fileBytes'])
+    expect(budgetFor('custom', { triangles: 5000 })).toMatchObject({ triangles: 5000, textureSize: 1024 })
+    expect(budgetFor(undefined)).not.toBe(TIGHT_BUDGET)
+  })
+})

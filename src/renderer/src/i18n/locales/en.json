@@ -179,7 +179,23 @@
     "fileBytes": "FBX is {{value}} — above {{limit}}.",
     "bones": "{{value}} bones — above {{limit}}.",
     "audioBytes": "About {{value}} in a build — above {{limit}} for one clip in a playable.",
-    "audioLength": "{{value}} s long — above {{limit}} s for a playable."
+    "audioLength": "{{value}} s long — above {{limit}} s for a playable.",
+    "preset": "Playable budget",
+    "presetHint": "What ✓ / ⚠, the budget filter and \"Best for playables\" judge assets by.",
+    "presets": {
+      "standard": "5 MB networks (Google, AppLovin, Unity…)",
+      "tight": "2 MB networks (Meta)",
+      "custom": "Custom"
+    },
+    "limits": {
+      "triangles": "Triangles",
+      "textureSize": "Texture size",
+      "textureBytes": "Textures (one asset)",
+      "fileBytes": "Model file",
+      "bones": "Bones",
+      "audioBytes": "Audio clip (built)",
+      "audioSeconds": "Audio length"
+    }
   },
   "deps": {
     "needsRepo": "Dependencies need a GitHub repository.",

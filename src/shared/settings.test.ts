@@ -28,3 +28,12 @@ describe('last opened repo/branch', () => {
     expect(sanitizeSettings({ lastRepo: '', lastBranch: 3 }, defaults)).not.toHaveProperty('lastRepo')
   })
 })
+
+describe('playable budget preset', () => {
+  it('keeps a known preset and positive custom limits only', () => {
+    expect(sanitizeSettings({ budgetPreset: 'tight' }, defaults)).toMatchObject({ budgetPreset: 'tight' })
+    expect(sanitizeSettings({ budgetPreset: 'huge' }, defaults)).not.toHaveProperty('budgetPreset')
+    expect(sanitizeSettings({ customBudget: { triangles: 9000, bones: -1, fileBytes: 'x', other: 3 } }, defaults).customBudget).toEqual({ triangles: 9000 })
+    expect(sanitizeSettings({ customBudget: { bones: 0 } }, defaults)).not.toHaveProperty('customBudget')
+  })
+})

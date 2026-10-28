@@ -3,6 +3,8 @@ import { createDefaultRegistry, type AssetSource } from '@core/index'
 import { MockAssetSource } from '@core/mock/mockSource'
 import type { AuthStatus } from '@shared/ipc'
 import type { Settings as AppSettings } from '@shared/settings'
+import { budgetFor } from '@core/checks/playable'
+import { BudgetContext } from './budget'
 import i18n from './i18n'
 import { RemoteAssetSource, RemoteError, unwrap } from './remoteSource'
 import { Browse } from './screens/Browse'
@@ -79,6 +81,7 @@ export function App() {
       return <Settings settings={settings} auth={auth} onChange={update} onSignOut={() => void signOut()} onBack={() => setScreen('browse')} />
     case 'browse':
       return source ? (
+        <BudgetContext.Provider value={budgetFor(settings.budgetPreset, settings.customBudget)}>
         <Browse
           source={source}
           registry={registry}
@@ -92,7 +95,10 @@ export function App() {
           }}
           onLanguage={setLanguage}
           onSettings={() => setScreen('settings')}
+          budgetPreset={settings.budgetPreset ?? 'standard'}
+          onBudgetPreset={(budgetPreset) => update({ budgetPreset })}
         />
+        </BudgetContext.Provider>
       ) : null
   }
 }

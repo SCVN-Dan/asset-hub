@@ -174,7 +174,23 @@
     "fileBytes": "FBX nặng {{value}} — vượt {{limit}}.",
     "bones": "{{value}} bone — vượt {{limit}}.",
     "audioBytes": "Khoảng {{value}} khi build — vượt {{limit}} cho một clip trong playable.",
-    "audioLength": "Dài {{value}} s — vượt {{limit}} s cho playable."
+    "audioLength": "Dài {{value}} s — vượt {{limit}} s cho playable.",
+    "preset": "Ngân sách playable",
+    "presetHint": "Dùng để chấm ✓ / ⚠, lọc \"vừa ngân sách\" và xếp \"Hợp playable nhất\".",
+    "presets": {
+      "standard": "Network 5 MB (Google, AppLovin, Unity…)",
+      "tight": "Network 2 MB (Meta)",
+      "custom": "Tuỳ chỉnh"
+    },
+    "limits": {
+      "triangles": "Tris",
+      "textureSize": "Cỡ texture",
+      "textureBytes": "Texture (một asset)",
+      "fileBytes": "File model",
+      "bones": "Bone",
+      "audioBytes": "Clip audio (khi build)",
+      "audioSeconds": "Độ dài audio"
+    }
   },
   "deps": {
     "needsRepo": "Dependency cần repo GitHub.",

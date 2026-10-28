@@ -5,6 +5,7 @@ import type { CatalogStatus } from '@shared/ipc'
 import type { SearchScope } from '../useCatalog'
 import { summaryIssues, type StatsSummary } from '@core/checks/playable'
 import { formatDuration } from '../viewer/audio'
+import { useBudget } from '../budget'
 import { DownloadButton } from './DownloadButton'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
@@ -209,7 +210,7 @@ const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 
 /** One line of measurements with a playable-budget verdict, for cards and panels. */
 export function StatsLine({ stats, short = false }: { stats: StatsSummary; short?: boolean }) {
   const { t } = useTranslation()
-  const issues = summaryIssues(stats)
+  const issues = summaryIssues(stats, useBudget())
   return (
     <span className="stats-line" title={issues.map((i) => t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(), limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString() })).join('\n') || t('ranking.fits')}>
       <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>

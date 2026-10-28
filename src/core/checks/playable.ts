@@ -16,16 +16,54 @@ export interface BudgetIssue {
   limit: number
 }
 
-/** Defaults for mobile playable ads; a project preset can override them later. */
-export const PLAYABLE_BUDGET = {
+/** Limits one asset is judged against for playable ads. */
+export interface PlayableBudget {
+  triangles: number
+  /** Largest texture side, in pixels (as built). */
+  textureSize: number
+  textureBytes: number
+  /** One model file. */
+  fileBytes: number
+  bones: number
+  /** One audio clip as built: playables carry a few short sounds and one music loop. */
+  audioBytes: number
+  audioSeconds: number
+}
+
+export const BUDGET_KEYS = ['triangles', 'textureSize', 'textureBytes', 'fileBytes', 'bones', 'audioBytes', 'audioSeconds'] as const satisfies ReadonlyArray<keyof PlayableBudget>
+
+const MB = 1024 * 1024
+
+/** For networks taking a 5 MB playable (Google, AppLovin, ironSource, Unity…): the default. */
+export const PLAYABLE_BUDGET: PlayableBudget = {
   triangles: 15_000,
   textureSize: 1024,
-  textureBytes: 4 * 1024 * 1024,
-  fileBytes: 5 * 1024 * 1024,
+  textureBytes: 4 * MB,
+  fileBytes: 5 * MB,
   bones: 60,
-  /** One audio clip: playables carry a few short sounds and one music loop. */
-  audioBytes: 1024 * 1024,
+  audioBytes: MB,
   audioSeconds: 60
+}
+
+/** For networks capping the whole playable at 2 MB (Meta): every asset has to be lighter. */
+export const TIGHT_BUDGET: PlayableBudget = {
+  triangles: 8_000,
+  textureSize: 512,
+  textureBytes: MB,
+  fileBytes: 1.5 * MB,
+  bones: 40,
+  audioBytes: 256 * 1024,
+  audioSeconds: 30
+}
+
+export const BUDGET_PRESETS = ['standard', 'tight', 'custom'] as const
+export type BudgetPreset = (typeof BUDGET_PRESETS)[number]
+
+/** The budget a preset stands for; `custom` fills what it does not set from the default. */
+export function budgetFor(preset: BudgetPreset | undefined, custom?: Partial<PlayableBudget>): PlayableBudget {
+  if (preset === 'tight') return TIGHT_BUDGET
+  if (preset === 'custom') return { ...PLAYABLE_BUDGET, ...custom }
+  return PLAYABLE_BUDGET
 }
 
 export function checkPlayableBudget(stats: ModelStats, budget = PLAYABLE_BUDGET): BudgetIssue[] {
@@ -117,7 +155,8 @@ export function rankForPlayable<T>(
   statsOf: (item: T) => StatsSummary | undefined,
   usedOf: (item: T) => number = () => 0,
   /** Search match strength: a closer match always ranks above a lighter but looser one. */
-  matchOf: (item: T) => number = () => 0
+  matchOf: (item: T) => number = () => 0,
+  budget: PlayableBudget = PLAYABLE_BUDGET
 ): T[] {
   if (mode === 'relevance') return [...items]
   const keyed = items.map((item, index) => {
@@ -129,7 +168,7 @@ export function rankForPlayable<T>(
         : !s
           ? [Infinity]
           : mode === 'playable'
-            ? [summaryIssues(s).length, size, -usedOf(item)]
+            ? [summaryIssues(s, budget).length, size, -usedOf(item)]
             : mode === 'smallest'
               ? [size, s.triangles]
               : [s.width || s.textureCount !== undefined || s.duration !== undefined || s.clipLength !== undefined ? 1 : 0, s.triangles, size] // textures, materials, audio and clips (no triangles) after models

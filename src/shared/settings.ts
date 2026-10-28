@@ -1,3 +1,5 @@
+import { BUDGET_KEYS, BUDGET_PRESETS, type BudgetPreset, type PlayableBudget } from '../core/checks/playable'
+
 export const LANGUAGES = ['en', 'vi'] as const
 export type Language = (typeof LANGUAGES)[number]
 
@@ -10,6 +12,10 @@ export interface Settings {
   /** Repo and branch opened last, restored on the next launch. */
   lastRepo?: string
   lastBranch?: string
+  /** Playable budget assets are judged against (absent: the 5 MB default). */
+  budgetPreset?: BudgetPreset
+  /** Limits of the `custom` preset; unset ones come from the default. */
+  customBudget?: Partial<PlayableBudget>
 }
 
 export const DEFAULT_EXCLUDED_FOLDERS = ['_ThirdParty']
@@ -29,6 +35,20 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
     cacheDir: typeof input.cacheDir === 'string' && input.cacheDir.trim() !== '' ? input.cacheDir : defaults.cacheDir,
     excludedFolders: folders,
     ...(typeof input.lastRepo === 'string' && input.lastRepo ? { lastRepo: input.lastRepo } : {}),
-    ...(typeof input.lastBranch === 'string' && input.lastBranch ? { lastBranch: input.lastBranch } : {})
+    ...(typeof input.lastBranch === 'string' && input.lastBranch ? { lastBranch: input.lastBranch } : {}),
+    ...((BUDGET_PRESETS as readonly unknown[]).includes(input.budgetPreset) ? { budgetPreset: input.budgetPreset as BudgetPreset } : {}),
+    ...sanitizeBudget(input.customBudget)
   }
+}
+
+/** Positive finite numbers for known limits only. */
+function sanitizeBudget(raw: unknown): Pick<Settings, 'customBudget'> {
+  if (!raw || typeof raw !== 'object') return {}
+  const input = raw as Record<string, unknown>
+  const budget: Partial<PlayableBudget> = {}
+  for (const k of BUDGET_KEYS) {
+    const v = input[k]
+    if (typeof v === 'number' && Number.isFinite(v) && v > 0) budget[k] = v
+  }
+  return Object.keys(budget).length ? { customBudget: budget } : {}
 }

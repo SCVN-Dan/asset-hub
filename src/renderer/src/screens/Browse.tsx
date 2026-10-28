@@ -30,7 +30,8 @@ import { SearchBox } from '../components/SearchBox'
 import { DRAWABLE } from '../viewer/textures'
 import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
-import { rankForPlayable, summaryIssues, type SortMode, type StatsSummary } from '@core/checks/playable'
+import { BUDGET_PRESETS, rankForPlayable, summaryIssues, type BudgetPreset, type SortMode, type StatsSummary } from '@core/checks/playable'
+import { useBudget } from '../budget'
 
 interface Props {
   source: AssetSource
@@ -45,6 +46,9 @@ interface Props {
   onOpenBranch(repo: string, branch: string): void
   onLanguage(language: Language): void
   onSettings(): void
+  /** Playable budget preset: switchable next to the ranking, like in Settings. */
+  budgetPreset: BudgetPreset
+  onBudgetPreset(preset: BudgetPreset): void
 }
 
 const ALL = 'all'
@@ -98,9 +102,12 @@ export function Browse({
   initialBranch,
   onOpenBranch,
   onLanguage,
-  onSettings
+  onSettings,
+  budgetPreset,
+  onBudgetPreset
 }: Props) {
   const { t } = useTranslation()
+  const budget = useBudget()
   const [repos, setRepos] = useState<Load<RepoRef[]>>({ status: 'loading' })
   const [repo, setRepo] = useState('')
   const [branches, setBranches] = useState<string[]>([])
@@ -300,24 +307,26 @@ export function Browse({
   // Ordered and filtered for reuse in playables (measurements come from thumbnails and opened models).
   const rankedShown = useMemo(
     () => rankForPlayable(
-        onlyFits ? shown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha]).length) : shown,
+        onlyFits ? shown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : shown,
         sortMode === 'used' ? 'relevance' : sortMode,
         (a) => modelStats[a.sha],
         undefined,
-        (a) => found.scores.get(a.id) ?? 0
+        (a) => found.scores.get(a.id) ?? 0,
+        budget
       ),
-    [shown, sortMode, onlyFits, modelStats, found]
+    [shown, sortMode, onlyFits, modelStats, found, budget]
   )
   const rankedCatalog = useMemo(
     () =>
       rankForPlayable(
-        onlyFits ? catalogShown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha]).length) : catalogShown,
+        onlyFits ? catalogShown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : catalogShown,
         sortMode,
         (a) => modelStats[a.sha],
         (a) => a.branchCount,
-        (a) => catalogFound.scores.get(a.id) ?? 0
+        (a) => catalogFound.scores.get(a.id) ?? 0,
+        budget
       ),
-    [catalogShown, sortMode, onlyFits, modelStats, catalogFound]
+    [catalogShown, sortMode, onlyFits, modelStats, catalogFound, budget]
   )
   const gridItems: readonly Asset[] = inCatalog ? rankedCatalog : rankedShown
   const measuredCount = (inCatalog ? catalogShown : shown).filter((a) => modelStats[a.sha]).length
@@ -699,6 +708,13 @@ export function Browse({
                 <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
                 {t('ranking.onlyFits')}
               </label>
+              <select className="select select-small" aria-label={t('budget.preset')} title={t('budget.presetHint')} value={budgetPreset} onChange={(e) => onBudgetPreset(e.target.value as BudgetPreset)}>
+                {BUDGET_PRESETS.map((p) => (
+                  <option key={p} value={p}>
+                    {t(`budget.presets.${p}`)}
+                  </option>
+                ))}
+              </select>
               {(sortMode !== 'relevance' || onlyFits) && (
                 <>
                   <span className="muted small">{t('ranking.measured', { done: measuredCount, total: inCatalog ? catalogShown.length : shown.length })}</span>

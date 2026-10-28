@@ -24,7 +24,7 @@
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
-| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn preset ngân sách, dung lượng gồm dependency) |
+| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn dung lượng gồm dependency) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
 | C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | ✅ (chờ xem Prefab + Animation trên app; còn Sprite Atlas, tab Sprite) |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
@@ -160,7 +160,7 @@ Mục tiêu: tìm ra 20 model "boat" thì biết ngay cái nào **đáng dùng l
 | Dung lượng gồm cả dependency (texture của .mat) — hiện đo đủ khi mở model; thumbnail chỉ tính texture nêu trong FBX | 🟡 |
 | Nút "Mở trên GitHub" cho file đang xem | ✅ |
 | Xuất `.unitypackage` ngay từ kết quả Mọi branch / Mọi repo (không phải chuyển branch) | ✅ |
-| Preset ngân sách theo network quảng cáo (vd. 5 MB / 2 MB) thay cho một bộ số mặc định | ⏳ |
+| Preset ngân sách: Network 5 MB (mặc định) / Network 2 MB (Meta) / Tuỳ chỉnh — chọn trong Cài đặt hoặc ngay cạnh ô sắp xếp; mọi ✓/⚠, lọc, xếp hạng, cảnh báo trong panel đổi theo ngay (thông số đo không phụ thuộc ngân sách) | ✅ |
 
 ## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
 Chỉ làm khi cần. Unity tự xử lý import; phần này giúp biết trước những gì Unity sẽ ghi đè hoặc thiếu.
@@ -250,6 +250,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-28 | **Preset ngân sách playable**: 5 MB (Google, AppLovin, Unity…) / 2 MB (Meta) / Tuỳ chỉnh từng giới hạn (tris, cỡ texture, MB texture, MB model, bone, KB audio, giây audio). Đổi ở Cài đặt hoặc cạnh ô sắp xếp; card, lọc, xếp hạng, panel đổi theo ngay. |
 | 2026-10-28 | **Chọn rig cho animation chính xác hơn**: thư mục chứa clip = nhân vật (trọng số cao), tên clip = hành động (gần như không tính) → clip vũ khí của player ra `player.fbx` (87–91% bone) thay vì cây đũa phép; danh sách chỉ còn model liên quan (bỏ model đã thử 0% bone); thêm "Model khác…" tìm trong mọi FBX; lựa chọn tay được nhớ theo thư mục clip (dùng cho cả thumbnail các clip cùng thư mục). |
 | 2026-10-28 | **Animation gắn với FBX**: tab Animation liệt kê cả FBX chứa clip (đã đo) hoặc tên dạng `Model@Clip.fbx` — handler khai báo `alsoShows`, UI không biết riêng FBX; tên clip lưu cùng thông số theo SHA và **tìm kiếm khớp tên clip** ("attack" ra Goblin.fbx có clip Goblin_Attack); card FBX có huy hiệu **▶ N** (rê chuột xem tên clip); mở FBX từ tab Animation thì tự phát clip đầu. FBX đo từ trước được render lại nền một lần để lấy tên clip. |
 | 2026-10-28 | Thumbnail cho animation clip: model ở tư thế giữa clip trên rig tự chọn (clip không có rig: vẽ curve), card ghi độ dài; mở clip hoặc chọn rig khác thì thumbnail cập nhật theo. Rig đã đọc được giữ lại cho các clip cùng nhân vật. |

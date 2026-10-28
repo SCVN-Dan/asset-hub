@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
+import { checkPlayableBudget, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
+import { useBudget } from '../budget'
 import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
@@ -63,13 +64,14 @@ const COMPRESSION: Record<number, string> = { 0: 'none', 1: 'normal', 2: 'high',
 /** Size, format and Unity import settings of a texture, with what matters for playables. */
 function TextureSection({ info }: { info: ImageInfo }) {
   const { t } = useTranslation()
+  const budget = useBudget()
   const imp = info.import
   const built = imp ? importedTextureSize(info.width, info.height, imp) : Math.max(info.width, info.height)
   const warnings: string[] = []
-  if (built > PLAYABLE_BUDGET.textureSize) warnings.push(t('texture.warn.size', { size: built, limit: PLAYABLE_BUDGET.textureSize }))
+  if (built > budget.textureSize) warnings.push(t('texture.warn.size', { size: built, limit: budget.textureSize }))
   if (imp?.compression === 0) warnings.push(t('texture.warn.uncompressed'))
   if (imp?.textureType === 8 && imp.mipmaps) warnings.push(t('texture.warn.spriteMips'))
-  if (info.bytes > PLAYABLE_BUDGET.textureBytes) warnings.push(t('texture.warn.bytes', { size: formatBytes(info.bytes), limit: formatBytes(PLAYABLE_BUDGET.textureBytes) }))
+  if (info.bytes > budget.textureBytes) warnings.push(t('texture.warn.bytes', { size: formatBytes(info.bytes), limit: formatBytes(budget.textureBytes) }))
   const cells: Array<[string, string]> = [
     [t('texture.size'), `${info.width} × ${info.height}`],
     [t('texture.file'), `${formatBytes(info.bytes)} · ${info.format}`],
@@ -118,13 +120,14 @@ const AUDIO_FORMATS: Record<number, string> = { 0: 'PCM', 1: 'Vorbis', 2: 'ADPCM
 /** Length, channels, rate and Unity import settings of a clip, with what matters for playables. */
 function AudioSection({ info }: { info: DecodedAudio }) {
   const { t } = useTranslation()
+  const budget = useBudget()
   const imp = info.import
   const s = imp ? effectiveAudioImport(imp) : undefined
   const stats = audioStats(info)
   const mono = imp?.forceToMono && info.channels > 1
   const rate = s?.sampleRateSetting === 2 && s.sampleRateOverride && s.sampleRateOverride < info.sampleRate ? s.sampleRateOverride : undefined
   const format = s?.compressionFormat ?? 1
-  const warnings = summaryIssues(stats).map((i) =>
+  const warnings = summaryIssues(stats, budget).map((i) =>
     t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value, limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit })
   )
   if (format === 0 && info.duration > 5) warnings.push(t('audio.warn.pcm'))
@@ -180,6 +183,7 @@ const toHex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toStr
 /** Shader, surface, colour and texture weight of a material, with what matters for playables. */
 function MaterialSection({ material, look, stats }: { material?: MaterialRef; look?: MaterialLook; stats?: StatsSummary }) {
   const { t } = useTranslation()
+  const budget = useBudget()
   const color = look?.color && `#${toHex(look.color.r)}${toHex(look.color.g)}${toHex(look.color.b)}`
   const cells: Array<[string, ReactNode]> = [
     ...(material?.shader ? [[t('material.shader'), material.shader.label] as [string, ReactNode]] : []),
@@ -196,7 +200,7 @@ function MaterialSection({ material, look, stats }: { material?: MaterialRef; lo
         ] as Array<[string, ReactNode]>)
       : [])
   ]
-  const issues = stats ? summaryIssues(stats).filter((i) => i.key === 'textureSize' || i.key === 'textureBytes') : []
+  const issues = stats ? summaryIssues(stats, budget).filter((i) => i.key === 'textureSize' || i.key === 'textureBytes') : []
   if (!cells.length) return null
   return (
     <section className="section">
@@ -399,6 +403,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
 
 export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models }: Props) {
   const { t } = useTranslation()
+  const budget = useBudget()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
   /** For a texture: what the image viewer found. */
@@ -526,7 +531,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       if (token === searchToken.current) setPrefab({ status: 'error', error })
     }
   }
-  const issues = stats ? checkPlayableBudget(stats) : []
+  const issues = stats ? checkPlayableBudget(stats, budget) : []
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(asset.path)
