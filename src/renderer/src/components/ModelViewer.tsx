@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelStats } from '@core/checks/playable'
-import { extractFbxTextureNames, type DependencyReport } from '@core/index'
+import { extractFbxTextureNames, type DependencyReport, type MaterialRef } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type MaterialSlot, type TextureFile, type ViewPreset } from '../viewer/FbxViewer'
 import { DRAWABLE, fetchTextureFile } from '../viewer/textures'
@@ -18,6 +18,8 @@ interface Props {
   /** Repo path of the FBX. */
   path: string
   report?: DependencyReport
+  /** Material a prefab puts on this model, applied to every mesh (for FBX without their own). */
+  prefabMaterial?: MaterialRef
   onStats(stats: ModelStats): void
   onThumb(dataUrl: string): void
 }
@@ -26,7 +28,7 @@ const MAX_TEXTURES = 16
 
 type Status = 'loading' | 'ready' | 'error'
 
-export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
+export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThumb }: Props) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
@@ -103,12 +105,14 @@ export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
     // live is compared by value through its fields.
   }, [live.repo, live.branch, live.root, path])
 
-  // Kind A: once dependencies are known, put the .mat textures on the model.
+  // Once materials are known (kind A .mat files, or one found on a prefab), put their textures on the model.
   useEffect(() => {
-    if (status !== 'ready' || !report || report.kind !== 'A') return
+    if (status !== 'ready') return
+    const slotsOf = (m: MaterialRef, material: string) => m.textures.filter((tex) => tex.path).map((tex) => ({ material, prop: tex.prop ?? '', path: tex.path! }))
+    const textures = [...(report?.kind === 'A' ? report.materials.flatMap((m) => slotsOf(m, m.name)) : []), ...(prefabMaterial ? slotsOf(prefabMaterial, '*') : [])]
+    if (!textures.length) return
     let cancelled = false
     void (async () => {
-      const textures = report.materials.flatMap((m) => m.textures.filter((tex) => tex.path).map((tex) => ({ material: m.name, prop: tex.prop ?? '', path: tex.path! })))
       await fetchTextures(textures.map((tex) => tex.path))
       if (cancelled || !viewer.current) return
       const slots: MaterialSlot[] = textures.flatMap((tex) => {
@@ -121,7 +125,7 @@ export function ModelViewer({ live, path, report, onStats, onThumb }: Props) {
     return () => {
       cancelled = true
     }
-  }, [status, report])
+  }, [status, report, prefabMaterial])
 
   const view = (preset: ViewPreset) => viewer.current?.setView(preset)
 

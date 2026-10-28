@@ -213,5 +213,16 @@
     "skipped_other": "Bỏ qua {{count}} file (thiếu .meta hoặc trùng GUID): {{list}}",
     "showInFolder": "Mở trong Finder",
     "dismiss": "Đóng"
+  },
+  "prefab": {
+    "title": "Material từ prefab",
+    "hint": "FBX này có thể lấy material từ prefab. Tìm các prefab đang dùng nó.",
+    "search": "Tìm material trong prefab",
+    "scanning": "Đang đọc các prefab liên quan…",
+    "scanningAll": "Đang đọc tất cả prefab…",
+    "none_other": "Không có prefab nào dùng FBX này trong {{count}} prefab đã kiểm tra.",
+    "found_other": "Được dùng bởi {{count}} prefab — material đầu tiên hiện trong preview, tất cả được kèm khi xuất.",
+    "applied": "Preview đang dùng {{name}}.",
+    "scanAll_other": "Quét thêm {{count}} prefab ({{size}})"
   }
 }

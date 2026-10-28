@@ -15,7 +15,7 @@ export interface TextureFile {
   height?: number
 }
 
-/** A .mat texture slot to apply to the FBX material with the same name (kind A). */
+/** A .mat texture slot to apply to the FBX material with the same name (kind A); '*' applies to every material. */
 export interface MaterialSlot {
   material: string
   prop: string
@@ -24,7 +24,10 @@ export interface MaterialSlot {
 
 const TRANSPARENT_PNG =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
-const COLOR_PROPS = new Set(['_basemap', '_maintex', '_albedo', '_basecolormap', '_diffuse'])
+/** In priority order: URP's _BaseMap wins over the legacy _MainTex that URP materials also keep. */
+const COLOR_ORDER = ['_basemap', '_basecolormap', '_albedo', '_maintex', '_diffuse']
+const COLOR_PROPS = new Set(COLOR_ORDER)
+const slotRank = (prop: string) => (COLOR_PROPS.has(prop) ? COLOR_ORDER.indexOf(prop) : COLOR_ORDER.length)
 const NORMAL_PROPS = new Set(['_bumpmap', '_normalmap'])
 const EMISSION_PROPS = new Set(['_emissionmap'])
 
@@ -91,7 +94,8 @@ export class FbxViewer {
   async applyMaterialSlots(slots: readonly MaterialSlot[]): Promise<void> {
     if (!this.model || !slots.length) return
     const byMaterial = new Map<string, MaterialSlot[]>()
-    for (const s of slots) {
+    const ordered = [...slots].sort((a, b) => slotRank(a.prop.toLowerCase()) - slotRank(b.prop.toLowerCase()))
+    for (const s of ordered) {
       const key = s.material.toLowerCase()
       byMaterial.set(key, [...(byMaterial.get(key) ?? []), s])
     }
@@ -115,11 +119,15 @@ export class FbxViewer {
       if (!mesh.isMesh) return
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const m = mat as THREE.MeshPhongMaterial
-        const slotsFor = byMaterial.get(m.name.toLowerCase()) ?? (byMaterial.size === 1 ? [...byMaterial.values()][0] : undefined)
+        const slotsFor = byMaterial.get(m.name.toLowerCase()) ?? byMaterial.get('*') ?? (byMaterial.size === 1 ? [...byMaterial.values()][0] : undefined)
+        let colorTaken = false
         for (const slot of slotsFor ?? []) {
           const prop = slot.prop.toLowerCase()
           const color = COLOR_PROPS.has(prop)
           if (!color && !NORMAL_PROPS.has(prop) && !EMISSION_PROPS.has(prop)) continue
+          // One colour map per material: the highest-priority slot.
+          if (color && colorTaken) continue
+          if (color) colorTaken = true
           jobs.push(
             loadTex(slot.file, color || EMISSION_PROPS.has(prop)).then((tex) => {
               if (!tex || this.disposed) return

@@ -44,7 +44,9 @@ export interface MaterialInfo {
 }
 
 export function parseMaterial(matText: string): MaterialInfo {
-  const name = /^\s*m_Name: (.*)$/m.exec(matText)?.[1]?.trim()
+  // URP materials start with an AssetVersion MonoBehaviour whose m_Name is empty; use the Material's own.
+  const materialDoc = matText.slice(Math.max(0, matText.search(/^Material:\s*$/m)))
+  const name = /^\s*m_Name: (.*)$/m.exec(materialDoc)?.[1]?.trim() || undefined
   const shaderMatch = new RegExp(`m_Shader: \\{fileID: (-?\\d+), guid: (${GUID})`).exec(matText)
   const textures: MaterialInfo['textures'] = []
   const start = matText.indexOf('m_TexEnvs:')

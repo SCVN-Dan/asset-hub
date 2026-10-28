@@ -101,6 +101,8 @@ export function Browse({
   const [exportOptions, setExportOptions] = useState<ExportOptions>({ layout: 'source', skipByName: false })
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
   const reports = useRef(new Map<string, DependencyReport>())
+  /** Materials found on prefabs, by model path: exported along with the model. */
+  const prefabFiles = useRef(new Map<string, string[]>())
 
   useEffect(
     () => window.api.exporter.onProgress((progress) => setExportState((s) => (s.status === 'running' ? { status: 'running', progress } : s))),
@@ -110,6 +112,7 @@ export function Browse({
   useEffect(() => {
     setPack([])
     reports.current.clear()
+    prefabFiles.current.clear()
   }, [repo, branch])
 
   useEffect(() => {
@@ -263,7 +266,7 @@ export function Browse({
     }
     const suggestedName = items.length === 1 ? items[0].asset.name.replace(/\.[^.]+$/, '') : `${live.repo.split('/').pop()}-${items.length}-assets`
     try {
-      const result = unwrap(await window.api.exporter.unityPackage({ ...live, paths: items.map((i) => i.path), ...exportOptions, previews, suggestedName }))
+      const result = unwrap(await window.api.exporter.unityPackage({ ...live, paths: items.map((i) => i.path), ...exportOptions, extraFiles: items.flatMap((i) => prefabFiles.current.get(i.path) ?? []), previews, suggestedName }))
       setExportState(result.canceled ? { status: 'idle' } : { status: 'done', result })
     } catch (error) {
       setExportState({ status: 'error', error })
@@ -470,6 +473,8 @@ export function Browse({
           onExport={() => selected && void runExport([packItem(selected)])}
           copies={selected ? copiesBySha.get(selected.sha) : undefined}
           onSelectCopy={setSelectedId}
+          excludedFolders={excludedFolders}
+          onPrefabFiles={(path, files) => prefabFiles.current.set(path, files)}
         />
       </div>
     </div>

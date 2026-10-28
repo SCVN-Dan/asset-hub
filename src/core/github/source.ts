@@ -1,9 +1,11 @@
-import { closestPath, type DepContext } from '../deps/fbx'
-import type { DependencyReport } from '../deps/types'
+import { closestPath, describeMaterials, type DepContext } from '../deps/fbx'
+import type { DependencyReport, PrefabMaterialsResult, PrefabUsage } from '../deps/types'
 import { SourceError } from '../errors'
 import { baseName } from '../registry'
 import type { AssetSource } from '../source'
 import type { AssetTypeHandler, RepoRef, TreeEntry } from '../types'
+import { isInExcludedFolder } from '../unity'
+import { folderAffinity, modelMaterials } from '../unity/prefab'
 import { metaGuid } from '../unity/yaml'
 import type { GitHubClient } from './client'
 import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
@@ -54,6 +56,14 @@ const INDEX_BATCH = 120
 /** Meta blob SHA → GUID ('' when the file has none), shared by every commit and branch of a repo. */
 const SHA_KIND = 'metaguids'
 const SHA_KEY = 'by-sha'
+/** Prefab blob SHA → model GUID → material GUIDs. */
+const PREFAB_KIND = 'prefabmodels'
+/** Bytes of prefabs read by a "nearby" search before it stops. */
+const NEAR_BUDGET = 40 * 1024 * 1024
+/** Bytes per bulk read, so progress can move during a big scan. */
+const PREFAB_CHUNK = 24 * 1024 * 1024
+/** Smaller steps for nearby searches, so they can stop as soon as the model is found. */
+const NEAR_CHUNK = 6 * 1024 * 1024
 
 export class GitHubAssetSource implements AssetSource {
   readonly id = 'github'
@@ -116,7 +126,96 @@ export class GitHubAssetSource implements AssetSource {
     const handler = entry && this.options.handlerFor?.(entry)
     if (!entry || !handler?.resolveDependencies) throw new SourceError('notFound', `No dependency resolver for ${path}`)
     const guids = await this.guidIndex(repo, snap, onProgress)
-    const ctx: DepContext = {
+    return handler.resolveDependencies(path, this.depContext(repo, snap, root, guids))
+  }
+
+  /**
+   * Materials that prefabs put on this model — for FBX files whose materials
+   * are assigned on prefabs instead. `near` reads only prefabs in related
+   * folders (a few MB); `all` reads every prefab. Results are cached by prefab
+   * SHA, so later searches for any model are instant for prefabs seen before.
+   */
+  async findPrefabMaterials(
+    repo: string,
+    branch: string,
+    path: string,
+    root: string,
+    scope: 'near' | 'all',
+    excludedFolders: readonly string[],
+    onProgress?: (p: IndexProgress) => void
+  ): Promise<PrefabMaterialsResult> {
+    const snap = await this.snapshot(repo, branch)
+    const guids = await this.guidIndex(repo, snap)
+    const metaText = (await this.readTexts(repo, snap, [`${path}.meta`])).get(`${path}.meta`)
+    const modelGuid = metaText ? metaGuid(metaText) : undefined
+    if (!modelGuid) throw new SourceError('notFound', `${path} has no .meta GUID`)
+
+    const prefabs = snap.entries.filter(
+      (e) => e.type === 'blob' && e.path.endsWith('.prefab') && e.path.startsWith(root + 'Assets/') && !isInExcludedFolder(e.path.slice(root.length), excludedFolders)
+    )
+    const known = (await this.options.cache?.get<Record<string, Record<string, string[]>>>(PREFAB_KIND, repo, SHA_KEY)) ?? {}
+    const ranked = prefabs
+      .map((e) => ({ e, score: folderAffinity(path, e.path, root) }))
+      .sort((a, b) => b.score - a.score || (a.e.size ?? 0) - (b.e.size ?? 0))
+    let candidates = ranked.filter((r) => !(r.e.sha in known))
+    if (scope === 'near') {
+      let budget = NEAR_BUDGET
+      candidates = candidates.filter((r) => r.score > 0 && (budget -= r.e.size ?? 0) >= 0)
+    }
+
+    const total = candidates.reduce((s, r) => s + (r.e.size ?? 0), 0)
+    let done = 0
+    onProgress?.({ done, total })
+    const dec = new TextDecoder()
+    const chunkBytes = scope === 'near' ? NEAR_CHUNK : PREFAB_CHUNK
+    // Best affinity among prefabs (cached or read) that already use the model.
+    let bestFound = Math.max(-1, ...ranked.filter((r) => known[r.e.sha]?.[modelGuid]?.length).map((r) => r.score))
+    let read = 0
+    for (let i = 0; i < candidates.length; ) {
+      // Nearby search: stop once what is left is less related than a prefab already found.
+      if (scope === 'near' && bestFound >= 0 && candidates[i].score < bestFound) break
+      const chunk: Array<(typeof candidates)[number]> = []
+      for (let bytes = 0; i < candidates.length && (bytes === 0 || bytes < chunkBytes); i++) {
+        chunk.push(candidates[i])
+        bytes += candidates[i].e.size ?? 0
+      }
+      const texts = await this.readManyTexts(repo, snap, chunk.map((r) => r.e), dec)
+      for (const r of chunk) {
+        known[r.e.sha] = modelMaterials(texts.get(r.e.sha) ?? '')
+        if (known[r.e.sha][modelGuid]?.length) bestFound = Math.max(bestFound, r.score)
+      }
+      read += chunk.length
+      done += chunk.reduce((s, r) => s + (r.e.size ?? 0), 0)
+      onProgress?.({ done, total })
+    }
+    if (read) await this.options.cache?.set(PREFAB_KIND, repo, SHA_KEY, known)
+
+    const ctx = this.depContext(repo, snap, root, guids)
+    const usages: PrefabUsage[] = []
+    const files = new Set<string>()
+    const warnings = new Set<PrefabMaterialsResult['warnings'][number]>()
+    for (const { e } of ranked) {
+      const mats = known[e.sha]?.[modelGuid]
+      if (!mats?.length) continue
+      const described = await describeMaterials(mats.map((guid) => ({ guid })), ctx)
+      described.files.forEach((f) => files.add(f))
+      described.warnings.forEach((w) => warnings.add(w))
+      usages.push({ path: e.path, materials: described.materials })
+    }
+    const unchecked = prefabs.filter((e) => !(e.sha in known))
+    return {
+      scope,
+      prefabs: usages,
+      scanned: prefabs.length - unchecked.length,
+      remaining: unchecked.length,
+      remainingBytes: unchecked.reduce((s, e) => s + (e.size ?? 0), 0),
+      files: [...files],
+      warnings: [...warnings]
+    }
+  }
+
+  private depContext(repo: string, snap: Snapshot, root: string, guids: Map<string, string>): DepContext {
+    return {
       root,
       byPath: snap.byPath,
       pathForGuid: (guid) => guids.get(guid),
@@ -128,7 +227,23 @@ export class GitHubAssetSource implements AssetSource {
         return this.readEntry(repo, e)
       }
     }
-    return handler.resolveDependencies(path, ctx)
+  }
+
+  /** Text of many files by blob SHA: one bulk read when possible, else GraphQL. */
+  private async readManyTexts(repo: string, snap: Snapshot, entries: readonly TreeEntry[], dec: TextDecoder): Promise<Map<string, string>> {
+    const out = new Map<string, string>()
+    if (this.options.readBlobsBulk) {
+      try {
+        for (const [sha, bytes] of await this.options.readBlobsBulk(repo, entries.map((e) => e.sha))) out.set(sha, dec.decode(bytes))
+        if (out.size === entries.length) return out
+      } catch {
+        // fall through to the API
+      }
+    }
+    const missing = entries.filter((e) => !out.has(e.sha))
+    const texts = await this.client.getBlobTexts(repo, snap.commit, missing.map((e) => e.path))
+    for (const e of missing) out.set(e.sha, texts.get(e.path) ?? '')
+    return out
   }
 
   private remember(repo: string, branch: string, commit: string, entries: TreeEntry[]): Snapshot {

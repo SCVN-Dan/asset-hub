@@ -353,3 +353,67 @@ describe('GUID index speed-ups', () => {
     expect(t.graphqlPaths.filter((p) => p !== 'p/Assets/Hero.fbx.meta')).toEqual(['p/Assets/B.png.meta'])
   })
 })
+
+describe('findPrefabMaterials', () => {
+  const G = (n: number) => n.toString(16).padStart(32, '0')
+  const FISH = G(1)
+  const RED = G(10)
+  const prefabText = `--- !u!137 &1\nSkinnedMeshRenderer:\n  m_GameObject: {fileID: 2}\n  m_Materials:\n  - {fileID: 2100000, guid: ${RED}, type: 2}\n  m_Mesh: {fileID: 5, guid: ${FISH}, type: 3}\n`
+  const tree = [
+    { path: 'p/ProjectSettings/ProjectVersion.txt', type: 'blob', sha: 'pv', size: 20 },
+    { path: 'p/Assets/Game/Models/Fish/Fish.fbx', type: 'blob', sha: 'fbx', size: 500 },
+    { path: 'p/Assets/Game/Models/Fish/Fish.fbx.meta', type: 'blob', sha: 'fm', size: 50 },
+    { path: 'p/Assets/Game/Prefabs/Fish/FishModel.prefab', type: 'blob', sha: 'near', size: 900 },
+    { path: 'p/Assets/Other/Level.prefab', type: 'blob', sha: 'far', size: 900 },
+    { path: 'p/Assets/Game/Materials/Red.mat', type: 'blob', sha: 'mat', size: 100 },
+    { path: 'p/Assets/Game/Materials/Red.mat.meta', type: 'blob', sha: 'matmeta', size: 40 }
+  ]
+  const texts: Record<string, string> = {
+    'p/Assets/Game/Models/Fish/Fish.fbx.meta': `guid: ${FISH}\n`,
+    'p/Assets/Game/Materials/Red.mat.meta': `guid: ${RED}\n`,
+    'p/Assets/Game/Materials/Red.mat': '  m_Name: Red\n  m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}\n'
+  }
+
+  function make() {
+    const { fetch } = fakeFetch((url, body) => {
+      if (url.includes('/git/ref/heads/')) return { json: { object: { sha: 'c1' } } }
+      if (url.includes('/git/trees/')) return { json: { truncated: false, tree } }
+      if (url.endsWith('/graphql')) {
+        const query = JSON.parse(body!).query as string
+        const repository: Record<string, { text: string } | null> = {}
+        for (const m of query.matchAll(/(f\d+): object\(expression: "c1:([^"]+)"\)/g)) repository[m[1]] = m[2] in texts ? { text: texts[m[2]] } : null
+        return { json: { data: { repository } } }
+      }
+      return { status: 404, json: {} }
+    })
+    const reads: string[][] = []
+    const store = new Map<string, unknown>()
+    const src = new GitHubAssetSource(new GitHubClient('t', fetch), {
+      shouldResolveLfs: () => false,
+      cache: { get: async <T,>(k: string, r: string, c: string) => store.get(`${k}:${r}@${c}`) as T | undefined, set: async (k, r, c, v) => void store.set(`${k}:${r}@${c}`, v) },
+      readBlobsBulk: async (_repo, oids) => {
+        reads.push([...oids])
+        const body = (sha: string) => (sha === 'near' ? prefabText : sha === 'far' ? '--- !u!1 &1\nGameObject:\n' : texts[tree.find((e) => e.sha === sha)!.path] ?? '')
+        return new Map(oids.map((o) => [o, new TextEncoder().encode(body(o))]))
+      }
+    })
+    return { src, reads }
+  }
+
+  it('finds the materials a nearby prefab puts on the model, then reuses what it read', async () => {
+    const { src, reads } = make()
+    const r = await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'near', [])
+    expect(r.prefabs).toEqual([{ path: 'p/Assets/Game/Prefabs/Fish/FishModel.prefab', materials: [expect.objectContaining({ name: 'Red', path: 'p/Assets/Game/Materials/Red.mat' })] }])
+    expect(r.files).toEqual(['p/Assets/Game/Materials/Red.mat', 'p/Assets/Game/Materials/Red.mat.meta'])
+    expect(r).toMatchObject({ scanned: 1, remaining: 1, remainingBytes: 900 })
+    const prefabReads = () => reads.filter((batch) => batch.some((o) => o === 'near' || o === 'far'))
+    expect(prefabReads()).toEqual([['near']])
+
+    await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'near', [])
+    expect(prefabReads()).toHaveLength(1) // cached by prefab SHA
+
+    const all = await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'all', [])
+    expect(prefabReads().at(-1)).toEqual(['far'])
+    expect(all).toMatchObject({ scanned: 2, remaining: 0 })
+  })
+})

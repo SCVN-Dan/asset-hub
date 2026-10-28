@@ -21,6 +21,7 @@ export async function exportUnityPackage(
     report.files.forEach((f) => files.add(f))
     for (const tex of report.embeddedTextures) if (tex.path && tex.matchedBy === 'name') byName.add(tex.path)
   }
+  req.extraFiles.forEach((f) => files.add(f))
   const assets = [...files].filter((f) => !f.endsWith('.meta') && !(req.skipByName && byName.has(f)))
 
   const packed: PackageFile[] = []

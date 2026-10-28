@@ -40,6 +40,13 @@ const api: AssetHubApi = {
       const handler = (_event: Electron.IpcRendererEvent, progress: { done: number; total: number }) => listener(progress)
       ipcRenderer.on(IPC.indexProgress, handler)
       return () => ipcRenderer.removeListener(IPC.indexProgress, handler)
+    },
+    findPrefabMaterials: (repo, branch, path, root, scope, excludedFolders) =>
+      ipcRenderer.invoke(IPC.findPrefabMaterials, repo, branch, path, root, scope, excludedFolders),
+    onPrefabProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: { done: number; total: number }) => listener(progress)
+      ipcRenderer.on(IPC.prefabProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.prefabProgress, handler)
     }
   },
   thumbs: {

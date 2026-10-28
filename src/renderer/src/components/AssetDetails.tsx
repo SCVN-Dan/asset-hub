@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, type ModelStats } from '@core/checks/playable'
-import { formatBytes, type Asset, type AssetTypeHandler, type DependencyReport, type TextureRef } from '@core/index'
+import { formatBytes, type Asset, type AssetTypeHandler, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
@@ -22,12 +22,45 @@ interface Props {
   /** Byte-identical copies of this file, including itself. */
   copies?: Asset[]
   onSelectCopy(id: string): void
+  /** Folders left out of prefab searches, like the grid. */
+  excludedFolders: string[]
+  /** Extra files (prefab materials) to include when this model is exported. */
+  onPrefabFiles(path: string, files: string[]): void
 }
+
+type PrefabSearch = { status: 'idle' } | { status: 'running'; scope: 'near' | 'all' } | { status: 'ready'; result: PrefabMaterialsResult } | { status: 'error'; error: unknown }
 
 type Deps = { status: 'idle' } | { status: 'loading' } | { status: 'error'; error: unknown } | { status: 'ready'; report: DependencyReport }
 
 function Dot({ tone }: { tone: 'ok' | 'warn' | 'info' }) {
   return <span className={`dot dot-${tone}`} aria-hidden="true" />
+}
+
+function MaterialRows({ m }: { m: MaterialRef }) {
+  const { t } = useTranslation()
+  return (
+    <li>
+      <div className="dep-row" title={m.path}>
+        <Dot tone={m.missing ? 'warn' : 'ok'} />
+        <span className="dep-type">MAT</span>
+        <span className="dep-name">{m.name}</span>
+        <span className="dep-meta">{m.missing ? t('deps.missing') : ''}</span>
+      </div>
+      {m.shader && (
+        <div className="dep-row dep-child" title={m.shader.path ?? m.shader.guid}>
+          <Dot tone={m.shader.kind === 'project' ? 'info' : 'ok'} />
+          <span className="dep-type">SHD</span>
+          <span className="dep-name">{m.shader.label}</span>
+          <span className="dep-meta">{t(`deps.shader.${m.shader.kind}`)}</span>
+        </div>
+      )}
+      <ul>
+        {m.textures.map((tex) => (
+          <TextureRow key={`${tex.prop}:${tex.guid}`} tex={tex} />
+        ))}
+      </ul>
+    </li>
+  )
 }
 
 function TextureRow({ tex }: { tex: TextureRef }) {
@@ -46,20 +79,24 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
+  const [prefab, setPrefab] = useState<PrefabSearch>({ status: 'idle' })
+  const [prefabProgress, setPrefabProgress] = useState<{ done: number; total: number }>()
   const repoPath = asset && live ? live.root + asset.path : undefined
 
   useEffect(() => window.api.assets.onIndexProgress(setProgress), [])
+  useEffect(() => window.api.assets.onPrefabProgress(setPrefabProgress), [])
 
   useEffect(() => {
     setStats(undefined)
     setCopied(false)
     setProgress(undefined)
+    setPrefab({ status: 'idle' })
     if (!live || !repoPath || !handler?.resolveDependencies) {
       setDeps({ status: 'idle' })
       return
@@ -93,6 +130,21 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   }
 
   const report = deps.status === 'ready' ? deps.report : undefined
+  const prefabResult = prefab.status === 'ready' ? prefab.result : undefined
+  const prefabMaterial = prefabResult?.prefabs[0]?.materials.find((m) => !m.missing)
+
+  const searchPrefabs = async (scope: 'near' | 'all') => {
+    if (!live || !repoPath) return
+    setPrefab({ status: 'running', scope })
+    setPrefabProgress(undefined)
+    try {
+      const result = unwrap(await window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, scope, excludedFolders))
+      setPrefab({ status: 'ready', result })
+      onPrefabFiles(repoPath, result.files)
+    } catch (error) {
+      setPrefab({ status: 'error', error })
+    }
+  }
   const issues = stats ? checkPlayableBudget(stats) : []
   const copyPath = async () => {
     try {
@@ -106,7 +158,15 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   return (
     <aside className="details" aria-label={t('details.label')}>
       {live && repoPath && handler?.preview.kind === 'three' ? (
-        <ModelViewer key={repoPath} live={live} path={repoPath} report={report} onStats={setStats} onThumb={(url) => onThumb(asset.sha, url)} />
+        <ModelViewer
+          key={repoPath}
+          live={live}
+          path={repoPath}
+          report={report}
+          prefabMaterial={prefabMaterial}
+          onStats={setStats}
+          onThumb={(url) => onThumb(asset.sha, url)}
+        />
       ) : (
         <div className="preview-box">
           <CubeIcon size={72} />
@@ -209,27 +269,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
                 ))}
               <ul className="dep-list">
                 {report.materials.map((m) => (
-                  <li key={m.guid ?? m.name}>
-                    <div className="dep-row" title={m.path}>
-                      <Dot tone={m.missing ? 'warn' : 'ok'} />
-                      <span className="dep-type">MAT</span>
-                      <span className="dep-name">{m.name}</span>
-                      <span className="dep-meta">{m.missing ? t('deps.missing') : ''}</span>
-                    </div>
-                    {m.shader && (
-                      <div className="dep-row dep-child" title={m.shader.path ?? m.shader.guid}>
-                        <Dot tone={m.shader.kind === 'project' ? 'info' : 'ok'} />
-                        <span className="dep-type">SHD</span>
-                        <span className="dep-name">{m.shader.label}</span>
-                        <span className="dep-meta">{t(`deps.shader.${m.shader.kind}`)}</span>
-                      </div>
-                    )}
-                    <ul>
-                      {m.textures.map((tex) => (
-                        <TextureRow key={`${tex.prop}:${tex.guid}`} tex={tex} />
-                      ))}
-                    </ul>
-                  </li>
+                  <MaterialRows key={m.guid ?? m.name} m={m} />
                 ))}
                 {report.embeddedTextures.length > 0 && (
                   <li>
@@ -250,6 +290,73 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               <p className="muted small" style={{ margin: 0 }}>
                 {t('deps.files', { count: report.files.length })}
               </p>
+            </>
+          )}
+        </section>
+      )}
+
+      {live && report && (
+        <section className="section">
+          <span className="label-caps">{t('prefab.title')}</span>
+          {prefab.status === 'idle' && (
+            <>
+              <p className="muted small" style={{ margin: 0 }}>
+                {t('prefab.hint')}
+              </p>
+              <div>
+                <button type="button" className="btn" onClick={() => void searchPrefabs('near')}>
+                  {t('prefab.search')}
+                </button>
+              </div>
+            </>
+          )}
+          {prefab.status === 'running' && (
+            <div className="note">
+              {t(prefab.scope === 'all' ? 'prefab.scanningAll' : 'prefab.scanning')}
+              {prefabProgress && prefabProgress.total > 0 && (
+                <>
+                  {' '}
+                  {formatBytes(prefabProgress.done)} / {formatBytes(prefabProgress.total)}
+                  <progress className="progress" max={prefabProgress.total} value={prefabProgress.done} />
+                </>
+              )}
+            </div>
+          )}
+          {prefab.status === 'error' && <ErrorNote error={prefab.error} />}
+          {prefabResult && (
+            <>
+              {prefabResult.prefabs.length === 0 ? (
+                <p className="note">{t('prefab.none', { count: prefabResult.scanned })}</p>
+              ) : (
+                <>
+                  <p className="note">{t('prefab.found', { count: prefabResult.prefabs.length })}</p>
+                  <ul className="dep-list">
+                    {prefabResult.prefabs.map((p) => (
+                      <li key={p.path}>
+                        <div className="dep-row" title={p.path}>
+                          <Dot tone="ok" />
+                          <span className="dep-type">PFB</span>
+                          <span className="dep-name">{p.path.split('/').pop()}</span>
+                          <span className="dep-meta" />
+                        </div>
+                        <ul className="dep-indent">
+                          {p.materials.map((m) => (
+                            <MaterialRows key={m.guid ?? m.name} m={m} />
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                  {prefabMaterial && <p className="muted small" style={{ margin: 0 }}>{t('prefab.applied', { name: prefabMaterial.name })}</p>}
+                </>
+              )}
+              {prefabResult.remaining > 0 && (
+                <div>
+                  <button type="button" className="btn" onClick={() => void searchPrefabs('all')}>
+                    {t('prefab.scanAll', { count: prefabResult.remaining, size: formatBytes(prefabResult.remainingBytes) })}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </section>

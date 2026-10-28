@@ -161,6 +161,7 @@ button { cursor: pointer; }
 .dep-list, .dep-list ul { list-style: none; margin: 0; padding: 0; }
 .dep-row { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; }
 .dep-child { padding-left: 18px; }
+.dep-indent { padding-left: 14px !important; }
 .dep-type { flex: 0 0 30px; font-size: 10px; font-weight: 700; color: var(--muted); }
 .dep-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dep-meta { flex: 0 0 auto; font-size: 11px; color: var(--muted); }

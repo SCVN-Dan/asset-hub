@@ -37,6 +37,25 @@ export type DependencyWarning =
   | 'noMeta'
   | 'noMaterials'
 
+/** A prefab that uses a model, and the materials its renderers put on that model. */
+export interface PrefabUsage {
+  path: string
+  materials: MaterialRef[]
+}
+
+export interface PrefabMaterialsResult {
+  scope: 'near' | 'all'
+  prefabs: PrefabUsage[]
+  /** Prefabs checked for this answer (scanned now or known from earlier scans). */
+  scanned: number
+  /** Prefabs not checked yet, and their size — what "scan all" would add. */
+  remaining: number
+  remainingBytes: number
+  /** Materials, textures and shaders (with .meta) to add to an export. */
+  files: string[]
+  warnings: DependencyWarning[]
+}
+
 export interface DependencyReport {
   /** A: materials extracted to .mat; B: embedded in the FBX; none: material import disabled. */
   kind: 'A' | 'B' | 'none'

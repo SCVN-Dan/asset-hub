@@ -225,5 +225,19 @@
     "skipped_other": "{{count}} files left out (no .meta or duplicate GUID): {{list}}",
     "showInFolder": "Show in Finder",
     "dismiss": "Close"
+  },
+  "prefab": {
+    "title": "Materials from prefabs",
+    "hint": "This FBX may get its materials from prefabs. Look for prefabs that use it.",
+    "search": "Find materials in prefabs",
+    "scanning": "Reading related prefabs…",
+    "scanningAll": "Reading all prefabs…",
+    "none_one": "No prefab using this FBX among {{count}} checked.",
+    "none_other": "No prefab using this FBX among {{count}} checked.",
+    "found_one": "Used by {{count}} prefab — its materials are shown in the preview and added to exports.",
+    "found_other": "Used by {{count}} prefabs — the first one’s material is shown in the preview; all are added to exports.",
+    "applied": "Preview uses {{name}}.",
+    "scanAll_one": "Scan {{count}} more prefab ({{size}})",
+    "scanAll_other": "Scan {{count}} more prefabs ({{size}})"
   }
 }

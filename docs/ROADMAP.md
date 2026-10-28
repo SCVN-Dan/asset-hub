@@ -107,6 +107,7 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 | Lưới nạp dần 60 thẻ / lần khi cuộn, skeleton khi đang tải branch | ✅ |
 | Gộp file giống hệt (cùng blob SHA): 1 thẻ + badge ×N, danh sách vị trí trong panel chi tiết, công tắc bật/tắt | ✅ |
 | Phím mũi tên chọn file (↑↓ nhảy một hàng) | ✅ |
+| Nút "Tìm material trong prefab" trên FBX: đọc prefab ở thư mục liên quan trước (dừng khi tìm thấy), nút quét tất cả; lấy đúng material của renderer dùng mesh đó (SkinnedMeshRenderer, MeshFilter+MeshRenderer, prefab lồng có override); áp vào preview + kèm khi xuất; cache theo SHA prefab | ✅ |
 | Sửa: cache nằm trong thư mục `Cache` của Chromium (ổ không phân biệt hoa/thường) nên bị xoá khi mở lại app → chuyển sang `AssetHubCache`, tự chuyển cài đặt cũ | ✅ |
 | #3 Preview animation clip trong FBX | ✅ |
 | #1 Thông số (tris, vertex, mesh, material, bone, clip, dung lượng) + cảnh báo ngân sách playable | ✅ |
@@ -202,6 +203,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | Material từ prefab: Fish_Tuna_A.fbx không có material — được gán ở FishModel.prefab. Thêm nút tìm material trong prefab (1,8 s), preview + export dùng material đó. Sửa tên material URP và ưu tiên `_BaseMap` hơn `_MainTex`. |
 | 2026-10-28 | Thumbnail tự tạo chạy nền + nạp dần, gộp file giống hệt, phím mũi tên. Sửa mất cache khi mở lại app (trùng thư mục `Cache` của Chromium). |
 | 2026-10-27 | Chỉ mục GUID nhanh hơn ~13 lần: git fetch một lần + cache GUID theo SHA `.meta`. Không gọi git trên macOS khi chưa có Command Line Tools. |
 | 2026-10-27 | **Phase 4 (phần app) xong**: xuất `.unitypackage` 1 model hoặc cả gói, preview PNG, 2 layout đường dẫn, bỏ texture theo tên. Test gói Short_Wood + Snow_Tree: 5 asset, GUID/pathname/tham chiếu đúng. Còn: test import trong Unity, deep link. |

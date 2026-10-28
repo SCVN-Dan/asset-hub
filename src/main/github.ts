@@ -166,6 +166,21 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       })
     )
   )
+  ipcMain.handle(IPC.findPrefabMaterials, (event, repo: string, branch: string, path: string, root: string, scope: unknown, excluded: unknown) =>
+    wrap(() =>
+      requireSession().findPrefabMaterials(
+        String(repo),
+        String(branch),
+        String(path),
+        String(root),
+        scope === 'all' ? 'all' : 'near',
+        Array.isArray(excluded) ? excluded.map(String) : [],
+        (progress) => {
+          if (!event.sender.isDestroyed()) event.sender.send(IPC.prefabProgress, progress)
+        }
+      )
+    )
+  )
   ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string) => wrap(() => requireSession().readFile(String(repo), String(branch), String(path))))
   ipcMain.handle(IPC.findByNames, (_e, repo: string, branch: string, names: unknown, nearPath: string, root: string) =>
     wrap(() =>
@@ -182,6 +197,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
         paths: Array.isArray(raw.paths) ? raw.paths.map(String) : [],
         layout: raw.layout === 'grouped' ? 'grouped' : 'source',
         skipByName: raw.skipByName === true,
+        extraFiles: Array.isArray(raw.extraFiles) ? raw.extraFiles.map(String) : [],
         previews: Object.fromEntries(
           Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
         ),

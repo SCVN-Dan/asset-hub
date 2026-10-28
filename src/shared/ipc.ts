@@ -1,4 +1,4 @@
-import type { DependencyReport, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { DependencyReport, PrefabMaterialsResult, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { Settings } from './settings'
 
 export const IPC = {
@@ -22,6 +22,8 @@ export const IPC = {
   readFile: 'assets:read-file',
   findByNames: 'assets:find-by-names',
   indexProgress: 'assets:index-progress',
+  findPrefabMaterials: 'assets:find-prefab-materials',
+  prefabProgress: 'assets:prefab-progress',
   getThumbs: 'thumbs:get',
   saveThumb: 'thumbs:save',
   exportPackage: 'export:unitypackage',
@@ -43,6 +45,8 @@ export interface ExportRequest {
   layout: 'source' | 'grouped'
   /** Leave out textures that were only matched by file name. */
   skipByName: boolean
+  /** More repo paths to include, e.g. materials found on prefabs (with .meta). */
+  extraFiles: string[]
   /** PNG previews keyed by repo path. */
   previews: Record<string, Uint8Array>
   /** Default file name in the save dialog. */
@@ -115,6 +119,10 @@ export interface AssetHubApi {
     findByNames(repo: string, branch: string, names: string[], nearPath: string, root: string): Promise<IpcResult<Record<string, string | null>>>
     /** Progress of the one-off GUID index build for a commit. */
     onIndexProgress(listener: (progress: { done: number; total: number }) => void): () => void
+    /** Materials that prefabs put on this model; `near` reads only related prefabs. */
+    findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: 'near' | 'all', excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
+    /** Bytes read so far by findPrefabMaterials. */
+    onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
   }
   thumbs: {
     get(keys: string[]): Promise<Record<string, string>>

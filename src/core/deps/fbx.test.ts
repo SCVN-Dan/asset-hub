@@ -83,6 +83,11 @@ describe('Unity YAML readers', () => {
     })
   })
 
+  it('takes the Material name, not the empty name of the URP AssetVersion block before it', () => {
+    const urp = `--- !u!114 &-1\nMonoBehaviour:\n  m_Name: \n  version: 9\n--- !u!21 &2100000\nMaterial:\n  m_Name: M_Fish_dirty\n`
+    expect(parseMaterial(urp).name).toBe('M_Fish_dirty')
+  })
+
   it('finds texture file names inside FBX bytes, including absolute paths', () => {
     const bytes = new TextEncoder().encode('Kaydara FBX Binary\0\x01RelativeFilename\0Users/artist/Desktop/T_Tree_Albedo.png\0\x05C:\\Art\\bark.TGA\0junk.pngx')
     expect(extractFbxTextureNames(bytes).sort()).toEqual(['T_Tree_Albedo.png', 'bark.TGA'])
