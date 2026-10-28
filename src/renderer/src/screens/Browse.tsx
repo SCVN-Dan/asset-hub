@@ -379,7 +379,10 @@ export function Browse({
     else if (tree.status === 'ready') land(tree.data, path)
   }
 
-  useEffect(() => setLimit(PAGE), [gridItems])
+  // Back to the first page only when the user asks for a different list, not when
+  // measurements arrive and re-rank it (that used to jump the grid back to the top).
+  const listKey = [scope, repo, branch, root, folder, typeFilter, query, sortMode, onlyFits, mergeCopies, catalogRepo, catalogBranch].join('\n')
+  useEffect(() => setLimit(PAGE), [listKey])
   // Render more cards as the end of the grid scrolls into view.
   useEffect(() => {
     const el = sentinel.current
@@ -408,15 +411,22 @@ export function Browse({
     return () => window.removeEventListener('keydown', onKey)
   }, [gridItems, gridSelected, limit, inCatalog])
 
+  /** Selection still to be scrolled into view; scrolling happens only when the selection changes. */
+  const scrollTo = useRef<string>()
   useEffect(() => {
-    if (!gridSelected) return
+    scrollTo.current = gridSelected
+  }, [gridSelected])
+  useEffect(() => {
+    const wanted = scrollTo.current
+    if (!wanted) return
     // A card further down than the cards rendered so far (e.g. opened from another branch): render up to it first.
-    const target = gridItems.find((a) => a.id === gridSelected) ?? (selected && gridItems.find((a) => a.sha === selected.sha))
+    const target = gridItems.find((a) => a.id === wanted) ?? (selected && gridItems.find((a) => a.sha === selected.sha))
     const index = target ? gridItems.indexOf(target) : -1
     if (index >= limit) {
       setLimit(index + PAGE)
       return
     }
+    scrollTo.current = undefined
     const card = target && document.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(target.id)}"]`)
     card?.scrollIntoView({ block: 'nearest' })
     if (document.activeElement?.classList.contains('asset-card')) card?.focus({ preventScroll: true })
