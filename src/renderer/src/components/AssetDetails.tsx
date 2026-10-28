@@ -1,13 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, type DependencyReport, type MaterialLook, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
 import { ImageViewer, type ImageInfo } from './ImageViewer'
+import { MaterialViewer } from './MaterialViewer'
 import { DownloadButton } from './DownloadButton'
 
 interface Props {
@@ -103,6 +104,57 @@ function TextureSection({ info }: { info: ImageInfo }) {
   )
 }
 
+const SURFACES = { opaque: 'opaque', cutout: 'cutout', transparent: 'transparent' } as const
+const toHex = (v: number) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')
+
+/** Shader, surface, colour and texture weight of a material, with what matters for playables. */
+function MaterialSection({ material, look, stats }: { material?: MaterialRef; look?: MaterialLook; stats?: StatsSummary }) {
+  const { t } = useTranslation()
+  const color = look?.color && `#${toHex(look.color.r)}${toHex(look.color.g)}${toHex(look.color.b)}`
+  const cells: Array<[string, ReactNode]> = [
+    ...(material?.shader ? [[t('material.shader'), material.shader.label] as [string, ReactNode]] : []),
+    ...(look
+      ? ([
+          [t('material.surface'), t(`material.surfaces.${SURFACES[look.surface]}`) + (look.surface === 'transparent' && look.color && look.color.a < 1 ? ` · ${Math.round(look.color.a * 100)}%` : '')],
+          ...(color ? [[t('material.color'), <span key="c" className="swatch-cell"><span className="swatch" style={{ background: color }} aria-hidden="true" />{color.toUpperCase()}</span>]] : [])
+        ] as Array<[string, ReactNode]>)
+      : []),
+    ...(stats
+      ? ([
+          [t('material.textures'), stats.textureCount ? `${stats.textureCount} · ${formatBytes(stats.textureBytes)}` : t('material.noTextures')],
+          ...(stats.maxTextureSize ? [[t('material.largest'), `${stats.maxTextureSize} px`]] : [])
+        ] as Array<[string, ReactNode]>)
+      : [])
+  ]
+  const issues = stats ? summaryIssues(stats).filter((i) => i.key === 'textureSize' || i.key === 'textureBytes') : []
+  if (!cells.length) return null
+  return (
+    <section className="section">
+      <span className="label-caps">{t('material.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {issues.length > 0 && (
+        <ul className="warn-note warn-list">
+          {issues.map((i) => (
+            <li key={i.key}>
+              {t(`budget.${i.key}`, {
+                value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(),
+                limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString()
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 /** Stat cells worth showing: counts that are zero (no bones, no clips) or trivial (one mesh) are left out. */
 function statCells(stats: ModelStats): Array<[string, string | number]> {
   const textureBytes = stats.textures.reduce((s, x) => s + x.bytes, 0)
@@ -181,6 +233,9 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [stats, setStats] = useState<ModelStats>()
   /** For a texture: what the image viewer found. */
   const [imageInfo, setImageInfo] = useState<ImageInfo>()
+  /** For a material: its colour / surface, and what its textures weigh. */
+  const [look, setLook] = useState<MaterialLook>()
+  const [materialStats, setMaterialStats] = useState<StatsSummary>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
   const [prefab, setPrefab] = useState<PrefabSearch>({ status: 'idle' })
@@ -217,6 +272,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     searchToken.current++
     setStats(undefined)
     setImageInfo(undefined)
+    setLook(undefined)
+    setMaterialStats(undefined)
     setCopied(false)
     setProgress(undefined)
     setPrefab({ status: 'idle' })
@@ -319,6 +376,20 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
+      ) : live && repoPath && handler?.preview.kind === 'material' ? (
+        <MaterialViewer
+          key={repoPath}
+          live={live}
+          path={repoPath}
+          report={report}
+          onLook={setLook}
+          onStats={(s) => {
+            setMaterialStats(s)
+            onModelStats?.(asset.sha, s)
+          }}
+          onThumb={(url) => onThumb(asset.sha, url)}
+          onLoading={onViewerLoading}
+        />
       ) : live && repoPath && handler?.preview.kind === 'image' ? (
         <ImageViewer key={repoPath} live={live} path={repoPath} onInfo={setImageInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : (
@@ -370,8 +441,10 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       )}
 
       {imageInfo && <TextureSection info={imageInfo} />}
+      {handler?.preview.kind === 'material' && <MaterialSection material={report?.materials[0]} look={look} stats={materialStats} />}
 
-      {handler?.resolveDependencies && handler.preview.kind === 'three' && (
+      {/* A texture is just itself: nothing to list. */}
+      {handler?.resolveDependencies && handler.usesGuids !== false && (
         <section className="section">
           <span className="label-caps">{t('details.deps')}</span>
           {!live && <p className="note">{t('deps.needsRepo')}</p>}

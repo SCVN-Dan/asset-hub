@@ -20,7 +20,7 @@ import { AssetCard, SkeletonCard } from '../components/AssetCard'
 import { AssetDetails } from '../components/AssetDetails'
 import { ExportBar, type ExportOptions, type ExportState, type PackItem } from '../components/ExportBar'
 import { unwrap } from '../remoteSource'
-import { useThumbnailQueue } from '../useThumbnailQueue'
+import { useThumbnailQueue, type ThumbKind } from '../useThumbnailQueue'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
@@ -338,8 +338,10 @@ export function Browse({
   const previewKind = (a: Asset) => registry.get(a.type)?.preview.kind
   /** Thumbnails: models up to THUMB_MAX_BYTES, images the browser (or our PSD / TGA decoders) can draw. */
   const canRender = (a: Asset) =>
-    (previewKind(a) === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES) || (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES)
-  const kindOf = (a: Asset) => (previewKind(a) === 'image' ? 'image' : 'three')
+    (previewKind(a) === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES) ||
+    previewKind(a) === 'material' ||
+    (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES)
+  const kindOf = (a: Asset): ThumbKind => (previewKind(a) === 'image' ? 'image' : previewKind(a) === 'material' ? 'material' : 'three')
 
   /** Renders (and so measures) every listed model not measured yet, top of the list first. */
   const measureAll = () => {

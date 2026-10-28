@@ -3,8 +3,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
 import type { ModelStats } from '@core/checks/playable'
+import type { MaterialLook } from '@core/index'
 
 export type ViewPreset = 'front' | 'side' | 'top' | 'reset'
+
+/** Shape a material is shown on. */
+export type PreviewShape = 'sphere' | 'cube' | 'plane'
 
 /** A texture file fetched from the repo, served to three.js through a blob URL. */
 export interface TextureFile {
@@ -88,6 +92,53 @@ export class FbxViewer {
     this.frameModel()
     if (model.animations.length) this.mixer = new THREE.AnimationMixer(model)
     return started ? loaded : Promise.resolve()
+  }
+
+  /**
+   * Shows a plain shape instead of a model, with one material that
+   * `applyMaterialSlots` ('*') and `setLook` dress. Switching shape keeps that material.
+   */
+  showShape(shape: PreviewShape): void {
+    const geometry =
+      shape === 'sphere' ? new THREE.SphereGeometry(0.5, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(0.7, 0.7, 0.7) : new THREE.PlaneGeometry(1, 1)
+    const mesh = this.model?.children[0] as THREE.Mesh | undefined
+    if (mesh?.isMesh) {
+      mesh.geometry.dispose()
+      mesh.geometry = geometry
+    } else {
+      const group = new THREE.Group()
+      group.add(new THREE.Mesh(geometry, new THREE.MeshPhongMaterial({ name: 'preview', side: THREE.DoubleSide })))
+      this.model = group
+      this.scene.add(group)
+    }
+    this.model!.position.set(0, 0, 0)
+    this.frameModel()
+    // A flat card is read face-on.
+    if (shape === 'plane') this.setView('front')
+  }
+
+  /** Colour, transparency, cutout, emission and gloss from a Unity material, on top of its textures. */
+  setLook(look: MaterialLook): void {
+    this.model?.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh) return
+      for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const m = mat as THREE.MeshPhongMaterial
+        // Unity stores colour properties in sRGB; they multiply the colour texture. HDR colours (> 1) would only blow out.
+        const c01 = (v: number) => Math.min(1, Math.max(0, v))
+        if (look.color) m.color.setRGB(c01(look.color.r), c01(look.color.g), c01(look.color.b), THREE.SRGBColorSpace)
+        m.transparent = look.surface === 'transparent'
+        m.opacity = m.transparent ? (look.color?.a ?? 1) : 1
+        m.depthWrite = !m.transparent
+        m.alphaTest = look.surface === 'cutout' ? (look.cutoff ?? 0.5) : 0
+        if (look.emission) m.emissive.setRGB(c01(look.emission.r), c01(look.emission.g), c01(look.emission.b), THREE.SRGBColorSpace)
+        else m.emissive.set(0x000000)
+        const smooth = look.smoothness ?? 0.5
+        m.shininess = 4 + smooth * 96
+        m.specular.setScalar(0.05 + smooth * 0.35)
+        m.needsUpdate = true
+      }
+    })
   }
 
   /** Puts .mat textures onto the FBX materials with matching names. */

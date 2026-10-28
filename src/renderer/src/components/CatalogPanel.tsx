@@ -212,8 +212,14 @@ export function StatsLine({ stats, short = false }: { stats: StatsSummary; short
   return (
     <span className="stats-line" title={issues.map((i) => t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(), limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString() })).join('\n') || t('ranking.fits')}>
       <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>
-      {stats.width ? <span>{`${stats.width}×${stats.height}`}</span> : <span>{t('ranking.tris', { n: compact(stats.triangles) })}</span>}
-      {(!short || stats.width) && <span>{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
+      {stats.width ? (
+        <span>{`${stats.width}×${stats.height}`}</span>
+      ) : stats.textureCount !== undefined ? (
+        <span>{t('ranking.textures', { count: stats.textureCount })}</span>
+      ) : (
+        <span>{t('ranking.tris', { n: compact(stats.triangles) })}</span>
+      )}
+      {(!short || stats.width || stats.textureCount !== undefined) && <span>{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
       {!short && stats.bones > 0 && <span>{t('ranking.bones', { count: stats.bones })}</span>}
     </span>
   )

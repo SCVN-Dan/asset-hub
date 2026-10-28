@@ -7,7 +7,8 @@
   "assetTypes": {
     "all": "All",
     "fbx": "FBX",
-    "texture": "Texture"
+    "texture": "Texture",
+    "material": "Material"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -189,7 +190,7 @@
       "missingTexture": "Some textures could not be found.",
       "textureByName": "Textures were matched by file name — check they are the right ones.",
       "customShader": "Uses a custom shader from the project; it may not exist in the target project.",
-      "noMeta": "This FBX has no .meta file, so its import settings and GUID are unknown.",
+      "noMeta": "This file has no .meta file, so its import settings and GUID are unknown.",
       "noMaterials": "Material import is turned off for this FBX."
     },
     "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
@@ -310,7 +311,9 @@
     "measure_other": "Measure {{count}} results",
     "fits": "Within the playable budget",
     "tris": "{{n}} tris",
-    "bones": "{{count}} bones"
+    "bones": "{{count}} bones",
+    "textures_one": "{{count}} texture",
+    "textures_other": "{{count}} textures"
   },
   "texture": {
     "title": "Texture",
@@ -355,6 +358,25 @@
       "normal": "Normal",
       "high": "High quality",
       "low": "Low quality"
+    }
+  },
+  "material": {
+    "title": "Material",
+    "shader": "Shader",
+    "surface": "Surface",
+    "color": "Colour",
+    "textures": "Textures",
+    "noTextures": "None",
+    "largest": "Largest texture",
+    "surfaces": {
+      "opaque": "Opaque",
+      "cutout": "Cutout",
+      "transparent": "Transparent"
+    },
+    "shape": {
+      "sphere": "Sphere",
+      "cube": "Cube",
+      "plane": "Plane"
     }
   },
   "download": {

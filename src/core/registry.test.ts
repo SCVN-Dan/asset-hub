@@ -18,7 +18,8 @@ describe('HandlerRegistry', () => {
     expect(registry.classify(blob('A/rock.FBX'))?.id).toBe('fbx')
     expect(registry.classify(blob('A/Hero.fbx.meta'))).toBeUndefined()
     expect(registry.classify({ path: 'A/Folder.fbx', type: 'tree', sha: 'x' })).toBeUndefined()
-    expect(registry.classify(blob('A/Hero.mat'))).toBeUndefined()
+    expect(registry.classify(blob('A/Hero.mat'))?.id).toBe('material')
+    expect(registry.classify(blob('A/Hero.prefab'))).toBeUndefined()
   })
 
   it('uses the first matching handler in registration order', () => {
@@ -41,8 +42,9 @@ describe('HandlerRegistry', () => {
     const fbx = (list: typeof main) => list.filter((a) => a.type === 'fbx')
     expect(fbx(main)).toHaveLength(10)
     expect(fbx(develop)).toHaveLength(11)
-    // Textures are assets of their own now.
+    // Textures and materials are assets of their own now.
     expect(main.filter((a) => a.type === 'texture').length).toBeGreaterThan(0)
-    expect(main.every((a) => a.type === 'fbx' || a.type === 'texture')).toBe(true)
+    expect(main.filter((a) => a.type === 'material').length).toBeGreaterThan(0)
+    expect(main.every((a) => ['fbx', 'texture', 'material'].includes(a.type))).toBe(true)
   })
 })

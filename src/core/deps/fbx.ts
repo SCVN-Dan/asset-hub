@@ -1,6 +1,6 @@
 import { baseName, dirName } from '../registry'
 import type { TreeEntry } from '../types'
-import { BUILTIN_SHADER_GUIDS, extractFbxTextureNames, KNOWN_PACKAGE_SHADERS, metaGuid, parseFbxMeta, parseMaterial } from '../unity/yaml'
+import { BUILTIN_SHADER_GUIDS, BUILTIN_SHADER_NAMES, extractFbxTextureNames, KNOWN_PACKAGE_SHADERS, metaGuid, parseFbxMeta, parseMaterial } from '../unity/yaml'
 import type { DependencyReport, DependencyWarning, MaterialRef, ShaderRef, TextureRef } from './types'
 
 /** What a resolver may ask of the branch it is resolving in. All paths are repo paths. */
@@ -46,8 +46,8 @@ export function closestPath(candidates: readonly string[], nearPath: string): st
   return best
 }
 
-function classifyShader(guid: string, ctx: DepContext): ShaderRef {
-  if (BUILTIN_SHADER_GUIDS.has(guid)) return { guid, kind: 'builtin', label: 'Built-in' }
+function classifyShader(guid: string, ctx: DepContext, fileID?: string): ShaderRef {
+  if (BUILTIN_SHADER_GUIDS.has(guid)) return { guid, kind: 'builtin', label: (fileID && BUILTIN_SHADER_NAMES[fileID]) || 'Built-in' }
   const path = ctx.pathForGuid(guid)
   if (path) return { guid, kind: 'project', label: baseName(path), path }
   return { guid, kind: 'package', label: KNOWN_PACKAGE_SHADERS[guid] ?? `Package shader (${guid.slice(0, 8)})` }
@@ -94,7 +94,7 @@ export async function describeMaterials(
     }
     addWithMeta(path)
     const parsed = parsedByPath.get(path)!
-    const shader = parsed.shader ? classifyShader(parsed.shader.guid, ctx) : undefined
+    const shader = parsed.shader ? classifyShader(parsed.shader.guid, ctx, parsed.shader.fileID) : undefined
     if (shader?.kind === 'project') {
       warnings.add('customShader')
       addWithMeta(shader.path!)

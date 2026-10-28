@@ -7,7 +7,8 @@
   "assetTypes": {
     "all": "Tất cả",
     "fbx": "FBX",
-    "texture": "Texture"
+    "texture": "Texture",
+    "material": "Material"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -183,7 +184,7 @@
       "missingTexture": "Không tìm thấy một số texture.",
       "textureByName": "Texture được ghép theo tên file — hãy kiểm tra lại cho đúng.",
       "customShader": "Dùng shader custom của project; project đích có thể không có shader này.",
-      "noMeta": "FBX này không có file .meta nên không rõ import settings và GUID.",
+      "noMeta": "File này không có file .meta nên không rõ import settings và GUID.",
       "noMaterials": "FBX này tắt import material."
     },
     "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
@@ -295,7 +296,9 @@
     "measure_other": "Đo {{count}} kết quả",
     "fits": "Vừa ngân sách playable",
     "tris": "{{n}} tris",
-    "bones": "{{count}} bones"
+    "bones": "{{count}} bones",
+    "textures_one": "{{count}} texture",
+    "textures_other": "{{count}} texture"
   },
   "texture": {
     "title": "Texture",
@@ -340,6 +343,25 @@
       "normal": "Thường",
       "high": "Chất lượng cao",
       "low": "Chất lượng thấp"
+    }
+  },
+  "material": {
+    "title": "Material",
+    "shader": "Shader",
+    "surface": "Bề mặt",
+    "color": "Màu",
+    "textures": "Texture",
+    "noTextures": "Không có",
+    "largest": "Texture lớn nhất",
+    "surfaces": {
+      "opaque": "Đặc (Opaque)",
+      "cutout": "Cắt alpha (Cutout)",
+      "transparent": "Trong suốt"
+    },
+    "shape": {
+      "sphere": "Cầu",
+      "cube": "Hộp",
+      "plane": "Mặt phẳng"
     }
   },
   "download": {

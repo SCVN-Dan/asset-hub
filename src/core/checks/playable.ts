@@ -46,6 +46,8 @@ export interface StatsSummary {
   /** For a texture asset: its size in pixels (no triangles). */
   width?: number
   height?: number
+  /** For a material: how many textures it uses (no triangles). */
+  textureCount?: number
   /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
   source: 'thumb' | 'viewer'
 }
@@ -112,7 +114,7 @@ export function rankForPlayable<T>(
             ? [summaryIssues(s).length, size, -usedOf(item)]
             : mode === 'smallest'
               ? [size, s.triangles]
-              : [s.width ? 1 : 0, s.triangles, size] // textures (no triangles) after models
+              : [s.width || s.textureCount !== undefined ? 1 : 0, s.triangles, size] // textures and materials (no triangles) after models
     return { item, index, keys: [-matchOf(item), ...keys] }
   })
   keyed.sort((a, b) => {

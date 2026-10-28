@@ -36,7 +36,8 @@ export interface Asset {
 /** Per-type statistics, stored as JSON in the index (`stats_json`). */
 export type AssetStats = Record<string, number | string | boolean>
 
-export type PreviewKind = 'three' | 'audio' | 'image' | 'unity-render'
+/** `three`: a model; `material`: a material drawn on a shape; `image`: the file as it is. */
+export type PreviewKind = 'three' | 'material' | 'audio' | 'image' | 'unity-render'
 
 export type PreviewResult =
   | { status: 'ready'; kind: PreviewKind; url: string }

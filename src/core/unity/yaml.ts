@@ -7,7 +7,15 @@ export const BUILTIN_SHADER_GUIDS = new Set(['0000000000000000f000000000000000',
 
 /** Package shaders recognised by GUID, so they show a name instead of a hash. */
 export const KNOWN_PACKAGE_SHADERS: Record<string, string> = {
-  '933532a4fcc9baf4fa0491de14d08ed7': 'Universal Render Pipeline/Lit'
+  '933532a4fcc9baf4fa0491de14d08ed7': 'Universal Render Pipeline/Lit',
+  '650dd9526735d5b46b79224bc6e94025': 'Universal Render Pipeline/Unlit',
+  '8d2bb70cbf9db8d4da26e15b26e74248': 'Universal Render Pipeline/Simple Lit'
+}
+
+/** Built-in shaders by fileID (they share one GUID). */
+export const BUILTIN_SHADER_NAMES: Record<string, string> = {
+  '46': 'Standard',
+  '45': 'Standard (Specular setup)'
 }
 
 const GUID = '[0-9a-f]{32}'
@@ -76,6 +84,74 @@ export function parseMaterial(matText: string): MaterialInfo {
   }
   const parentGuid = new RegExp(`m_Parent: \\{fileID: -?\\d+, guid: (${GUID})`).exec(matText)?.[1]
   return { name, shader: shaderMatch ? { fileID: shaderMatch[1], guid: shaderMatch[2] } : undefined, parentGuid, textures }
+}
+
+export interface Rgba {
+  r: number
+  g: number
+  b: number
+  a: number
+}
+
+/** How a material looks, from its colour and number properties — what a preview can reproduce. */
+export interface MaterialLook {
+  /** _BaseColor (URP) or _Color (built-in): multiplies the colour texture. */
+  color?: Rgba
+  /** Only when the material turns emission on. */
+  emission?: Rgba
+  surface: 'opaque' | 'cutout' | 'transparent'
+  /** Alpha clip threshold for a cutout surface. */
+  cutoff?: number
+  /** 0–1 (_Smoothness in URP, _Glossiness in built-in). */
+  smoothness?: number
+  metallic?: number
+}
+
+/** `- _Prop: value` entries of one m_SavedProperties list (also the Unity 5 `- first: name:` layout). */
+function propertyList(matText: string, list: string): Array<[string, string]> {
+  const text = matText.replace(/\r\n/g, '\n')
+  const start = text.indexOf(`${list}:`)
+  if (start === -1) return []
+  const rest = text.slice(start + list.length + 1)
+  const end = rest.search(/\n {4}m_\w+:|\n[^ \n-]/)
+  const block = end === -1 ? rest : rest.slice(0, end)
+  const out: Array<[string, string]> = []
+  for (const m of block.matchAll(/^\s*- (\w+): (.+)$/gm)) out.push([m[1], m[2].trim()])
+  for (const m of block.matchAll(/^\s*name: (\w+)\s*\n\s*second: (.+)$/gm)) out.push([m[1], m[2].trim()])
+  return out
+}
+
+function parseRgba(v: string): Rgba | undefined {
+  const n = (k: string) => Number(new RegExp(`\\b${k}: (-?[\\d.eE+-]+)`).exec(v)?.[1])
+  const c = { r: n('r'), g: n('g'), b: n('b'), a: n('a') }
+  return Object.values(c).every(Number.isFinite) ? c : undefined
+}
+
+export function parseMaterialLook(matText: string): MaterialLook {
+  const colors: Record<string, Rgba> = {}
+  for (const [k, v] of propertyList(matText, 'm_Colors')) {
+    const c = parseRgba(v)
+    if (c) colors[k] = c
+  }
+  const floats: Record<string, number> = {}
+  for (const [k, v] of [...propertyList(matText, 'm_Ints'), ...propertyList(matText, 'm_Floats')]) {
+    const n = Number(v)
+    if (Number.isFinite(n)) floats[k] = n
+  }
+  // Keywords are a string (m_ShaderKeywords) or a list (m_ValidKeywords), depending on the Unity version.
+  const emissive = /_EMISSION\b/.test(/m_ShaderKeywords:.*$/m.exec(matText)?.[0] ?? '') || /m_ValidKeywords:(?:\s*\n\s*- \w+)*?\s*\n\s*- _EMISSION\s*$/m.test(matText)
+  // URP: _Surface 0 opaque / 1 transparent, _AlphaClip for cutout. Built-in Standard: _Mode 0 opaque, 1 cutout, 2 fade, 3 transparent.
+  const surface: MaterialLook['surface'] =
+    floats._Surface === 1 || floats._Mode === 2 || floats._Mode === 3 ? 'transparent' : floats._AlphaClip === 1 || floats._Mode === 1 ? 'cutout' : 'opaque'
+  return {
+    // Legacy particle shaders double _TintColor (0.5 grey is neutral).
+    color: colors._BaseColor ?? colors._Color ?? (colors._TintColor && { ...colors._TintColor, r: colors._TintColor.r * 2, g: colors._TintColor.g * 2, b: colors._TintColor.b * 2 }),
+    emission: emissive ? colors._EmissionColor : undefined,
+    surface,
+    cutoff: surface === 'cutout' ? floats._Cutoff : undefined,
+    smoothness: floats._Smoothness ?? floats._Glossiness,
+    metallic: floats._Metallic
+  }
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|tga|psd|tiff?|exr|bmp|gif|hdr)$/i

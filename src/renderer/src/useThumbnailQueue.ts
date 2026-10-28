@@ -3,6 +3,11 @@ import type { LiveContext } from './components/ModelViewer'
 import type { StatsSummary } from '@core/checks/playable'
 import { renderThumbnail } from './viewer/backgroundThumb'
 import { renderImageThumbnail } from './viewer/imageThumb'
+import { renderMaterialThumbnail } from './viewer/materialThumb'
+
+export type ThumbKind = 'three' | 'material' | 'image'
+
+const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail }
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
@@ -15,8 +20,8 @@ interface Job {
   order: number
   /** Repo + branch to read from, when not the open branch (results from other branches). */
   ctx?: LiveContext
-  /** How it is drawn: a 3D model, or an image file as it is. */
-  kind: 'three' | 'image'
+  /** How it is drawn: a 3D model, a material on a sphere, or an image file as it is. */
+  kind: ThumbKind
 }
 
 /**
@@ -44,7 +49,7 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
       const ctx = job.ctx ?? liveRef.current
       if (!ctx) continue
       active.current.add(job.key)
-      void (job.kind === 'image' ? renderImageThumbnail(ctx, job.path) : renderThumbnail(ctx, job.path))
+      void RENDER[job.kind](ctx, job.path)
         .then(({ url, stats }) => onThumbRef.current(job.key, url, stats))
         .catch(() => failed.current.set(job.key, Date.now()))
         .finally(() => {
@@ -67,7 +72,7 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
   }, [paused, pump])
 
   const request = useCallback(
-    (key: string, path: string, order: number, ctx?: LiveContext, kind: 'three' | 'image' = 'three') => {
+    (key: string, path: string, order: number, ctx?: LiveContext, kind: ThumbKind = 'three') => {
       if (!(ctx ?? liveRef.current) || active.current.has(key) || Date.now() - (failed.current.get(key) ?? -Infinity) < RETRY_MS) return
       const rest = queue.current.filter((j) => j.key !== key)
       const at = rest.findIndex((j) => j.order > order)

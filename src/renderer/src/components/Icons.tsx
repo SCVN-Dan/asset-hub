@@ -71,6 +71,14 @@ export const InfoIcon =({ size = 16 }: IconProps) => (
   </svg>
 )
 
+export const SphereIcon = ({ size = 24 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12c0 2.2 3.8 4 8.5 4s8.5-1.8 8.5-4" />
+    <path d="M8.5 7.5a4 4 0 0 1 3-1.5" />
+  </svg>
+)
+
 export const ImageIcon = ({ size = 24 }: IconProps) => (
   <svg {...base(size)}>
     <rect x="3.5" y="4.5" width="17" height="15" rx="2" />

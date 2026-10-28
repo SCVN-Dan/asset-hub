@@ -11,7 +11,7 @@ const MAX_TEXTURES = 6
 let host: HTMLDivElement | undefined
 
 /** Off-screen element that background viewers render into. */
-function offscreenHost(): HTMLDivElement {
+export function offscreenHost(): HTMLDivElement {
   if (!host) {
     host = document.createElement('div')
     host.setAttribute('aria-hidden', 'true')
