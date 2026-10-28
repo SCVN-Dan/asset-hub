@@ -4,7 +4,7 @@ import type { ModelStats } from '@core/checks/playable'
 import { extractFbxTextureNames, type DependencyReport, type MaterialRef } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type MaterialSlot, type TextureFile, type ViewPreset } from '../viewer/FbxViewer'
-import { DRAWABLE, fetchTextureFile } from '../viewer/textures'
+import { DRAWABLE, fetchTextureFile, guessedSlots } from '../viewer/textures'
 
 export interface LiveContext {
   repo: string
@@ -85,6 +85,9 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
         if (cancelled) return
         const byName = new Map([...ownFiles.values()].map((f) => [f.name.toLowerCase(), f]))
         await v.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, byName)
+        if (cancelled) return
+        // Textures named in the FBX but not wired to a slot: place them by file name.
+        if (!v.hasColorMaps() && byName.size) await v.applyMaterialSlots(guessedSlots([...byName.values()]))
         if (cancelled) return
         setClips(v.stats(0, []).animations)
         setStatus('ready')

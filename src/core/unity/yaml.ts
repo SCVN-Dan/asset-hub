@@ -82,3 +82,18 @@ export function extractFbxTextureNames(bytes: Uint8Array): string[] {
   }
   return [...names]
 }
+
+export type TextureRole = 'color' | 'normal' | 'emission'
+
+/**
+ * What a texture is for, judged from its file name — for FBX files that list
+ * textures without saying which material slot they belong to.
+ */
+export function guessTextureRole(fileName: string): TextureRole | undefined {
+  const n = fileName.replace(/\.[^.]+$/, '').toLowerCase()
+  if (/(normal|nrm|norm|_n$|_nm$|bump)/.test(n)) return 'normal'
+  if (/(emiss|emit|glow|_e$)/.test(n)) return 'emission'
+  if (/(diffuse|albedo|basecolou?r|base_colou?r|colou?r|_d$|_bc$|_c$|_col$|_diff$|maintex)/.test(n)) return 'color'
+  // Masks, roughness, metallic, AO… are not drawn by the preview.
+  return undefined
+}

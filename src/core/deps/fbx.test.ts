@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TreeEntry } from '../types'
-import { extractFbxTextureNames, metaGuid, parseFbxMeta, parseMaterial } from '../unity/yaml'
+import { extractFbxTextureNames, guessTextureRole, metaGuid, parseFbxMeta, parseMaterial } from '../unity/yaml'
 import { closestPath, resolveFbxDependencies, type DepContext } from './fbx'
 
 const G = (n: number) => n.toString(16).padStart(32, '0')
@@ -177,5 +177,16 @@ describe('resolveFbxDependencies', () => {
     expect(report.suggested[0].material.textures[0]).toMatchObject({ prop: '_BaseMap', path: 'proj/Assets/Fish/T_Fish.png' })
     expect(report.suggested[0].files).toContain('proj/Assets/Fish/M_Fish_red.mat.meta')
     expect(report.files).not.toContain('proj/Assets/Fish/M_Fish_red.mat')
+  })
+
+  it('guesses texture roles from file names', () => {
+    expect(guessTextureRole('T_Crocodile_Diffuse_Green.png')).toBe('color')
+    expect(guessTextureRole('T_Crocodile_Normal.png')).toBe('normal')
+    expect(guessTextureRole('Rock_N.tga')).toBe('normal')
+    expect(guessTextureRole('Hero_Albedo.png')).toBe('color')
+    expect(guessTextureRole('Hero_BaseColor.png')).toBe('color')
+    expect(guessTextureRole('Hero_Emission.png')).toBe('emission')
+    expect(guessTextureRole('Hero_Mask.png')).toBeUndefined()
+    expect(guessTextureRole('Hero_Roughness.png')).toBeUndefined()
   })
 })

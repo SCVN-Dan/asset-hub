@@ -148,6 +148,17 @@ export class FbxViewer {
     await Promise.all(jobs)
   }
 
+  /** True when at least one material got a colour texture from the FBX itself. */
+  hasColorMaps(): boolean {
+    let found = false
+    this.model?.traverse((obj) => {
+      const mesh = obj as THREE.Mesh
+      if (!mesh.isMesh) return
+      for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if ((m as THREE.MeshPhongMaterial).map) found = true
+    })
+    return found
+  }
+
   stats(fileBytes: number, textures: readonly TextureFile[]): ModelStats {
     let triangles = 0
     let vertices = 0

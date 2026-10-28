@@ -2,7 +2,7 @@ import { extractFbxTextureNames } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type TextureFile } from './FbxViewer'
-import { fetchTextureFile } from './textures'
+import { fetchTextureFile, guessedSlots } from './textures'
 
 /** Keeps background renders light: a few textures, the ones named inside the FBX. */
 const MAX_TEXTURES = 6
@@ -35,6 +35,7 @@ export async function renderThumbnail(live: LiveContext, path: string): Promise<
   const viewer = new FbxViewer(offscreenHost())
   try {
     await viewer.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, new Map(files.map((f) => [f.name.toLowerCase(), f])))
+    if (!viewer.hasColorMaps() && files.length) await viewer.applyMaterialSlots(guessedSlots(files))
     return viewer.snapshot()
   } finally {
     viewer.dispose()
