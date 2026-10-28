@@ -344,11 +344,12 @@ export function Browse({
     (previewKind(a) === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES) ||
     previewKind(a) === 'material' ||
     previewKind(a) === 'prefab' ||
+    previewKind(a) === 'animation' ||
     (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES) ||
     (previewKind(a) === 'audio' && PLAYABLE_AUDIO.test(a.path) && (a.size ?? 0) <= AUDIO_THUMB_MAX_BYTES)
   const kindOf = (a: Asset): ThumbKind => {
     const kind = previewKind(a)
-    return kind === 'image' || kind === 'material' || kind === 'audio' || kind === 'prefab' ? kind : 'three'
+    return kind === 'image' || kind === 'material' || kind === 'audio' || kind === 'prefab' || kind === 'animation' ? kind : 'three'
   }
 
   /** Cards whose thumbnail is ready, out of those that can have one (huge or EXR files never do). */

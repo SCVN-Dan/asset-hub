@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { parseAnimClip, type AnimClipInfo, type DependencyReport } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
-import { loadRig, rigCoverage, toThreeClip, type Rig } from '../viewer/animPlayer'
+import { loadRig, pickRig, rigCoverage, THUMB_POSE, toThreeClip, type Rig } from '../viewer/animPlayer'
 import type { LiveContext } from './ModelViewer'
 
 interface Props {
@@ -12,18 +12,15 @@ interface Props {
   path: string
   report?: DependencyReport
   onInfo(info: AnimClipInfo): void
+  /** A snapshot on the rig chosen (automatically or by hand), to replace the grid thumbnail. */
+  onThumb?(dataUrl: string): void
   onLoading?(loading: boolean): void
 }
-
-/** Rigs tried automatically before giving up (each is a download). */
-const AUTO_TRIES = 4
-/** A rig with this share of the clip's objects is taken without trying more: the first candidates are the likeliest models, a generic rig further down may match more bones yet be the wrong character. */
-const GOOD_ENOUGH = 0.5
 
 type Status = 'loading' | 'ready' | 'norig' | 'unsupported' | 'error'
 
 /** Plays a clip on a model whose rig matches it: picked automatically from nearby models, or chosen by hand. */
-export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
+export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: Props) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
@@ -39,8 +36,8 @@ export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
   const [coverage, setCoverage] = useState<Record<string, number>>({})
   const [playing, setPlaying] = useState(true)
   const [loop, setLoop] = useState(true)
-  const callbacks = useRef({ onInfo, onLoading })
-  callbacks.current = { onInfo, onLoading }
+  const callbacks = useRef({ onInfo, onThumb, onLoading })
+  callbacks.current = { onInfo, onThumb, onLoading }
 
   useEffect(() => {
     callbacks.current.onLoading?.(status === 'loading')
@@ -88,7 +85,12 @@ export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
     if (!v) return
     current.current = r
     v.showGroup(r.root)
-    v.playClip(toThreeClip(clip, r), loop)
+    // The grid shows the same pose as background thumbnails: the clip at 40%.
+    const three = toThreeClip(clip, r)
+    v.playClip(three, loop)
+    v.poseAt(clip.length * THUMB_POSE)
+    callbacks.current.onThumb?.(v.snapshot())
+    v.playClip(three, loop)
     v.setPaused(false)
     setPlaying(true)
     setRig(r.path)
@@ -102,22 +104,13 @@ export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
     let cancelled = false
     let finished = false
     void (async () => {
-      let best: { rig: Rig; score: number } | undefined
-      for (const p of report.rigs!.slice(0, AUTO_TRIES)) {
-        try {
-          const r = await loadRig(live, p)
-          if (cancelled) return
-          const score = rigCoverage(info, r.root)
-          setCoverage((c) => ({ ...c, [p]: score }))
-          if (!best || score > best.score) best = { rig: r, score }
-          if (score >= GOOD_ENOUGH) break
-        } catch {
-          setCoverage((c) => ({ ...c, [p]: 0 }))
-        }
-      }
+      const best = await pickRig(live, info, report.rigs!, {
+        isCancelled: () => cancelled,
+        onTried: (p, coverage) => !cancelled && setCoverage((c) => ({ ...c, [p]: coverage }))
+      })
       if (cancelled) return
       finished = true
-      if (best && best.score > 0) show(best.rig, info)
+      if (best) show(best.rig, info)
       else setStatus('norig')
     })()
     return () => {
@@ -128,7 +121,7 @@ export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
     // Reports arrive in steps with the same rigs: compared by content.
   }, [info, report?.rigs?.join('|'), status])
 
-  const pickRig = async (p: string) => {
+  const chooseRig = async (p: string) => {
     if (!info) return
     setStatus('loading')
     try {
@@ -198,7 +191,7 @@ export function AnimViewer({ live, path, report, onInfo, onLoading }: Props) {
             </>
           )}
           {rigs.length > 0 && (
-            <select className="select viewer-select" aria-label={t('anim.rig')} value={rig ?? ''} onChange={(e) => void pickRig(e.target.value)}>
+            <select className="select viewer-select" aria-label={t('anim.rig')} value={rig ?? ''} onChange={(e) => void chooseRig(e.target.value)}>
               {!rig && <option value="">{t('anim.pickRig')}</option>}
               {rigs.map((p) => (
                 <option key={p} value={p}>

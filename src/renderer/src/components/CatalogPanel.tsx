@@ -215,8 +215,8 @@ export function StatsLine({ stats, short = false }: { stats: StatsSummary; short
       <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>
       {stats.width ? (
         <span>{`${stats.width}×${stats.height}`}</span>
-      ) : stats.duration !== undefined ? (
-        <span>{formatDuration(stats.duration)}</span>
+      ) : stats.duration !== undefined || stats.clipLength !== undefined ? (
+        <span>{formatDuration(stats.duration ?? stats.clipLength ?? 0)}</span>
       ) : stats.textureCount !== undefined ? (
         <span>{t('ranking.textures', { count: stats.textureCount })}</span>
       ) : (

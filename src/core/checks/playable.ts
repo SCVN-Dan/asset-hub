@@ -51,6 +51,8 @@ export interface StatsSummary {
   height?: number
   /** For an audio clip: its length in seconds (no triangles); `fileBytes` is then its estimated size in a build. */
   duration?: number
+  /** For an animation clip: its length in seconds (no triangles). */
+  clipLength?: number
   /** For a material: how many textures it uses (no triangles). */
   textureCount?: number
   /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
@@ -124,7 +126,7 @@ export function rankForPlayable<T>(
             ? [summaryIssues(s).length, size, -usedOf(item)]
             : mode === 'smallest'
               ? [size, s.triangles]
-              : [s.width || s.textureCount !== undefined || s.duration !== undefined ? 1 : 0, s.triangles, size] // textures, materials and audio (no triangles) after models
+              : [s.width || s.textureCount !== undefined || s.duration !== undefined || s.clipLength !== undefined ? 1 : 0, s.triangles, size] // textures, materials, audio and clips (no triangles) after models
     return { item, index, keys: [-matchOf(item), ...keys] }
   })
   keyed.sort((a, b) => {

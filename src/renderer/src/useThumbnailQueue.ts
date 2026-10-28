@@ -6,10 +6,11 @@ import { renderImageThumbnail } from './viewer/imageThumb'
 import { renderMaterialThumbnail } from './viewer/materialThumb'
 import { renderAudioThumbnail } from './viewer/audio'
 import { renderPrefabThumbnail } from './viewer/prefabThumb'
+import { renderAnimThumbnail } from './viewer/animThumb'
 
-export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab'
+export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab' | 'animation'
 
-const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail }
+const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail, animation: renderAnimThumbnail }
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */

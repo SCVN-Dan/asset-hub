@@ -298,6 +298,11 @@ export class FbxViewer {
     action.reset().play()
   }
 
+  /** Moves what is playing to `seconds` (for a still pose). */
+  poseAt(seconds: number): void {
+    this.mixer?.setTime(seconds)
+  }
+
   /** Pauses or resumes whatever is playing. */
   setPaused(paused: boolean): void {
     if (this.mixer) this.mixer.timeScale = paused ? 0 : 1

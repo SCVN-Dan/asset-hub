@@ -562,7 +562,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onLoading={onViewerLoading}
         />
       ) : live && repoPath && handler?.preview.kind === 'animation' ? (
-        <AnimViewer key={repoPath} live={live} path={repoPath} report={report} onInfo={setAnimInfo} onLoading={onViewerLoading} />
+        <AnimViewer key={repoPath} live={live} path={repoPath} report={report} onInfo={setAnimInfo} onThumb={(url) => onThumb(asset.sha, url)} onLoading={onViewerLoading} />
       ) : live && repoPath && handler?.preview.kind === 'material' ? (
         <MaterialViewer
           key={repoPath}

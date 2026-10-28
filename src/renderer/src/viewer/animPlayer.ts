@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
+import { clone as cloneWithBones } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { modelImportScale, sampleCurve, type AnimClipInfo } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
@@ -22,11 +23,33 @@ export interface Rig {
   bytes: number
 }
 
-export async function loadRig(live: LiveContext, path: string): Promise<Rig> {
+/** The last few rigs parsed: clips of one character share it, so each FBX is read once. */
+const rigs = new Map<string, Promise<Rig>>()
+const RIG_CACHE = 4
+
+/** A rig to show: a copy of the parsed model (a viewer disposes what it shows). */
+export function loadRig(live: LiveContext, path: string, background = false): Promise<Rig> {
+  const key = `${live.repo}@${live.branch}:${path}`
+  let parsed = rigs.get(key)
+  if (!parsed) {
+    parsed = parseRig(live, path, background)
+    rigs.set(key, parsed)
+    parsed.catch(() => rigs.delete(key))
+    if (rigs.size > RIG_CACHE) rigs.delete(rigs.keys().next().value!)
+  }
+  return parsed.then((r) => {
+    const root = cloneWithBones(r.root) as THREE.Group
+    root.name = ROOT
+    return { ...r, root }
+  })
+}
+
+async function parseRig(live: LiveContext, path: string, background: boolean): Promise<Rig> {
   const [bytes, meta] = await Promise.all([
-    window.api.assets.readFile(live.repo, live.branch, path).then(unwrap),
-    window.api.assets.readFile(live.repo, live.branch, `${path}.meta`).then((r) => (r.ok ? new TextDecoder().decode(r.data) : ''))
+    window.api.assets.readFile(live.repo, live.branch, path, background).then(unwrap),
+    window.api.assets.readFile(live.repo, live.branch, `${path}.meta`, background).then((r) => (r.ok ? new TextDecoder().decode(r.data) : ''))
   ])
+  if (bytes.byteLength > MAX_RIG_BYTES) throw new Error(`${path} is too large to try as a rig`)
   const manager = new THREE.LoadingManager()
   manager.setURLModifier(() => TRANSPARENT_PNG)
   const root = new FBXLoader(manager).parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')
@@ -88,4 +111,39 @@ export function toThreeClip(info: AnimClipInfo, rig: Rig): THREE.AnimationClip {
     }
   }
   return new THREE.AnimationClip(info.name || 'clip', info.length || -1, tracks)
+}
+
+/** Where in a clip its thumbnail pose is taken (share of its length): past the wind-up, into the motion. */
+export const THUMB_POSE = 0.4
+
+/** Rigs tried automatically before giving up (each is a download). */
+export const AUTO_TRIES = 4
+/**
+ * A rig with this share of the clip's objects is taken without trying more:
+ * the first candidates are the likeliest models; a generic rig further down
+ * may match more bones yet be the wrong character.
+ */
+const GOOD_ENOUGH = 0.5
+
+/** The first likely model whose rig has most of the clip's objects; the coverage of every rig tried. */
+export async function pickRig(
+  live: LiveContext,
+  info: AnimClipInfo,
+  candidates: readonly string[],
+  options: { tries?: number; background?: boolean; isCancelled?(): boolean; onTried?(path: string, coverage: number): void } = {}
+): Promise<{ rig: Rig; coverage: number } | undefined> {
+  let best: { rig: Rig; coverage: number } | undefined
+  for (const p of candidates.slice(0, options.tries ?? AUTO_TRIES)) {
+    if (options.isCancelled?.()) return undefined
+    try {
+      const rig = await loadRig(live, p, options.background)
+      const coverage = rigCoverage(info, rig.root)
+      options.onTried?.(p, coverage)
+      if (!best || coverage > best.coverage) best = { rig, coverage }
+      if (coverage >= GOOD_ENOUGH) break
+    } catch {
+      options.onTried?.(p, 0)
+    }
+  }
+  return best && best.coverage > 0 ? best : undefined
 }
