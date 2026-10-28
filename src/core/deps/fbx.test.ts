@@ -158,4 +158,24 @@ describe('resolveFbxDependencies', () => {
     ])
     expect(report.warnings.sort()).toEqual(['missingTexture', 'textureByName'])
   })
+
+  it('suggests .mat files next to an FBX that has no materials, without adding them to the export', async () => {
+    const fbx = new TextEncoder().encode('Kaydara FBX Binary')
+    const ctx = ctxFor(
+      {
+        'proj/Assets/Fish/Fish.fbx.meta': fbxMetaB,
+        'proj/Assets/Fish/M_Fish_red.mat': mat(URP_LIT),
+        'proj/Assets/Fish/M_Fish_red.mat.meta': `guid: ${G(20)}\n`,
+        'proj/Assets/Other/M_Car.mat': mat(URP_LIT),
+        'proj/Assets/Other/M_Car.mat.meta': `guid: ${G(21)}\n`
+      },
+      { [G(3)]: 'proj/Assets/Fish/T_Fish.png' },
+      { 'proj/Assets/Fish/Fish.fbx': fbx }
+    )
+    const report = await resolveFbxDependencies('proj/Assets/Fish/Fish.fbx', ctx)
+    expect(report.suggested.map((s) => s.material.path)).toEqual(['proj/Assets/Fish/M_Fish_red.mat'])
+    expect(report.suggested[0].material.textures[0]).toMatchObject({ prop: '_BaseMap', path: 'proj/Assets/Fish/T_Fish.png' })
+    expect(report.suggested[0].files).toContain('proj/Assets/Fish/M_Fish_red.mat.meta')
+    expect(report.files).not.toContain('proj/Assets/Fish/M_Fish_red.mat')
+  })
 })

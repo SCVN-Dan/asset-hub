@@ -37,6 +37,8 @@ button { cursor: pointer; }
 .btn-primary:hover { background: #3a7af0; }
 .btn-lg { height: 44px; font-size: 15px; }
 .icon-btn { width: 40px; padding: 0; }
+.btn-small { height: 26px; padding: 0 10px; font-size: 12px; }
+.btn-small[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:disabled:hover { background: transparent; }
 .device-code { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 16px; border-radius: 10px; background: var(--bg); border: 1px solid var(--accent); }

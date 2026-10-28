@@ -189,7 +189,10 @@
       "customShader": "Uses a custom shader from the project; it may not exist in the target project.",
       "noMeta": "This FBX has no .meta file, so its import settings and GUID are unknown.",
       "noMaterials": "Material import is turned off for this FBX."
-    }
+    },
+    "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
+    "suggestedUse": "Use",
+    "suggestedOn": "Using ✓"
   },
   "export": {
     "title": "Export",

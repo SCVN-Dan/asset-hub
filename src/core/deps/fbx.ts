@@ -1,6 +1,6 @@
 import { baseName, dirName } from '../registry'
 import type { TreeEntry } from '../types'
-import { BUILTIN_SHADER_GUIDS, extractFbxTextureNames, KNOWN_PACKAGE_SHADERS, parseFbxMeta, parseMaterial } from '../unity/yaml'
+import { BUILTIN_SHADER_GUIDS, extractFbxTextureNames, KNOWN_PACKAGE_SHADERS, metaGuid, parseFbxMeta, parseMaterial } from '../unity/yaml'
 import type { DependencyReport, DependencyWarning, MaterialRef, ShaderRef, TextureRef } from './types'
 
 /** What a resolver may ask of the branch it is resolving in. All paths are repo paths. */
@@ -14,6 +14,8 @@ export interface DepContext {
   readTexts(paths: readonly string[]): Promise<Map<string, string>>
   readBytes(path: string): Promise<Uint8Array>
 }
+
+const MAX_SUGGESTED = 8
 
 const entrySize = (e: TreeEntry | undefined) => (e ? (e.lfs ? (e.lfsSize ?? e.size) : e.size) : undefined)
 
@@ -136,5 +138,24 @@ export async function resolveFbxDependencies(fbxPath: string, ctx: DepContext): 
     }
   }
 
-  return { kind, materials, embeddedTextures, warnings: [...warnings], files: [...files] }
+  // No materials of its own: offer .mat files placed next to it (same folder or a Materials/ folder beside it).
+  const suggested: DependencyReport['suggested'] = []
+  if (!materials.length) {
+    const dir = dirName(fbxPath)
+    const parent = dirName(dir)
+    const near = [...ctx.byPath.keys()].filter((p) => {
+      if (!p.endsWith('.mat')) return false
+      const d = dirName(p)
+      return d === dir || d === `${dir}/Materials` || d === `${parent}/Materials`
+    })
+    const metas = await ctx.readTexts(near.slice(0, MAX_SUGGESTED).map((p) => `${p}.meta`))
+    for (const p of near.slice(0, MAX_SUGGESTED)) {
+      const guid = metaGuid(metas.get(`${p}.meta`) ?? '')
+      if (!guid) continue
+      const d = await describeMaterials([{ guid, name: baseName(p).replace(/\.mat$/, '') }], { ...ctx, pathForGuid: (g) => (g === guid ? p : ctx.pathForGuid(g)) })
+      if (d.materials[0] && !d.materials[0].missing) suggested.push({ material: d.materials[0], files: d.files })
+    }
+  }
+
+  return { kind, materials, embeddedTextures, suggested, warnings: [...warnings], files: [...files] }
 }

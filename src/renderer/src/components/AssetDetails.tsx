@@ -86,6 +86,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
   const [prefab, setPrefab] = useState<PrefabSearch>({ status: 'idle' })
+  /** A suggested .mat (next to the FBX) the user chose to try. */
+  const [picked, setPicked] = useState<{ material: MaterialRef; files: string[] }>()
   const [prefabProgress, setPrefabProgress] = useState<{ done: number; total: number }>()
   const repoPath = asset && live ? live.root + asset.path : undefined
 
@@ -97,6 +99,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     setCopied(false)
     setProgress(undefined)
     setPrefab({ status: 'idle' })
+    setPicked(undefined)
     if (!live || !repoPath || !handler?.resolveDependencies) {
       setDeps({ status: 'idle' })
       return
@@ -137,7 +140,13 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
   const report = deps.status === 'ready' ? deps.report : undefined
   const prefabResult = prefab.status === 'ready' ? prefab.result : undefined
-  const prefabMaterial = prefabResult?.prefabs[0]?.materials.find((m) => !m.missing)
+  const prefabMaterial = prefabResult?.prefabs[0]?.materials.find((m) => !m.missing) ?? picked?.material
+  const suggestions = !prefabResult?.prefabs.length ? (report?.suggested ?? []) : []
+
+  const pick = (s: { material: MaterialRef; files: string[] } | undefined) => {
+    setPicked(s)
+    if (repoPath) onPrefabFiles(repoPath, s?.files ?? [])
+  }
 
   const searchPrefabs = async (scope: 'near' | 'all') => {
     if (!live || !repoPath) return
@@ -293,6 +302,35 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
                   </li>
                 )}
               </ul>
+              {suggestions.length > 0 && (
+                <div className="section" style={{ marginTop: 4 }}>
+                  <p className="note">{t('deps.suggestedHint')}</p>
+                  <ul className="dep-list">
+                    {suggestions.map((s) => (
+                      <li key={s.material.path}>
+                        <div className="dep-row" title={s.material.path}>
+                          <Dot tone="info" />
+                          <span className="dep-type">MAT</span>
+                          <span className="dep-name">{s.material.name}</span>
+                          <button
+                            type="button"
+                            className="btn btn-small"
+                            aria-pressed={picked?.material.path === s.material.path}
+                            onClick={() => pick(picked?.material.path === s.material.path ? undefined : s)}
+                          >
+                            {picked?.material.path === s.material.path ? t('deps.suggestedOn') : t('deps.suggestedUse')}
+                          </button>
+                        </div>
+                        <ul className="dep-indent">
+                          {s.material.textures.map((tex) => (
+                            <TextureRow key={`${tex.prop}:${tex.guid}`} tex={tex} />
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <p className="muted small" style={{ margin: 0 }}>
                 {t('deps.files', { count: report.files.length })}
               </p>

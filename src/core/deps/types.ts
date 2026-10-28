@@ -66,6 +66,11 @@ export interface DependencyReport {
   /** Textures referenced by name inside the FBX itself. */
   embeddedTextures: TextureRef[]
   warnings: DependencyWarning[]
+  /**
+   * .mat files next to an FBX that has no materials of its own — a guess, since
+   * nothing references them. Not part of `files` unless the user picks one.
+   */
+  suggested: Array<{ material: MaterialRef; files: string[] }>
   /** Every repo path that an import would copy (assets and their .meta files). */
   files: string[]
 }

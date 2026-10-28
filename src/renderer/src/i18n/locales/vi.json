@@ -183,7 +183,10 @@
       "customShader": "Dùng shader custom của project; project đích có thể không có shader này.",
       "noMeta": "FBX này không có file .meta nên không rõ import settings và GUID.",
       "noMaterials": "FBX này tắt import material."
-    }
+    },
+    "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
+    "suggestedUse": "Dùng",
+    "suggestedOn": "Đang dùng ✓"
   },
   "export": {
     "title": "Xuất",
