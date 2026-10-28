@@ -24,7 +24,7 @@
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
-| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | 🔄 đang làm |
+| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn preset ngân sách, dung lượng gồm dependency) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
 | C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | ⏳ |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
@@ -153,13 +153,13 @@ Mục tiêu: tìm ra 20 model "boat" thì biết ngay cái nào **đáng dùng l
 
 | Việc | State |
 |---|---|
-| Lưu thông số model theo SHA khi render thumbnail nền hoặc mở viewer (tris, vertices, bones, clips, material, texture, dung lượng) — dùng chung mọi branch | ⏳ |
-| Huy hiệu trên card: `2.1k tris · 1.2 MB` + ✓ vừa ngân sách / ⚠ vượt | ⏳ |
-| Sắp xếp: phù hợp playable nhất, nhẹ nhất, ít tris nhất, nhiều playable dùng nhất (số branch/repo từ catalog) | ⏳ |
-| Lọc "chỉ asset vừa ngân sách playable" | ⏳ |
-| Dung lượng gồm cả dependency (texture, material) khi đã resolve | ⏳ |
-| Nút "Mở trên GitHub" cho file đang xem | ⏳ |
-| Xuất `.unitypackage` ngay từ kết quả Mọi branch / Mọi repo (không phải chuyển branch) | ⏳ |
+| Lưu thông số model theo SHA khi render thumbnail nền hoặc mở viewer (tris, vertices, bones, clips, material, texture, dung lượng) — dùng chung mọi branch (`stats.json`) | ✅ |
+| Huy hiệu trên card: ✓ / ⚠ N + số tris; panel có dung lượng, bones; rê chuột xem lý do vượt | ✅ |
+| Sắp xếp: khớp nhất, hợp playable nhất, nhẹ nhất, ít tris nhất, dùng nhiều nhất — luôn giữ mức khớp tìm kiếm trước (tên > nhóm từ > thư mục > sửa chính tả); nút "Đo N kết quả" (75 kết quả fish: 44 s) | ✅ |
+| Lọc "chỉ asset vừa ngân sách playable" | ✅ |
+| Dung lượng gồm cả dependency (texture của .mat) — hiện đo đủ khi mở model; thumbnail chỉ tính texture nêu trong FBX | 🟡 |
+| Nút "Mở trên GitHub" cho file đang xem | ✅ |
+| Xuất `.unitypackage` ngay từ kết quả Mọi branch / Mọi repo (không phải chuyển branch) | ✅ |
 | Preset ngân sách theo network quảng cáo (vd. 5 MB / 2 MB) thay cho một bộ số mặc định | ⏳ |
 
 ## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
@@ -256,6 +256,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | **Phase 4.6 xong (phần chính)**: thông số model lưu theo SHA khi tạo thumbnail / mở model; card có ✓/⚠ + tris; sắp xếp Hợp playable nhất / Nhẹ nhất / Ít tris / Dùng nhiều nhất (giữ mức khớp tìm kiếm trước); lọc vừa ngân sách; nút Đo N kết quả; Mở trên GitHub; xuất gói ngay từ kết quả Mọi branch. Kịch bản demo: tìm "fish" trên 104 branch → đo 75 kết quả 44 s → chọn → xuất 1 click. |
 | 2026-10-28 | Ghi nhận góp ý: thêm **Phase 4.6 Playable-aware ranking** (làm tiếp), Phase 6 đổi thành **Thêm loại asset** (Texture ưu tiên 1, Material, Audio, Sprite/UI, Prefab tĩnh, Animation clip), mục "Ý đã cân nhắc nhưng không làm". |
 | 2026-10-28 | **Mở file nhanh, tải từng phần**: đo bằng `ASSETHUB_TRACE=1` → chậm do phải dựng chỉ mục GUID cả branch (31–186 s) trước khi trả dependency. Giờ: (1) hiện ngay những gì đã biết (~2–4 s), dòng chưa rõ ghi "đang kiểm tra…"; (2) tra GUID theo nhu cầu qua GraphQL — đoán theo tên material trước, rồi thư mục gần nhất, theo loại file (.mat / texture / shader), song song; (3) chỉ mục đầy đủ dựng nền ngay khi mở branch. Lần đầu tuyệt đối (cache trống): 186 s → hiện sau 3,8 s, đủ sau 18 s; branch đã học: ~2 s. Prefab không tự tải nữa: chỉ báo "dùng trong N prefab đã biết" + nút tải. Thumbnail đọc file ở chế độ nền (nhường file đang mở). |
 | 2026-10-28 | **Phase 4.5 xong**: tìm trên Mọi branch / Mọi repo. Chỉ mục nền gộp theo SHA; 104 branch của xp_hero: 6.947 FBX trong 200 s lần đầu, ~3 s các lần sau. Cây quá lớn (truncated) tải gộp nhiều commit trong 1 lần git, dùng repo cache riêng để không chặn việc đang xem. Ưu tiên tải thứ đang chọn: quét nền + thumbnail tạm dừng khi model đang mở còn tải; thumbnail render từ trên xuống theo lưới (cả kết quả ở branch khác); lọc theo repo / branch; "Cũng có ở N branch khác" + bấm để mở. Đóng gói `.dmg` dời về Phase 10 (cuối). |

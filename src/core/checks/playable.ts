@@ -26,15 +26,102 @@ export const PLAYABLE_BUDGET = {
 }
 
 export function checkPlayableBudget(stats: ModelStats, budget = PLAYABLE_BUDGET): BudgetIssue[] {
+  return summaryIssues(summarizeStats(stats, 'viewer'), budget)
+}
+
+/**
+ * What is kept per model (by content SHA) so search results can be ranked
+ * without opening them. Measured when a thumbnail renders or the model opens.
+ */
+export interface StatsSummary {
+  triangles: number
+  vertices: number
+  bones: number
+  clips: number
+  materials: number
+  fileBytes: number
+  textureBytes: number
+  /** Largest texture side in pixels. */
+  maxTextureSize: number
+  /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
+  source: 'thumb' | 'viewer'
+}
+
+export function summarizeStats(stats: ModelStats, source: StatsSummary['source']): StatsSummary {
+  return {
+    triangles: stats.triangles,
+    vertices: stats.vertices,
+    bones: stats.bones,
+    clips: stats.animations.length,
+    materials: stats.materials,
+    fileBytes: stats.fileBytes,
+    textureBytes: stats.textures.reduce((s, t) => s + t.bytes, 0),
+    maxTextureSize: Math.max(0, ...stats.textures.map((t) => Math.max(t.width ?? 0, t.height ?? 0))),
+    source
+  }
+}
+
+export function summaryIssues(s: StatsSummary, budget = PLAYABLE_BUDGET): BudgetIssue[] {
   const issues: BudgetIssue[] = []
-  if (stats.triangles > budget.triangles) issues.push({ key: 'triangles', value: stats.triangles, limit: budget.triangles })
-  const largest = Math.max(0, ...stats.textures.map((t) => Math.max(t.width ?? 0, t.height ?? 0)))
-  if (largest > budget.textureSize) issues.push({ key: 'textureSize', value: largest, limit: budget.textureSize })
-  const texBytes = stats.textures.reduce((s, t) => s + t.bytes, 0)
-  if (texBytes > budget.textureBytes) issues.push({ key: 'textureBytes', value: texBytes, limit: budget.textureBytes })
-  if (stats.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: stats.fileBytes, limit: budget.fileBytes })
-  if (stats.bones > budget.bones) issues.push({ key: 'bones', value: stats.bones, limit: budget.bones })
+  if (s.triangles > budget.triangles) issues.push({ key: 'triangles', value: s.triangles, limit: budget.triangles })
+  if (s.maxTextureSize > budget.textureSize) issues.push({ key: 'textureSize', value: s.maxTextureSize, limit: budget.textureSize })
+  if (s.textureBytes > budget.textureBytes) issues.push({ key: 'textureBytes', value: s.textureBytes, limit: budget.textureBytes })
+  if (s.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: s.fileBytes, limit: budget.fileBytes })
+  if (s.bones > budget.bones) issues.push({ key: 'bones', value: s.bones, limit: budget.bones })
   return issues
+}
+
+/** Checks a summary read back from disk or IPC. */
+export function isStatsSummary(v: unknown): v is StatsSummary {
+  const s = v as Record<string, unknown> | null
+  return (
+    !!s &&
+    ['triangles', 'vertices', 'bones', 'clips', 'materials', 'fileBytes', 'textureBytes', 'maxTextureSize'].every((k) => typeof s[k] === 'number' && Number.isFinite(s[k] as number) && (s[k] as number) >= 0) &&
+    (s.source === 'thumb' || s.source === 'viewer')
+  )
+}
+
+/** How a result list is ordered. `relevance` keeps the search order. */
+export type SortMode = 'relevance' | 'playable' | 'smallest' | 'triangles' | 'used'
+
+/**
+ * Orders results for reuse in playables. Models not measured yet keep their
+ * relative order after the measured ones (`used` needs no measurements).
+ */
+export function rankForPlayable<T>(
+  items: readonly T[],
+  mode: SortMode,
+  statsOf: (item: T) => StatsSummary | undefined,
+  usedOf: (item: T) => number = () => 0,
+  /** Search match strength: a closer match always ranks above a lighter but looser one. */
+  matchOf: (item: T) => number = () => 0
+): T[] {
+  if (mode === 'relevance') return [...items]
+  const keyed = items.map((item, index) => {
+    const s = statsOf(item)
+    const size = s ? s.fileBytes + s.textureBytes : Infinity
+    const keys: number[] =
+      mode === 'used'
+        ? [-usedOf(item)]
+        : !s
+          ? [Infinity]
+          : mode === 'playable'
+            ? [summaryIssues(s).length, size, -usedOf(item)]
+            : mode === 'smallest'
+              ? [size, s.triangles]
+              : [s.triangles, size]
+    return { item, index, keys: [-matchOf(item), ...keys] }
+  })
+  keyed.sort((a, b) => {
+    for (let i = 0; i < Math.max(a.keys.length, b.keys.length); i++) {
+      const d = (a.keys[i] ?? 0) - (b.keys[i] ?? 0)
+      if (d && !Number.isNaN(d)) return d
+      if (a.keys[i] === Infinity && b.keys[i] !== Infinity) return 1
+      if (b.keys[i] === Infinity && a.keys[i] !== Infinity) return -1
+    }
+    return a.index - b.index
+  })
+  return keyed.map((k) => k.item)
 }
 
 /** Width/height from an image file header (PNG, JPEG, TGA) without decoding it. */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveContext } from './components/ModelViewer'
+import type { StatsSummary } from '@core/checks/playable'
 import { renderThumbnail } from './viewer/backgroundThumb'
 
 const CONCURRENCY = 2
@@ -20,7 +21,7 @@ interface Job {
  * the grid first. Cards that scroll away before their turn are dropped.
  * Nothing new starts while `paused` (the model the user opened is loading).
  */
-export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: string, dataUrl: string) => void, paused = false) {
+export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: string, dataUrl: string, stats?: StatsSummary) => void, paused = false) {
   const queue = useRef<Job[]>([])
   const active = useRef(new Set<string>())
   const failed = useRef(new Map<string, number>())
@@ -41,7 +42,7 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
       if (!ctx) continue
       active.current.add(job.key)
       void renderThumbnail(ctx, job.path)
-        .then((url) => onThumbRef.current(job.key, url))
+        .then(({ url, stats }) => onThumbRef.current(job.key, url, stats))
         .catch(() => failed.current.set(job.key, Date.now()))
         .finally(() => {
           active.current.delete(job.key)

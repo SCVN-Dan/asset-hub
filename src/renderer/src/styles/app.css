@@ -236,3 +236,9 @@ button { cursor: pointer; }
 .chip-more { border-style: dashed; }
 .catalog-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: -6px 0 0; }
 .catalog-filters .select { height: 32px; font-size: 13px; max-width: 280px; }
+.stats-line { display: flex; gap: 6px; align-items: center; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.fit { font-weight: 700; padding: 0 5px; border-radius: 999px; }
+.fit-ok { color: #7fd99a; background: rgba(76, 175, 110, 0.15); }
+.fit-no { color: #f7d9a0; background: var(--warn-bg); }
+.ranking-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: -6px 0 0; }
+.ranking-bar .select { height: 32px; font-size: 13px; }

@@ -29,6 +29,7 @@ import { LangToggle } from '../components/LangToggle'
 import { SearchBox } from '../components/SearchBox'
 import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
+import { rankForPlayable, summaryIssues, type SortMode, type StatsSummary } from '@core/checks/playable'
 
 interface Props {
   source: AssetSource
@@ -113,6 +114,10 @@ export function Browse({
   const nav = useRef<{ repo: string; branch: string; path: string }>()
   const [selectedId, setSelectedId] = useState<string>()
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  /** Model measurements by blob SHA, for ranking. */
+  const [modelStats, setModelStats] = useState<Record<string, StatsSummary>>({})
+  const [sortMode, setSortMode] = useState<SortMode>('relevance')
+  const [onlyFits, setOnlyFits] = useState(false)
   /** Saved thumbnails are known; only then is it worth rendering missing ones. */
   const [thumbsLoaded, setThumbsLoaded] = useState(false)
   const [mergeCopies, setMergeCopies] = useState(true)
@@ -269,7 +274,31 @@ export function Browse({
   const catalogSelected = catalogShown.find((a) => a.sha === catalogSel)
   const inCatalog = scope !== 'branch'
   /** Cards in the grid, whichever view is open. */
-  const gridItems: readonly Asset[] = inCatalog ? catalogShown : shown
+  // Ordered and filtered for reuse in playables (measurements come from thumbnails and opened models).
+  const rankedShown = useMemo(
+    () => rankForPlayable(
+        onlyFits ? shown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha]).length) : shown,
+        sortMode === 'used' ? 'relevance' : sortMode,
+        (a) => modelStats[a.sha],
+        undefined,
+        (a) => found.scores.get(a.id) ?? 0
+      ),
+    [shown, sortMode, onlyFits, modelStats, found]
+  )
+  const rankedCatalog = useMemo(
+    () =>
+      rankForPlayable(
+        onlyFits ? catalogShown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha]).length) : catalogShown,
+        sortMode,
+        (a) => modelStats[a.sha],
+        (a) => a.branchCount,
+        (a) => catalogFound.scores.get(a.id) ?? 0
+      ),
+    [catalogShown, sortMode, onlyFits, modelStats, catalogFound]
+  )
+  const gridItems: readonly Asset[] = inCatalog ? rankedCatalog : rankedShown
+  const measuredCount = (inCatalog ? catalogShown : shown).filter((a) => modelStats[a.sha]).length
+  const unmeasured = (inCatalog ? catalogShown : shown).filter((a) => !modelStats[a.sha])
   const gridSelected = inCatalog ? catalogSel : selectedId
   const setGridSelected = inCatalog ? setCatalogSel : setSelectedId
   const searchFound = inCatalog ? catalogFound : found
@@ -279,6 +308,7 @@ export function Browse({
     if (!catalog.assets?.length) return
     let cancelled = false
     void window.api.thumbs.get(catalog.assets.slice(0, 5000).map((a) => a.sha)).then((more) => !cancelled && setThumbs((prev) => ({ ...more, ...prev })))
+    void window.api.stats.get(catalog.assets.map((a) => a.sha)).then((more) => !cancelled && setModelStats((prev) => ({ ...more, ...prev })))
     return () => {
       cancelled = true
     }
@@ -294,6 +324,50 @@ export function Browse({
     setQuery('')
     setTypeFilter(ALL)
     setSelectedId(repoPath.slice(projectRoot.length))
+  }
+
+  /** Where to read a result from for its thumbnail: the filtered repo / branch when set, else its main location. */
+  const catalogSource = (a: CatalogAsset) => {
+    const at = a.locations.find((l) => !catalogRepo || l.repo === catalogRepo) ?? a.locations[0]
+    const atBranch = catalogBranch && at.branches.includes(catalogBranch) ? catalogBranch : at.branches[0]
+    return { path: at.path, ctx: { repo: at.repo, branch: atBranch, root: projectRootOf(at.path) } }
+  }
+  const canRender = (a: Asset) => registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
+
+  /** Renders (and so measures) every listed model not measured yet, top of the list first. */
+  const measureAll = () => {
+    unmeasured.forEach((a, i) => {
+      if (!canRender(a)) return
+      if (inCatalog) {
+        const src = catalogSource(a as CatalogAsset)
+        thumbQueue.request(a.sha, src.path, 10_000 + i, src.ctx)
+      } else thumbQueue.request(a.sha, root + a.path, 10_000 + i)
+    })
+  }
+
+  /** Exports a result from another branch / repo as it is on its main branch, without opening that branch. */
+  const exportFromCatalog = async (a: CatalogAsset) => {
+    const at = a.locations[0]
+    setExportState({ status: 'running' })
+    const thumb = thumbs[a.sha]
+    const png = thumb ? await thumbToPng(thumb) : undefined
+    try {
+      const result = unwrap(
+        await window.api.exporter.unityPackage({
+          repo: at.repo,
+          branch: at.branches[0],
+          root: projectRootOf(at.path),
+          paths: [at.path],
+          ...exportOptions,
+          extraFiles: [],
+          previews: png ? { [at.path]: png } : {},
+          suggestedName: a.name.replace(/\.[^.]+$/, '')
+        })
+      )
+      setExportState(result.canceled ? { status: 'idle' } : { status: 'done', result })
+    } catch (error) {
+      setExportState({ status: 'error', error })
+    }
   }
 
   /** Opens a file found in another branch or repo there, in the normal branch view. */
@@ -357,14 +431,14 @@ export function Browse({
     setThumbsLoaded(false)
     if (source.isDemo || !allAssets.length) return
     let cancelled = false
-    void window.api.thumbs.get(allAssets.map((a) => a.sha)).then(
-      (found) => {
-        if (cancelled) return
-        setThumbs(found)
-        setThumbsLoaded(true)
-      },
-      () => !cancelled && setThumbsLoaded(true)
-    )
+    const keys = allAssets.map((a) => a.sha)
+    // Both known before rendering starts, so nothing is rendered or measured twice.
+    void Promise.all([window.api.thumbs.get(keys).catch(() => ({})), window.api.stats.get(keys).catch(() => ({}))]).then(([found, measured]) => {
+      if (cancelled) return
+      setThumbs(found)
+      setModelStats((prev) => ({ ...prev, ...measured }))
+      setThumbsLoaded(true)
+    })
     return () => {
       cancelled = true
     }
@@ -396,9 +470,15 @@ export function Browse({
     setPack((items) => items.map((i) => (i.path === path ? { ...i, report } : i)))
   }
 
-  const saveThumb = (key: string, dataUrl: string) => {
+  const saveStats = (key: string, summary: StatsSummary) => {
+    // A thumbnail's measurement never replaces one taken in the viewer (which counts every texture).
+    setModelStats((prev) => (summary.source === 'thumb' && prev[key]?.source === 'viewer' ? prev : { ...prev, [key]: summary }))
+    void window.api.stats.save(key, summary)
+  }
+  const saveThumb = (key: string, dataUrl: string, summary?: StatsSummary) => {
     setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
     void window.api.thumbs.save(key, dataUrl)
+    if (summary) saveStats(key, summary)
   }
   /** The opened model is loading: thumbnails wait so it gets the bandwidth. */
   const [viewerLoading, setViewerLoading] = useState(false)
@@ -521,13 +601,38 @@ export function Browse({
             <h1>{inCatalog ? t(`catalog.title.${scope}`, { repo: repo.split('/').pop() }) : folder || t('browse.allFolders')}</h1>
             <span className="muted small">
               {inCatalog
-                ? t('browse.assetCount', { count: catalogShown.length })
+                ? t('browse.assetCount', { count: rankedCatalog.length })
                 : <>
-                    {t('browse.assetCount', { count: shown.length })}
+                    {t('browse.assetCount', { count: rankedShown.length })}
                     {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
                   </>}
             </span>
           </div>
+          {(inCatalog ? catalogShown.length : shown.length) > 0 && (
+            <div className="ranking-bar">
+              <select className="select" aria-label={t('ranking.sort')} value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
+                {(['relevance', 'playable', 'smallest', 'triangles', ...(inCatalog ? (['used'] as const) : [])] as const).map((m) => (
+                  <option key={m} value={m}>
+                    {t(`ranking.sorts.${m}`)}
+                  </option>
+                ))}
+              </select>
+              <label className="check small">
+                <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
+                {t('ranking.onlyFits')}
+              </label>
+              {(sortMode !== 'relevance' || onlyFits) && (
+                <>
+                  <span className="muted small">{t('ranking.measured', { done: measuredCount, total: inCatalog ? catalogShown.length : shown.length })}</span>
+                  {unmeasured.some(canRender) && (
+                    <button type="button" className="btn btn-small" onClick={measureAll}>
+                      {t('ranking.measure', { count: unmeasured.filter(canRender).length })}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {inCatalog && catalog.assets && (
             <div className="catalog-filters">
               {scope === 'all' && (
@@ -571,7 +676,7 @@ export function Browse({
           {inCatalog && catalogShown.length > 0 && (
             <>
               <div className="grid">
-                {catalogShown.slice(0, limit).map((a, i) => (
+                {rankedCatalog.slice(0, limit).map((a, i) => (
                   <AssetCard
                     key={a.id}
                     asset={a}
@@ -581,21 +686,21 @@ export function Browse({
                     onSelect={() => setCatalogSel(a.sha)}
                     note={locationNote(a, scope, t)}
                     generating={thumbQueue.busy.has(a.sha)}
+                    stats={modelStats[a.sha]}
                     onVisible={
-                      thumbsLoaded && registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
+                      thumbsLoaded && canRender(a)
                         ? (on) => {
                             if (!on) return thumbQueue.cancel(a.sha)
-                            if (thumbs[a.sha]) return
-                            const at = a.locations.find((l) => !catalogRepo || l.repo === catalogRepo) ?? a.locations[0]
-                            const ctx = { repo: at.repo, branch: catalogBranch && at.branches.includes(catalogBranch) ? catalogBranch : at.branches[0], root: projectRootOf(at.path) }
-                            thumbQueue.request(a.sha, at.path, i, ctx)
+                            if (thumbs[a.sha] && modelStats[a.sha]) return
+                            const src = catalogSource(a)
+                            thumbQueue.request(a.sha, src.path, i, src.ctx)
                           }
                         : undefined
                     }
                   />
                 ))}
               </div>
-              {limit < catalogShown.length && <div ref={sentinel} className="grid-sentinel" />}
+              {limit < rankedCatalog.length && <div ref={sentinel} className="grid-sentinel" />}
             </>
           )}
           {repos.status === 'error' && <ErrorNote error={repos.error} />}
@@ -629,7 +734,7 @@ export function Browse({
           {!inCatalog && tree.status === 'ready' && shown.length > 0 && (
             <>
               <div className="grid">
-                {shown.slice(0, limit).map((a, i) => (
+                {rankedShown.slice(0, limit).map((a, i) => (
                   <AssetCard
                     key={a.id}
                     asset={a}
@@ -639,25 +744,34 @@ export function Browse({
                     copies={mergeCopies ? copiesBySha.get(a.sha)?.length : undefined}
                     selected={a.id === selectedId || (!!selected && mergeCopies && selected.sha === a.sha)}
                     onSelect={() => setSelectedId(a.id)}
+                    stats={modelStats[a.sha]}
                     onVisible={
-                      live && thumbsLoaded && registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
-                        ? (on) => (on ? !thumbs[a.sha] && thumbQueue.request(a.sha, root + a.path, i) : thumbQueue.cancel(a.sha))
+                      live && thumbsLoaded && canRender(a)
+                        ? (on) => (on ? (!thumbs[a.sha] || !modelStats[a.sha]) && thumbQueue.request(a.sha, root + a.path, i) : thumbQueue.cancel(a.sha))
                         : undefined
                     }
                   />
                 ))}
               </div>
-              {limit < shown.length && <div ref={sentinel} className="grid-sentinel" />}
+              {limit < rankedShown.length && <div ref={sentinel} className="grid-sentinel" />}
             </>
           )}
         </main>
 
         {inCatalog ? (
-          <CatalogDetails asset={catalogSelected} thumb={catalogSelected && thumbs[catalogSelected.sha]} onOpen={openLocation} />
+          <CatalogDetails
+            asset={catalogSelected}
+            thumb={catalogSelected && thumbs[catalogSelected.sha]}
+            stats={catalogSelected && modelStats[catalogSelected.sha]}
+            exporting={exportState.status === 'running'}
+            onOpen={openLocation}
+            onExport={(a) => void exportFromCatalog(a)}
+          />
         ) : (
         <AssetDetails
           onOpenLocation={openLocation}
           onViewerLoading={setViewerLoading}
+          onModelStats={saveStats}
           asset={selected}
           handler={selected && registry.get(selected.type)}
           live={live}

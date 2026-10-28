@@ -1,5 +1,6 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
+import { isStatsSummary, type StatsSummary } from '@core/checks/playable'
 import type { BlobCache, CommitCache } from '@core/github/source'
 
 const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_')
@@ -87,5 +88,45 @@ export class ThumbnailStore {
   async save(key: string, dataUrl: string): Promise<void> {
     if (!/^data:image\/(png|webp|jpeg);base64,/.test(dataUrl) || dataUrl.length > 2_000_000) return
     await writeAtomic(this.file(key), dataUrl)
+  }
+}
+
+/** Model measurements by content SHA, in one small JSON file (`<cacheDir>/stats.json`). */
+export class StatsStore {
+  private data?: Promise<Record<string, StatsSummary>>
+  private timer?: NodeJS.Timeout
+
+  constructor(private readonly cacheDir: () => string) {}
+
+  private file(): string {
+    return join(this.cacheDir(), 'stats.json')
+  }
+
+  private load(): Promise<Record<string, StatsSummary>> {
+    this.data ??= readFile(this.file(), 'utf8').then(
+      (text) => {
+        const raw = JSON.parse(text) as Record<string, unknown>
+        return Object.fromEntries(Object.entries(raw).filter((e): e is [string, StatsSummary] => isStatsSummary(e[1])))
+      },
+      () => ({})
+    )
+    return this.data
+  }
+
+  async getMany(keys: readonly string[]): Promise<Record<string, StatsSummary>> {
+    const all = await this.load()
+    const out: Record<string, StatsSummary> = {}
+    for (const k of keys) if (all[k]) out[k] = all[k]
+    return out
+  }
+
+  async save(key: string, summary: unknown): Promise<void> {
+    if (!isStatsSummary(summary)) return
+    const all = await this.load()
+    // A thumbnail only sees textures named in the FBX: never replace a full measurement with it.
+    if (summary.source === 'thumb' && all[key]?.source === 'viewer') return
+    all[key] = summary
+    clearTimeout(this.timer)
+    this.timer = setTimeout(() => void writeAtomic(this.file(), JSON.stringify(all)).catch(() => {}), 1000)
   }
 }

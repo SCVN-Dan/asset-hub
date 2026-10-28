@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type AssetTypeHandler } from '@core/index'
+import type { StatsSummary } from '@core/checks/playable'
+import { StatsLine } from './CatalogPanel'
 import { CubeIcon } from './Icons'
 
 interface Props {
@@ -18,9 +20,11 @@ interface Props {
   onVisible?(visible: boolean): void
   /** Extra line under the size, e.g. where the file is in other branches. */
   note?: string
+  /** Measurements, when known: triangle count and playable-budget verdict. */
+  stats?: StatsSummary
 }
 
-export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note }: Props) {
+export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note, stats }: Props) {
   const { t } = useTranslation()
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
@@ -57,6 +61,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
           <span>{formatBytes(asset.size)}</span>
           {asset.lfs && <span className="badge">LFS</span>}
         </span>
+        {stats && <StatsLine stats={stats} short />}
         {note && <span className="asset-note">{note}</span>}
       </span>
     </button>

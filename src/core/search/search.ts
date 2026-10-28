@@ -117,6 +117,8 @@ export interface SearchResult {
   related: string[]
   /** Name words matched despite a typo, e.g. "wolf" for "wlof". */
   typos: string[]
+  /** How well each asset (by id) matched: the name itself scores highest, then group members, folders, typos. */
+  scores: ReadonlyMap<string, number>
 }
 
 export interface Suggestion {
@@ -180,7 +182,7 @@ export class AssetSearch {
 
   private run(query: string): SearchResult {
     const terms = parseQuery(query)
-    if (!terms.length) return { assets: this.items.map((i) => i.asset), related: [], typos: [] }
+    if (!terms.length) return { assets: this.items.map((i) => i.asset), related: [], typos: [], scores: new Map() }
     const related = new Map<string, number>()
     const typos = new Set<string>()
     const scored: Array<{ asset: Asset; score: number }> = []
@@ -207,7 +209,8 @@ export class AssetSearch {
     return {
       assets: scored.map((s) => s.asset),
       related: [...related].sort((a, b) => b[1] - a[1]).map(([w]) => w),
-      typos: [...typos]
+      typos: [...typos],
+      scores: new Map(scored.map((s) => [s.asset.id, s.score]))
     }
   }
 

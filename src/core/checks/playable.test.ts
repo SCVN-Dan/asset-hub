@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import { isStatsSummary, rankForPlayable, summaryIssues, type StatsSummary } from './playable'
+
+const stat = (o: Partial<StatsSummary>): StatsSummary => ({
+  triangles: 1000,
+  vertices: 1500,
+  bones: 0,
+  clips: 0,
+  materials: 1,
+  fileBytes: 100_000,
+  textureBytes: 200_000,
+  maxTextureSize: 512,
+  source: 'thumb',
+  ...o
+})
+
+describe('playable ranking', () => {
+  const items = [
+    { id: 'heavy', s: stat({ triangles: 40_000, fileBytes: 6_000_000 }), used: 9 },
+    { id: 'unmeasured', s: undefined, used: 1 },
+    { id: 'light', s: stat({ triangles: 800, fileBytes: 50_000 }), used: 2 },
+    { id: 'mid', s: stat({ triangles: 3000 }), used: 5 }
+  ]
+  const order = (mode: Parameters<typeof rankForPlayable>[1]) => rankForPlayable(items, mode, (i) => i.s, (i) => i.used).map((i) => i.id)
+
+  it('puts models within budget first, smallest first, unmeasured last', () => {
+    expect(summaryIssues(items[0].s!).map((i) => i.key)).toEqual(['triangles', 'fileBytes'])
+    expect(order('playable')).toEqual(['light', 'mid', 'heavy', 'unmeasured'])
+    expect(order('triangles')).toEqual(['light', 'mid', 'heavy', 'unmeasured'])
+    expect(order('smallest')).toEqual(['light', 'mid', 'heavy', 'unmeasured'])
+  })
+
+  it('orders by use without measurements, and keeps search order for relevance', () => {
+    expect(order('used')).toEqual(['heavy', 'mid', 'light', 'unmeasured'])
+    expect(order('relevance')).toEqual(['heavy', 'unmeasured', 'light', 'mid'])
+  })
+
+  it('never ranks a looser search match above a closer one', () => {
+    const match = (i: { id: string }) => (i.id === 'heavy' ? 100 : 30)
+    expect(rankForPlayable(items, 'playable', (i) => i.s, (i) => i.used, match).map((i) => i.id)).toEqual(['heavy', 'light', 'mid', 'unmeasured'])
+  })
+
+  it('validates summaries from disk', () => {
+    expect(isStatsSummary(stat({}))).toBe(true)
+    expect(isStatsSummary({ ...stat({}), triangles: -1 })).toBe(false)
+    expect(isStatsSummary({ triangles: 1 })).toBe(false)
+  })
+})

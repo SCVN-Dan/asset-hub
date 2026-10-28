@@ -1,3 +1,4 @@
+import { summarizeStats, type StatsSummary } from '@core/checks/playable'
 import { extractFbxTextureNames } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
@@ -26,7 +27,7 @@ function offscreenHost(): HTMLDivElement {
  * from .mat files (kind A) are added when the model is opened in the viewer,
  * which then replaces this thumbnail.
  */
-export async function renderThumbnail(live: LiveContext, path: string): Promise<string> {
+export async function renderThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats: StatsSummary }> {
   const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path, true))
   const names = extractFbxTextureNames(bytes)
   const found = names.length ? unwrap(await window.api.assets.findByNames(live.repo, live.branch, names, path, live.root)) : {}
@@ -36,7 +37,8 @@ export async function renderThumbnail(live: LiveContext, path: string): Promise<
   try {
     await viewer.load(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, new Map(files.map((f) => [f.name.toLowerCase(), f])))
     if (!viewer.hasColorMaps() && files.length) await viewer.applyMaterialSlots(guessedSlots(files))
-    return viewer.snapshot()
+    // Measured while the model is loaded anyway: lets results be ranked without opening them.
+    return { url: viewer.snapshot(), stats: summarizeStats(viewer.stats(bytes.byteLength, files), 'thumb') }
   } finally {
     viewer.dispose()
     files.forEach((f) => URL.revokeObjectURL(f.url))

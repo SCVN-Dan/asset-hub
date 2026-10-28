@@ -83,7 +83,8 @@
     "deps": "Dependency",
     "copyPath": "Copy đường dẫn",
     "copied": "Đã copy",
-    "copies_other": "File giống hệt ở {{count}} vị trí"
+    "copies_other": "File giống hệt ở {{count}} vị trí",
+    "openGitHub": "Mở trên GitHub"
   },
   "settings": {
     "title": "Cài đặt",
@@ -277,5 +278,22 @@
     "allBranches": "Mọi branch ({{count}})",
     "foundIn_one": "có ở {{count}} branch",
     "foundIn_other": "có ở {{count}} branch"
+  },
+  "ranking": {
+    "sort": "Sắp xếp",
+    "sorts": {
+      "relevance": "Khớp nhất",
+      "playable": "Hợp playable nhất",
+      "smallest": "Nhẹ nhất",
+      "triangles": "Ít tris nhất",
+      "used": "Dùng nhiều nhất"
+    },
+    "onlyFits": "Chỉ asset vừa ngân sách playable",
+    "measured": "Đã đo {{done}}/{{total}}",
+    "measure_one": "Đo {{count}} kết quả",
+    "measure_other": "Đo {{count}} kết quả",
+    "fits": "Vừa ngân sách playable",
+    "tris": "{{n}} tris",
+    "bones": "{{count}} bones"
   }
 }

@@ -87,7 +87,8 @@
     "copyPath": "Copy path",
     "copied": "Copied",
     "copies_one": "Identical file in {{count}} place",
-    "copies_other": "Identical file in {{count}} places"
+    "copies_other": "Identical file in {{count}} places",
+    "openGitHub": "Open on GitHub"
   },
   "settings": {
     "title": "Settings",
@@ -292,5 +293,22 @@
     "allBranches": "All branches ({{count}})",
     "foundIn_one": "on {{count}} branch",
     "foundIn_other": "on {{count}} branches"
+  },
+  "ranking": {
+    "sort": "Sort",
+    "sorts": {
+      "relevance": "Best match",
+      "playable": "Best for playables",
+      "smallest": "Smallest",
+      "triangles": "Fewest triangles",
+      "used": "Most used"
+    },
+    "onlyFits": "Only within playable budget",
+    "measured": "{{done}} of {{total}} measured",
+    "measure_one": "Measure {{count}} result",
+    "measure_other": "Measure {{count}} results",
+    "fits": "Within the playable budget",
+    "tris": "{{n}} tris",
+    "bones": "{{count}} bones"
   }
 }

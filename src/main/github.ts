@@ -8,7 +8,7 @@ import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLog
 import { exportUnityPackage } from './exporter'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
-import { FileBlobCache, FileCommitCache, ThumbnailStore } from './caches'
+import { FileBlobCache, FileCommitCache, StatsStore, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
 
 interface Session {
@@ -55,6 +55,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   const cache = new FileCommitCache(options.cacheDir)
   const blobCache = new FileBlobCache(options.cacheDir)
   const thumbs = new ThumbnailStore(options.cacheDir)
+  const statsStore = new StatsStore(options.cacheDir)
   const registry = createDefaultRegistry()
   let session: Session | undefined
   let restored = false
@@ -307,6 +308,8 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     wrap(() => requireCatalog().list(typeof repo === 'string' ? [repo] : [], Array.isArray(excluded) ? excluded.map(String) : []))
   )
   ipcMain.handle(IPC.catalogWhere, (_e, sha: unknown) => wrap(() => requireCatalog().whereIs(String(sha))))
+  ipcMain.handle(IPC.getStats, (_e, keys: unknown) => statsStore.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 20000) : []))
+  ipcMain.handle(IPC.saveStats, (_e, key: unknown, summary: unknown) => (typeof key === 'string' ? statsStore.save(key, summary) : undefined))
   ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 5000) : []))
   ipcMain.handle(IPC.saveThumb, (_e, key: unknown, dataUrl: unknown) =>
     typeof key === 'string' && typeof dataUrl === 'string' ? thumbs.save(key, dataUrl) : undefined

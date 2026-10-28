@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { formatBytes, shortPath, type CatalogAsset, type CatalogLocation } from '@core/index'
 import type { CatalogStatus } from '@shared/ipc'
 import type { SearchScope } from '../useCatalog'
+import { summaryIssues, type StatsSummary } from '@core/checks/playable'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 
@@ -10,6 +11,10 @@ import { CubeIcon } from './Icons'
 const BRANCHES_SHOWN = 6
 
 const repoName = (repo: string) => repo.split('/').pop() ?? repo
+
+/** The file's page on GitHub, on that branch. */
+export const githubUrl = (repo: string, branch: string, path: string) =>
+  `https://github.com/${repo}/blob/${branch.split('/').map(encodeURIComponent).join('/')}/${path.split('/').map(encodeURIComponent).join('/')}`
 
 /** Short card line: "xp_hero · 12 branches" or the single branch name. */
 export function locationNote(asset: CatalogAsset, scope: SearchScope, t: (key: string, o?: Record<string, unknown>) => string): string {
@@ -141,11 +146,15 @@ export function LocationList({ locations, here, showRepo, onOpen }: LocationsPro
 interface DetailsProps {
   asset?: CatalogAsset
   thumb?: string
+  stats?: StatsSummary
+  exporting: boolean
   onOpen(repo: string, branch: string, path: string): void
+  /** Exports the file as found on its main branch, without opening that branch. */
+  onExport(asset: CatalogAsset): void
 }
 
 /** Right panel for a result found in other branches / repos. */
-export function CatalogDetails({ asset, thumb, onOpen }: DetailsProps) {
+export function CatalogDetails({ asset, thumb, stats, exporting, onOpen, onExport }: DetailsProps) {
   const { t } = useTranslation()
   if (!asset) {
     return (
@@ -168,7 +177,14 @@ export function CatalogDetails({ asset, thumb, onOpen }: DetailsProps) {
           <button type="button" className="btn btn-primary" onClick={() => onOpen(first.repo, first.branches[0], first.path)}>
             {t('catalog.open', { branch: first.branches[0] })}
           </button>
+          <button type="button" className="btn" disabled={exporting} onClick={() => onExport(asset)}>
+            {t('export.exportOne')}
+          </button>
+          <button type="button" className="btn" onClick={() => void window.api.openExternal(githubUrl(first.repo, first.branches[0], first.path))}>
+            {t('details.openGitHub')}
+          </button>
         </div>
+        {stats && <StatsLine stats={stats} />}
         <p className="muted small" style={{ margin: 0 }}>
           {t('catalog.openHint')}
         </p>
@@ -178,5 +194,21 @@ export function CatalogDetails({ asset, thumb, onOpen }: DetailsProps) {
         <LocationList locations={asset.locations} showRepo={asset.repoCount > 1} onOpen={onOpen} />
       </section>
     </aside>
+  )
+}
+
+const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n))
+
+/** One line of measurements with a playable-budget verdict, for cards and panels. */
+export function StatsLine({ stats, short = false }: { stats: StatsSummary; short?: boolean }) {
+  const { t } = useTranslation()
+  const issues = summaryIssues(stats)
+  return (
+    <span className="stats-line" title={issues.map((i) => t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(), limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString() })).join('\n') || t('ranking.fits')}>
+      <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>
+      <span>{t('ranking.tris', { n: compact(stats.triangles) })}</span>
+      {!short && <span>{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
+      {!short && stats.bones > 0 && <span>{t('ranking.bones', { count: stats.bones })}</span>}
+    </span>
   )
 }

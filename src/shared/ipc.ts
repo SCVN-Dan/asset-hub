@@ -1,4 +1,5 @@
 import type { CatalogAsset, CatalogLocation, DependencyReport, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
 
 export const IPC = {
@@ -26,6 +27,8 @@ export const IPC = {
   prefabProgress: 'assets:prefab-progress',
   getThumbs: 'thumbs:get',
   saveThumb: 'thumbs:save',
+  getStats: 'stats:get',
+  saveStats: 'stats:save',
   exportPackage: 'export:unitypackage',
   exportProgress: 'export:progress',
   showItemInFolder: 'shell:show-item',
@@ -163,6 +166,11 @@ export interface AssetHubApi {
   thumbs: {
     get(keys: string[]): Promise<Record<string, string>>
     save(key: string, dataUrl: string): Promise<void>
+  }
+  /** Model measurements by blob SHA, for ranking results without opening them. */
+  stats: {
+    get(keys: string[]): Promise<Record<string, StatsSummary>>
+    save(key: string, summary: StatsSummary): Promise<void>
   }
   exporter: {
     /** Asks where to save, then builds the .unitypackage. */

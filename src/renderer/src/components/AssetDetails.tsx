@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { checkPlayableBudget, type ModelStats } from '@core/checks/playable'
+import { checkPlayableBudget, summarizeStats, type ModelStats, type StatsSummary } from '@core/checks/playable'
 import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
-import { LocationList } from './CatalogPanel'
+import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
@@ -14,6 +14,8 @@ interface Props {
   /** Repo context; absent with sample data, where nothing can be downloaded. */
   live?: LiveContext
   onThumb(key: string, dataUrl: string): void
+  /** Full measurements of the opened model, kept for ranking results. */
+  onModelStats?(key: string, stats: StatsSummary): void
   /** Called once dependencies are known, so the pack can show sizes and warnings. */
   onReport(path: string, report: DependencyReport): void
   inPack: boolean
@@ -116,7 +118,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
@@ -249,7 +251,10 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           path={repoPath}
           report={report}
           prefabMaterial={prefabMaterial}
-          onStats={setStats}
+          onStats={(s) => {
+            setStats(s)
+            onModelStats?.(asset.sha, summarizeStats(s, 'viewer'))
+          }}
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
@@ -495,6 +500,11 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         <button type="button" className="btn btn-small" onClick={copyPath}>
           {copied ? t('details.copied') : t('details.copyPath')}
         </button>
+        {live && (
+          <button type="button" className="btn btn-small" onClick={() => void window.api.openExternal(githubUrl(live.repo, live.branch, live.root + asset.path))}>
+            {t('details.openGitHub')}
+          </button>
+        )}
       </div>
     </aside>
   )
