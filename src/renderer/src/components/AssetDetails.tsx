@@ -36,6 +36,22 @@ function Dot({ tone }: { tone: 'ok' | 'warn' | 'info' }) {
   return <span className={`dot dot-${tone}`} aria-hidden="true" />
 }
 
+/** Stat cells worth showing: counts that are zero (no bones, no clips) or trivial (one mesh) are left out. */
+function statCells(stats: ModelStats): Array<[string, string | number]> {
+  const textureBytes = stats.textures.reduce((s, x) => s + x.bytes, 0)
+  const cells: Array<[string, string | number | false]> = [
+    ['triangles', stats.triangles.toLocaleString()],
+    ['vertices', stats.vertices.toLocaleString()],
+    ['meshes', stats.meshes > 1 && stats.meshes],
+    ['materials', stats.materials > 0 && stats.materials],
+    ['bones', stats.bones > 0 && stats.bones],
+    ['clips', stats.animations.length > 0 && stats.animations.length],
+    ['file', formatBytes(stats.fileBytes)],
+    ['textures', textureBytes > 0 && formatBytes(textureBytes)]
+  ]
+  return cells.filter((c): c is [string, string | number] => c[1] !== false)
+}
+
 function MaterialRows({ m }: { m: MaterialRef }) {
   const { t } = useTranslation()
   return (
@@ -46,21 +62,34 @@ function MaterialRows({ m }: { m: MaterialRef }) {
         <span className="dep-name">{m.name}</span>
         <span className="dep-meta">{m.missing ? t('deps.missing') : ''}</span>
       </div>
-      {m.shader && (
+      {/* Built-in and package shaders come with Unity: nothing to do, so not listed. */}
+      {m.shader?.kind === 'project' && (
         <div className="dep-row dep-child" title={m.shader.path ?? m.shader.guid}>
           <Dot tone={m.shader.kind === 'project' ? 'info' : 'ok'} />
           <span className="dep-type">SHD</span>
           <span className="dep-name">{m.shader.label}</span>
-          <span className="dep-meta">{t(`deps.shader.${m.shader.kind}`)}</span>
+          <span className="dep-meta">{t('deps.shader.project')}</span>
         </div>
       )}
       <ul>
-        {m.textures.map((tex) => (
+        {mergeSlots(m.textures).map((tex) => (
           <TextureRow key={`${tex.prop}:${tex.guid}`} tex={tex} />
         ))}
       </ul>
     </li>
   )
+}
+
+/** One row per texture: a file used by several slots (_MainTex, _OcclusionMap) is listed once. */
+function mergeSlots(textures: readonly TextureRef[]): TextureRef[] {
+  const byFile = new Map<string, TextureRef>()
+  for (const tex of textures) {
+    const key = tex.path ?? `${tex.prop}:${tex.name}`
+    const seen = byFile.get(key)
+    if (!seen) byFile.set(key, tex)
+    else if (tex.prop && !seen.prop?.split(', ').includes(tex.prop)) byFile.set(key, { ...seen, prop: seen.prop ? `${seen.prop}, ${tex.prop}` : tex.prop })
+  }
+  return [...byFile.values()]
 }
 
 function TextureRow({ tex }: { tex: TextureRef }) {
@@ -71,7 +100,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
       <Dot tone={tone} />
       <span className="dep-type">TEX</span>
       <span className="dep-name">
-        {tex.prop && <span className="muted">{tex.prop} · </span>}
+        {tex.prop && tex.prop !== tex.name && <span className="muted">{tex.prop} · </span>}
         {tex.missing ? tex.name : tex.path!.split('/').pop()}
       </span>
       <span className="dep-meta">{tex.missing ? t('deps.missing') : tex.matchedBy === 'name' ? t('deps.byName') : formatBytes(tex.size)}</span>
@@ -196,11 +225,6 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{asset.name}</h2>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {handler && <span className="badge badge-accent">{t(handler.labelKey)}</span>}
-          {report && <span className="badge">{t(`deps.kind.${report.kind}`)}</span>}
-          {asset.lfs && <span className="badge">LFS</span>}
-        </div>
         {live && handler?.resolveDependencies && (
           <div className="field-row">
             <button type="button" className="btn btn-primary" onClick={onExport} disabled={exporting}>
@@ -217,47 +241,25 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         <section className="section">
           <span className="label-caps">{t('stats.title')}</span>
           <dl className="stat-grid">
-            <div>
-              <dt>{t('stats.triangles')}</dt>
-              <dd>{stats.triangles.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.vertices')}</dt>
-              <dd>{stats.vertices.toLocaleString()}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.meshes')}</dt>
-              <dd>{stats.meshes}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.materials')}</dt>
-              <dd>{stats.materials}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.bones')}</dt>
-              <dd>{stats.bones}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.clips')}</dt>
-              <dd>{stats.animations.length}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.file')}</dt>
-              <dd>{formatBytes(stats.fileBytes)}</dd>
-            </div>
-            <div>
-              <dt>{t('stats.textures')}</dt>
-              <dd>{formatBytes(stats.textures.reduce((s, x) => s + x.bytes, 0))}</dd>
-            </div>
+            {statCells(stats).map(([key, value]) => (
+              <div key={key}>
+                <dt>{t(`stats.${key}`)}</dt>
+                <dd>{value}</dd>
+              </div>
+            ))}
           </dl>
-          {issues.map((i) => (
-            <p key={i.key} className="warn-note">
-              {t(`budget.${i.key}`, {
-                value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(),
-                limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString()
-              })}
-            </p>
-          ))}
+          {issues.length > 0 && (
+            <ul className="warn-note warn-list">
+              {issues.map((i) => (
+                <li key={i.key}>
+                  {t(`budget.${i.key}`, {
+                    value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(),
+                    limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString()
+                  })}
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       )}
 
@@ -281,6 +283,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           {report && (
             <>
               {report.warnings
+                // Missing files already say "not in repo" on their own row.
+                .filter((w) => w !== 'missingTexture' && w !== 'missingMaterial')
                 .filter((w) => w !== 'textureByName' || report.embeddedTextures.some((x) => !x.missing))
                 .map((w) => (
                   <p key={w} className={w === 'textureByName' ? 'note' : 'warn-note'}>
@@ -336,9 +340,6 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
                   </ul>
                 </div>
               )}
-              <p className="muted small" style={{ margin: 0 }}>
-                {t('deps.files', { count: report.files.length })}
-              </p>
             </>
           )}
         </section>
@@ -396,12 +397,17 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
                       </li>
                     ))}
                   </ul>
-                  {prefabMaterial && <p className="muted small" style={{ margin: 0 }}>{t('prefab.applied', { name: prefabMaterial.name })}</p>}
+                  {/* Only worth saying when there was a choice. */}
+                  {prefabMaterial && prefabResult.prefabs.flatMap((p) => p.materials).length > 1 && (
+                    <p className="muted small" style={{ margin: 0 }}>
+                      {t('prefab.applied', { name: prefabMaterial.name })}
+                    </p>
+                  )}
                 </>
               )}
               {prefabResult.remaining > 0 && (
                 <div>
-                  <button type="button" className="btn" onClick={() => void searchPrefabs('all')}>
+                  <button type="button" className={prefabResult.prefabs.length ? 'btn btn-small' : 'btn'} onClick={() => void searchPrefabs('all')}>
                     {t('prefab.scanAll', { count: prefabResult.remaining, size: formatBytes(prefabResult.remainingBytes) })}
                   </button>
                 </div>
@@ -426,21 +432,11 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         </section>
       )}
 
-      <dl className="kv">
-        <dt>{t('details.path')}</dt>
-        <dd className="mono small" title={asset.path}>
+      <div className="path-row">
+        <span className="mono small" title={asset.path}>
           {shortPath(asset.path)}
-        </dd>
-        <dt>{t('details.size')}</dt>
-        <dd>{formatBytes(asset.size)}</dd>
-        <dt>{t('details.storage')}</dt>
-        <dd>{asset.lfs ? t('details.lfs') : t('details.git')}</dd>
-        <dt>{t('details.sha')}</dt>
-        <dd className="mono small">{asset.sha.slice(0, 12)}</dd>
-      </dl>
-
-      <div>
-        <button type="button" className="btn" onClick={copyPath}>
+        </span>
+        <button type="button" className="btn btn-small" onClick={copyPath}>
           {copied ? t('details.copied') : t('details.copyPath')}
         </button>
       </div>

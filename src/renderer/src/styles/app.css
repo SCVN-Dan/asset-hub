@@ -138,6 +138,9 @@ button { cursor: pointer; }
 
 .preview-box { height: 240px; border-radius: 10px; background: var(--bg); border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--muted); font-size: 12px; text-align: center; padding: 16px; }
 .details h2 { margin: 0; font-size: 16px; font-weight: 600; word-break: break-all; }
+.warn-note.warn-list { margin: 0; padding-left: 26px; display: flex; flex-direction: column; gap: 4px; }
+.path-row { display: flex; align-items: center; gap: 8px; }
+.path-row .mono { flex: 1; min-width: 0; color: var(--muted); word-break: break-all; }
 .kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; margin: 0; font-size: 13px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-all; }
