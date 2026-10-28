@@ -120,6 +120,8 @@ export class FbxViewer {
   /** Shows a group put together elsewhere (a prefab) like a loaded model. */
   showGroup(group: THREE.Group): void {
     if (this.model) this.scene.remove(this.model)
+    this.mixer?.stopAllAction()
+    this.mixer = undefined
     this.model = group
     this.scene.add(group)
     this.frameModel()
@@ -283,6 +285,22 @@ export class FbxViewer {
       if (!mesh.isMesh) return
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) (m as THREE.MeshPhongMaterial).wireframe = on
     })
+  }
+
+  /** Plays a clip made elsewhere (an .anim file) on the shown model, looping or once; null stops. */
+  playClip(clip: THREE.AnimationClip | null, loop = true): void {
+    this.mixer?.stopAllAction()
+    if (!clip || !this.model) return
+    this.mixer ??= new THREE.AnimationMixer(this.model)
+    const action = this.mixer.clipAction(clip)
+    action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity)
+    action.clampWhenFinished = true
+    action.reset().play()
+  }
+
+  /** Pauses or resumes whatever is playing. */
+  setPaused(paused: boolean): void {
+    if (this.mixer) this.mixer.timeScale = paused ? 0 : 1
   }
 
   /** Plays one animation clip, or stops when `index` is null. */

@@ -10,7 +10,8 @@
     "texture": "Texture",
     "material": "Material",
     "audio": "Audio",
-    "prefab": "Prefab"
+    "prefab": "Prefab",
+    "animation": "Animation"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -436,6 +437,42 @@
     "unsupported": "Định dạng này không phát được trong app.",
     "autoPlay": "Tự phát",
     "autoPlayHint": "Phát ngay khi chọn clip khác"
+  },
+  "anim": {
+    "title": "Animation",
+    "length": "Độ dài",
+    "frames": "frame",
+    "rate": "Sample rate",
+    "type": "Loại",
+    "loop": "Lặp",
+    "objects": "Số object được animate",
+    "curves": "Curve",
+    "keys": "key",
+    "events": "Event",
+    "kinds": {
+      "generic": "Generic",
+      "humanoid": "Humanoid",
+      "legacy": "Legacy",
+      "ui": "UI",
+      "sprite": "Sprite",
+      "property": "Thuộc tính"
+    },
+    "findingRig": "Đang tìm model có rig khớp…",
+    "noRig": "Không thấy model gần đó có bone của clip này — chọn một model trong danh sách.",
+    "pickRig": "Chọn model…",
+    "rig": "Model để phát",
+    "on": "Trên {{name}} · khớp {{percent}}% bone",
+    "compressed": "Clip nén: curve không lưu dạng key nên không xem trước được.",
+    "unsupported": {
+      "humanoid": "Clip Humanoid: cần retarget sang rig — chưa có preview.",
+      "ui": "Animation UI (RectTransform, màu…): không có preview 3D.",
+      "sprite": "Animation sprite: chưa có preview. Sprite được liệt kê bên dưới.",
+      "property": "Chỉ animate thuộc tính của component: không có gì để hiện 3D."
+    },
+    "warn": {
+      "baked": "Key ở gần như mọi frame (baked): bật Keyframe Reduction trong import settings có thể giảm nhiều.",
+      "legacy": "Clip Legacy (component Animation, không phải Animator)."
+    }
   },
   "download": {
     "button": "Tải về",

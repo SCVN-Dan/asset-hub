@@ -265,3 +265,4 @@ button { cursor: pointer; }
 .sprite-list li { padding: 2px 0; }
 .sprite-list li > span { display: inline-block; vertical-align: bottom; }
 .sprite-list .dep-name { max-width: 60%; margin-right: 8px; }
+.viewer-select { height: 28px; font-size: 12px; max-width: 200px; background: rgba(15, 17, 21, 0.85); }

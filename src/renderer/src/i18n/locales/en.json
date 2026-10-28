@@ -10,7 +10,8 @@
     "texture": "Texture",
     "material": "Material",
     "audio": "Audio",
-    "prefab": "Prefab"
+    "prefab": "Prefab",
+    "animation": "Animation"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -451,6 +452,42 @@
     "unsupported": "This format cannot be played here.",
     "autoPlay": "Auto play",
     "autoPlayHint": "Play each clip as soon as it is selected"
+  },
+  "anim": {
+    "title": "Animation",
+    "length": "Length",
+    "frames": "frames",
+    "rate": "Sample rate",
+    "type": "Type",
+    "loop": "Loop",
+    "objects": "Objects animated",
+    "curves": "Curves",
+    "keys": "keys",
+    "events": "Events",
+    "kinds": {
+      "generic": "Generic",
+      "humanoid": "Humanoid",
+      "legacy": "Legacy",
+      "ui": "UI",
+      "sprite": "Sprite",
+      "property": "Properties"
+    },
+    "findingRig": "Looking for a model with a matching rig…",
+    "noRig": "No nearby model has this clip’s bones — pick one from the list.",
+    "pickRig": "Pick a model…",
+    "rig": "Model to play on",
+    "on": "On {{name}} · {{percent}}% of bones",
+    "compressed": "Compressed clip: its curves are not stored as keys, so it cannot be previewed.",
+    "unsupported": {
+      "humanoid": "Humanoid clip: playing it needs retargeting to a rig — not previewed yet.",
+      "ui": "UI animation (RectTransform, colours…): no 3D preview.",
+      "sprite": "Sprite animation: no preview yet. Its sprites are listed below.",
+      "property": "Animates component properties only: nothing to show in 3D."
+    },
+    "warn": {
+      "baked": "Keys on nearly every frame (baked): Keyframe Reduction in the import settings could shrink it a lot.",
+      "legacy": "Legacy clip (Animation component, not Animator)."
+    }
   },
   "download": {
     "button": "Download",

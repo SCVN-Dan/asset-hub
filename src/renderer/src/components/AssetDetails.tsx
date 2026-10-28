@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
@@ -10,6 +10,7 @@ import { ModelViewer, type LiveContext } from './ModelViewer'
 import { ImageViewer, type ImageInfo } from './ImageViewer'
 import { MaterialViewer } from './MaterialViewer'
 import { PrefabViewer } from './PrefabViewer'
+import { AnimViewer } from './AnimViewer'
 import { AudioViewer } from './AudioViewer'
 import { audioStats, formatDuration, type DecodedAudio } from '../viewer/audio'
 import { DownloadButton } from './DownloadButton'
@@ -268,6 +269,39 @@ function SpriteSection({ info }: { info: ImageInfo }) {
   )
 }
 
+/** Length, rate and what a clip animates, with what matters for playables. */
+function AnimSection({ info }: { info: AnimClipInfo }) {
+  const { t } = useTranslation()
+  const curves = info.transformCurves.length + info.floatCurves.length + info.spriteCurves
+  const cells: Array<[string, string]> = [
+    [t('anim.length'), `${formatDuration(info.length)} · ${Math.round(info.length * info.sampleRate)} ${t('anim.frames')}`],
+    [t('anim.rate'), `${info.sampleRate} fps`],
+    [t('anim.type'), t(`anim.kinds.${info.kind}`)],
+    [t('anim.loop'), info.loop ? t('texture.yes') : t('texture.no')],
+    [t('anim.objects'), String(info.paths.length)],
+    [t('anim.curves'), `${curves} · ${info.keyframes.toLocaleString()} ${t('anim.keys')}`],
+    ...(info.events ? ([[t('anim.events'), String(info.events)]] as Array<[string, string]>) : [])
+  ]
+  // Keys on (nearly) every frame: baked, not keyframed by hand; Keyframe Reduction would shrink it.
+  const transformKeys = info.transformCurves.reduce((s, c) => s + c.keys.length, 0)
+  const baked = info.transformCurves.length > 0 && info.length > 0.5 && transformKeys / (info.transformCurves.length * info.length * info.sampleRate) > 0.8
+  return (
+    <section className="section">
+      <span className="label-caps">{t('anim.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k} className={statClass(v)}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      {baked && <p className="warn-note">{t('anim.warn.baked')}</p>}
+      {info.legacy && <p className="note">{t('anim.warn.legacy')}</p>}
+    </section>
+  )
+}
+
 /** Stat cells worth showing: counts that are zero (no bones, no clips) or trivial (one mesh) are left out. */
 function statCells(stats: ModelStats): Array<[string, string | number]> {
   const textureBytes = stats.textures.reduce((s, x) => s + x.bytes, 0)
@@ -367,6 +401,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [imageInfo, setImageInfo] = useState<ImageInfo>()
   /** For a material: its colour / surface, and what its textures weigh. */
   const [look, setLook] = useState<MaterialLook>()
+  /** For an animation clip: what it animates. */
+  const [animInfo, setAnimInfo] = useState<AnimClipInfo>()
   /** For an audio clip: what the player decoded. */
   const [audioInfo, setAudioInfo] = useState<DecodedAudio>()
   const [materialStats, setMaterialStats] = useState<StatsSummary>()
@@ -408,6 +444,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     setImageInfo(undefined)
     setLook(undefined)
     setAudioInfo(undefined)
+    setAnimInfo(undefined)
     setMaterialStats(undefined)
     setCopied(false)
     setProgress(undefined)
@@ -524,6 +561,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
+      ) : live && repoPath && handler?.preview.kind === 'animation' ? (
+        <AnimViewer key={repoPath} live={live} path={repoPath} report={report} onInfo={setAnimInfo} onLoading={onViewerLoading} />
       ) : live && repoPath && handler?.preview.kind === 'material' ? (
         <MaterialViewer
           key={repoPath}
@@ -593,6 +632,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       {imageInfo && <TextureSection info={imageInfo} />}
       {imageInfo?.sprite && <SpriteSection info={imageInfo} />}
       {audioInfo && <AudioSection info={audioInfo} />}
+      {animInfo && <AnimSection info={animInfo} />}
       {handler?.preview.kind === 'material' && <MaterialSection material={report?.materials[0]} look={look} stats={materialStats} />}
 
       {/* A texture is just itself: nothing to list. */}

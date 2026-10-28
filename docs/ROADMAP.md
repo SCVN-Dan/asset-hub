@@ -26,7 +26,7 @@
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
 | B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn preset ngân sách, dung lượng gồm dependency) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
-| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | 🔄 Texture, Material, Audio, Sprite, Prefab tĩnh xong |
+| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | ✅ (chờ xem Prefab + Animation trên app; còn Sprite Atlas, tab Sprite) |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
@@ -183,7 +183,7 @@ Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, prev
 | **Sprite / UI** (texture kiểu Sprite) | Trong viewer ảnh của Texture: khung từng sprite con (đánh số) + đường 9-slice, bật/tắt; nét vẽ giữ độ dày khi thu nhỏ | Từ `.meta`: chế độ (Single / Multiple / Polygon), số sprite, % sheet đã dùng (cảnh báo khi > 50% trống), Pixels per unit, viền 9-slice, packing tag; danh sách sprite (tên, kích thước, 9-slice) | ✅ chờ user xem trên app |
 | Sprite Atlas (`.spriteatlas`), tab / lọc riêng cho sprite | Atlas: danh sách sprite / thư mục được pack | Tab Sprite cần đọc `.meta` của mọi texture (chỉ mục hiện chỉ có tên) | ⏳ |
 | **Prefab tĩnh** (mesh + material, không particle) | Dựng lại bằng three.js: cây transform (đổi hệ trục Unity → three), mesh từ FBX theo tỉ lệ import (UnitScaleFactor × globalScale), material + texture + màu theo GUID, prefab lồng nhau / Prefab Variant / model kéo thả (override vị trí, xoay, scale, material) tới 4 tầng; mesh khớp theo bảng tên trong `.meta` hoặc tên GameObject (chuẩn hoá, mỗi mesh một lần); thumbnail lưới; prefab UI / particle / chỉ script hiện thẻ chữ | Model, prefab lồng nhau, material (+ texture, shader), script custom, asset khác (sprite, audio, animator…) với số lần dùng; GUID của model / prefab / script / asset khác tra theo nhu cầu (gần nhất trước, đủ cả branch ở bước cuối); cảnh báo thiếu model, script custom, particle, prefab UI; xuất `.unitypackage` đủ file | ✅ chờ user xem trên app |
-| **Animation clip** (.anim, clip trong FBX) | Phát trên model rig phù hợp | Độ dài, số curve | ⏳ |
+| **Animation clip** (`.anim`; clip trong FBX đã có từ Phase 3) | Phát trên model có rig khớp: curve vị trí / xoay / Euler / scale lấy mẫu Hermite như Unity, đổi hệ trục, tỉ lệ import; tự thử tối đa 4 model gần nhất (tên clip + thư mục, khớp ≥ 50% bone), hoặc chọn tay trong danh sách 8 model; phát / dừng, lặp, góc nhìn. Clip Humanoid, UI, Sprite, nén: chỉ thông tin | Độ dài, frame, sample rate, loại (Generic / Humanoid / Legacy / UI / Sprite), số object, curve, key, event; cảnh báo key ở mọi frame (nên bật Keyframe Reduction); sprite / object tham chiếu được xuất kèm | ✅ chờ user xem trên app |
 | Particle System prefab | → Phase 9 | | ⏳ |
 
 Ghi chú chung:
@@ -250,6 +250,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-28 | **Phase 6 — Animation clip xong** (chờ xem trên app): handler `.anim`, parser curve + nội suy Hermite, phát trên rig tự chọn. Kiểm trên 10 clip thật: DarkWizard / Ballista khớp 100% ở ứng viên đầu, Goblin 59% (đúng model); clip vũ khí của player chưa tìm đúng rig tự động (chọn tay). 109 test. |
 | 2026-10-28 | **Phase 6 — Prefab tĩnh xong** (chờ xem trên app): handler `.prefab`, resolver đệ quy (model, prefab lồng nhau, material, script, asset khác) với tra GUID theo nhu cầu cho các loại chỉ mục chưa có; preview ghép mesh FBX theo cây transform + material; thumbnail. Unity 2022 không ghi tên mesh trong `.meta` (fileID là mã băm) → khớp theo tên GameObject; kiểm trên 28 prefab thật (kích thước đúng, mỗi node đúng mesh). 105 test. |
 | 2026-10-28 | **Phase 6 — Sprite xong** (chờ xem trên app): texture kiểu Sprite hiện khung sprite con + 9-slice trên ảnh, phần Sprite trong panel (chế độ, số sprite, % sheet dùng, PPU, viền, danh sách). Parser kiểm trên 49 `.meta` thật (sheet 14 và 4 sprite, 7 ảnh 9-slice). 101 test. |
 | 2026-10-28 | Lưới: hiện **đã tải X/Y** (thumbnail sẵn sàng / card có thể có thumbnail) cạnh số asset, có thanh tiến độ; thumbnail **tải nền hết danh sách** sau khi xong card trên màn hình (4 card / lượt, từ trên xuống, nhường khi đang mở file, bỏ qua card vừa lỗi). |

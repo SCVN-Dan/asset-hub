@@ -103,6 +103,8 @@ export interface DependencyReport {
   files: string[]
   /** Prefabs: models, nested prefabs, scripts and other assets, in order of use. */
   parts?: PartRef[]
+  /** Animation clips: models that may carry the rig it animates, most likely first. */
+  rigs?: string[]
   /** Prefabs: GUID → repo path of everything found, so a preview can put the prefab together. */
   guidPaths?: Record<string, string>
 }
