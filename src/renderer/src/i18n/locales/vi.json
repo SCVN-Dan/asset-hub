@@ -71,7 +71,9 @@
     "mergeCopies": "Gộp file giống hệt",
     "merged_other": "đã gộp {{count}} bản trùng",
     "copiesTitle": "{{count}} bản giống hệt trong project",
-    "generatingThumb": "Đang tạo thumbnail…"
+    "generatingThumb": "Đang tạo thumbnail…",
+    "loaded": "đã tải {{done}}/{{total}}",
+    "loadedHint": "Số thumbnail đã sẵn sàng. Card trên màn hình tải trước, phần còn lại tải nền sau đó."
   },
   "details": {
     "label": "Chi tiết asset",

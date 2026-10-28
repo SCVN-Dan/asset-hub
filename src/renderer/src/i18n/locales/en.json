@@ -74,7 +74,9 @@
     "merged_one": "{{count}} identical copy merged",
     "merged_other": "{{count}} identical copies merged",
     "copiesTitle": "{{count}} identical copies in this project",
-    "generatingThumb": "Rendering thumbnail…"
+    "generatingThumb": "Rendering thumbnail…",
+    "loaded": "{{done}}/{{total}} loaded",
+    "loadedHint": "Thumbnails ready. Cards on screen load first, then the rest in the background."
   },
   "details": {
     "label": "Asset details",

@@ -90,5 +90,8 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
     if (queue.current.length !== before) sync()
   }, [])
 
-  return { busy, request, cancel }
+  /** Failed a short while ago: not retried yet, so not worth asking for. */
+  const failedRecently = useCallback((key: string) => Date.now() - (failed.current.get(key) ?? -Infinity) < RETRY_MS, [])
+
+  return { busy, request, cancel, failedRecently }
 }

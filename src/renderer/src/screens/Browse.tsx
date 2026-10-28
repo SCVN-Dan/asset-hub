@@ -350,14 +350,22 @@ export function Browse({
     return kind === 'image' || kind === 'material' || kind === 'audio' ? kind : 'three'
   }
 
+  /** Cards whose thumbnail is ready, out of those that can have one (huge or EXR files never do). */
+  const renderable = gridItems.filter(canRender)
+  const loadedCount = renderable.filter((a) => thumbs[a.sha]).length
+
+  /** Queues a card's thumbnail, read from the open branch or (for results elsewhere) its main location. */
+  const requestThumb = (a: Asset, order: number) => {
+    if (inCatalog) {
+      const src = catalogSource(a as CatalogAsset)
+      thumbQueue.request(a.sha, src.path, order, src.ctx, kindOf(a))
+    } else thumbQueue.request(a.sha, root + a.path, order, undefined, kindOf(a))
+  }
+
   /** Renders (and so measures) every listed model not measured yet, top of the list first. */
   const measureAll = () => {
     unmeasured.forEach((a, i) => {
-      if (!canRender(a)) return
-      if (inCatalog) {
-        const src = catalogSource(a as CatalogAsset)
-        thumbQueue.request(a.sha, src.path, 10_000 + i, src.ctx, kindOf(a))
-      } else thumbQueue.request(a.sha, root + a.path, 10_000 + i, undefined, kindOf(a))
+      if (canRender(a)) requestThumb(a, 10_000 + i)
     })
   }
 
@@ -510,6 +518,16 @@ export function Browse({
   const [viewerLoading, setViewerLoading] = useState(false)
   const thumbQueue = useThumbnailQueue(live, saveThumb, viewerLoading)
 
+  // Cards on screen go first; once the queue is empty the rest of the list follows, top first,
+  // a few at a time so cards scrolled into view can still jump ahead.
+  useEffect(() => {
+    if (!thumbsLoaded || viewerLoading || thumbQueue.busy.size || (!inCatalog && !live)) return
+    renderable
+      .filter((a) => !thumbs[a.sha] && !thumbQueue.failedRecently(a.sha))
+      .slice(0, 4)
+      .forEach((a, i) => requestThumb(a, 1_000_000 + i))
+  }, [thumbsLoaded, viewerLoading, thumbQueue.busy, thumbs, gridItems, inCatalog, live])
+
   /** Counts for the type tabs: of the open branch, or of the cross-branch results. */
   const typeSource: readonly Asset[] = inCatalog ? (catalog.assets ?? []) : assets
   const typeCounts = useMemo(() => {
@@ -632,6 +650,13 @@ export function Browse({
                     {t('browse.assetCount', { count: rankedShown.length })}
                     {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
                   </>}
+              {renderable.length > 0 && (
+                <span className="loaded-count" title={t('browse.loadedHint')}>
+                  {' · '}
+                  {t('browse.loaded', { done: loadedCount.toLocaleString(), total: renderable.length.toLocaleString() })}
+                  {loadedCount < renderable.length && <progress className="loaded-bar" max={renderable.length} value={loadedCount} />}
+                </span>
+              )}
             </span>
           </div>
           {(inCatalog ? catalogShown.length : shown.length) > 0 && (

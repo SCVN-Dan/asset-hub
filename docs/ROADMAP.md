@@ -249,6 +249,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-28 | Lưới: hiện **đã tải X/Y** (thumbnail sẵn sàng / card có thể có thumbnail) cạnh số asset, có thanh tiến độ; thumbnail **tải nền hết danh sách** sau khi xong card trên màn hình (4 card / lượt, từ trên xuống, nhường khi đang mở file, bỏ qua card vừa lỗi). |
 | 2026-10-28 | **Phase 6 — Audio xong**: handler audio (tab Audio tự sinh, xp_hero @ net-catch: 249 clip), player + waveform, panel Audio với import settings và dung lượng ước tính khi build, cảnh báo playable riêng cho audio (không dùng ngân sách file model), xếp hạng dùng chung, Tải về. Resolver "file + .meta" tách thành `resolveSelf` dùng chung cho texture + audio. Header khớp `afinfo` trên 10 file thật; parser `.meta` kiểm trên 12 file thật. 98 test. |
 | 2026-10-28 | **Phase 6 — Material xong**: handler `.mat` (tab Material tự sinh, xp_hero @ net-catch: 2.578 file), preview quả cầu / hộp / mặt phẳng với texture + màu + trong suốt / cutout + emission, thumbnail lưới, panel Material (shader, bề mặt, màu, texture, cảnh báo playable), xếp hạng dùng chung (card ghi "N texture" thay cho tris), xuất gói kèm texture + shader custom. Kiểm parser trên 40 `.mat` thật (URP, built-in, particle, Unity 5). 91 test. |
 | 2026-10-27 | Khởi tạo project, viết PLAN + ROADMAP. |
