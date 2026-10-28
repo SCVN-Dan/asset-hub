@@ -67,3 +67,12 @@ describe('AssetSearch', () => {
     expect(search.suggest('beaver cá').map((x) => x.text)).toEqual([])
   })
 })
+
+describe('AssetSearch extra names', () => {
+  it('finds a model by the name of a clip inside it', () => {
+    const asset = (name: string) => ({ id: name, type: 'fbx', path: `A/${name}`, name, sha: name, lfs: false })
+    const search = new AssetSearch([asset('Goblin.fbx'), asset('Tree.fbx')], (a) => (a.name === 'Goblin.fbx' ? ['Goblin_Run', 'Goblin_Attack'] : []))
+    expect(search.search('attack').assets.map((a) => a.name)).toEqual(['Goblin.fbx'])
+    expect(search.search('tree').assets.map((a) => a.name)).toEqual(['Tree.fbx'])
+  })
+})

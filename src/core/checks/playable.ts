@@ -51,6 +51,8 @@ export interface StatsSummary {
   height?: number
   /** For an audio clip: its length in seconds (no triangles); `fileBytes` is then its estimated size in a build. */
   duration?: number
+  /** Names of the animation clips inside a model (FBX), so they can be searched. */
+  clipNames?: string[]
   /** For an animation clip: its length in seconds (no triangles). */
   clipLength?: number
   /** For a material: how many textures it uses (no triangles). */
@@ -59,12 +61,15 @@ export interface StatsSummary {
   source: 'thumb' | 'viewer'
 }
 
+const MAX_CLIP_NAMES = 30
+
 export function summarizeStats(stats: ModelStats, source: StatsSummary['source']): StatsSummary {
   return {
     triangles: stats.triangles,
     vertices: stats.vertices,
     bones: stats.bones,
     clips: stats.animations.length,
+    ...(stats.animations.length ? { clipNames: stats.animations.slice(0, MAX_CLIP_NAMES) } : {}),
     materials: stats.materials,
     fileBytes: stats.fileBytes,
     textureBytes: stats.textures.reduce((s, t) => s + t.bytes, 0),
@@ -94,7 +99,8 @@ export function isStatsSummary(v: unknown): v is StatsSummary {
   return (
     !!s &&
     ['triangles', 'vertices', 'bones', 'clips', 'materials', 'fileBytes', 'textureBytes', 'maxTextureSize'].every((k) => typeof s[k] === 'number' && Number.isFinite(s[k] as number) && (s[k] as number) >= 0) &&
-    (s.source === 'thumb' || s.source === 'viewer')
+    (s.source === 'thumb' || s.source === 'viewer') &&
+    (s.clipNames === undefined || (Array.isArray(s.clipNames) && s.clipNames.every((n) => typeof n === 'string')))
   )
 }
 

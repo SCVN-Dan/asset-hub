@@ -124,8 +124,12 @@ export class StatsStore {
     if (!isStatsSummary(summary)) return
     const all = await this.load()
     // A thumbnail only sees textures named in the FBX: never replace a full measurement with it.
-    if (summary.source === 'thumb' && all[key]?.source === 'viewer') return
-    all[key] = summary
+    const kept = all[key]
+    if (summary.source === 'thumb' && kept?.source === 'viewer') {
+      // A full measurement stays; clip names measured since are added to it.
+      if (!summary.clipNames || kept.clipNames) return
+      all[key] = { ...kept, clipNames: summary.clipNames }
+    } else all[key] = summary
     clearTimeout(this.timer)
     this.timer = setTimeout(() => void writeAtomic(this.file(), JSON.stringify(all)).catch(() => {}), 1000)
   }

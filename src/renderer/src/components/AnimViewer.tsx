@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { parseAnimClip, type AnimClipInfo, type DependencyReport } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
-import { loadRig, pickRig, rigCoverage, THUMB_POSE, toThreeClip, type Rig } from '../viewer/animPlayer'
+import { GOOD_ENOUGH, loadRig, pickRig, rememberRig, rigCoverage, rigOrder, THUMB_POSE, toThreeClip, type Rig } from '../viewer/animPlayer'
 import type { LiveContext } from './ModelViewer'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   path: string
   report?: DependencyReport
   onInfo(info: AnimClipInfo): void
+  /** Every model of the branch (repo paths), to pick any as the rig. */
+  models?: readonly string[]
   /** A snapshot on the rig chosen (automatically or by hand), to replace the grid thumbnail. */
   onThumb?(dataUrl: string): void
   onLoading?(loading: boolean): void
@@ -20,7 +22,7 @@ interface Props {
 type Status = 'loading' | 'ready' | 'norig' | 'unsupported' | 'error'
 
 /** Plays a clip on a model whose rig matches it: picked automatically from nearby models, or chosen by hand. */
-export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: Props) {
+export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, onLoading }: Props) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
@@ -104,7 +106,7 @@ export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: P
     let cancelled = false
     let finished = false
     void (async () => {
-      const best = await pickRig(live, info, report.rigs!, {
+      const best = await pickRig(live, info, rigOrder(live, path, report.rigs!), {
         isCancelled: () => cancelled,
         onTried: (p, coverage) => !cancelled && setCoverage((c) => ({ ...c, [p]: coverage }))
       })
@@ -121,8 +123,12 @@ export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: P
     // Reports arrive in steps with the same rigs: compared by content.
   }, [info, report?.rigs?.join('|'), status])
 
+  const [searching, setSearching] = useState(false)
   const chooseRig = async (p: string) => {
     if (!info) return
+    setSearching(false)
+    // Clips in the same folder use it too (and their thumbnails, when rendered).
+    rememberRig(live, path, p)
     setStatus('loading')
     try {
       const r = await loadRig(live, p)
@@ -145,7 +151,11 @@ export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: P
           : status === 'error'
             ? t('viewer.error', { message: error })
             : undefined
-  const rigs = report?.rigs ?? []
+  // A model that fits is the only one offered ("Other model…" still finds any). Without one: the
+  // remembered model, then candidates not ruled out (tried with no matching bone).
+  const fits = !!rig && (coverage[rig] ?? 0) >= GOOD_ENOUGH
+  const rigs = fits ? [rig!] : rigOrder(live, path, report?.rigs ?? []).filter((p) => p === rig || coverage[p] === undefined || coverage[p] > 0)
+  const OTHER = '__other'
 
   return (
     <div className="viewer">
@@ -155,7 +165,7 @@ export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: P
           {overlay}
         </div>
       )}
-      {(status === 'ready' || status === 'norig') && (
+      {(status === 'ready' || status === 'norig' || (status === 'error' && !!info)) && (
         <div className="viewer-tools" role="toolbar" aria-label={t('viewer.tools')}>
           {status === 'ready' && (
             <>
@@ -190,17 +200,41 @@ export function AnimViewer({ live, path, report, onInfo, onThumb, onLoading }: P
               ))}
             </>
           )}
-          {rigs.length > 0 && (
-            <select className="select viewer-select" aria-label={t('anim.rig')} value={rig ?? ''} onChange={(e) => void chooseRig(e.target.value)}>
+          {searching ? (
+            <input
+              className="input viewer-select"
+              list="anim-models"
+              autoFocus
+              placeholder={t('anim.searchModel')}
+              aria-label={t('anim.searchModel')}
+              onBlur={() => setSearching(false)}
+              onKeyDown={(e) => e.key === 'Escape' && setSearching(false)}
+              onChange={(e) => {
+                const hit = models.find((m) => m === e.target.value)
+                if (hit) void chooseRig(hit)
+              }}
+            />
+          ) : (
+            <select
+              className="select viewer-select"
+              aria-label={t('anim.rig')}
+              value={rig ?? ''}
+              onChange={(e) => (e.target.value === OTHER ? setSearching(true) : void chooseRig(e.target.value))}
+            >
               {!rig && <option value="">{t('anim.pickRig')}</option>}
+              {rig && !rigs.includes(rig) && <option value={rig}>{rig.split('/').pop()}</option>}
               {rigs.map((p) => (
                 <option key={p} value={p}>
                   {p.split('/').pop()}
                   {coverage[p] !== undefined ? ` · ${Math.round(coverage[p] * 100)}%` : ''}
                 </option>
               ))}
+              {models.length > 0 && <option value={OTHER}>{t('anim.otherModel')}</option>}
             </select>
           )}
+          <datalist id="anim-models">
+            {searching && models.map((m) => <option key={m} value={m} />)}
+          </datalist>
         </div>
       )}
       {status === 'ready' && rig && <span className="viewer-hint">{t('anim.on', { name: rig.split('/').pop(), percent: Math.round((coverage[rig] ?? 0) * 100) })}</span>}

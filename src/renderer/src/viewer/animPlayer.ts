@@ -123,7 +123,7 @@ export const AUTO_TRIES = 4
  * the first candidates are the likeliest models; a generic rig further down
  * may match more bones yet be the wrong character.
  */
-const GOOD_ENOUGH = 0.5
+export const GOOD_ENOUGH = 0.5
 
 /** The first likely model whose rig has most of the clip's objects; the coverage of every rig tried. */
 export async function pickRig(
@@ -146,4 +146,29 @@ export async function pickRig(
     }
   }
   return best && best.coverage > 0 ? best : undefined
+}
+
+/** A model picked by hand is remembered for the clip's folder: clips side by side animate the same character. */
+const rigKey = (live: LiveContext, animPath: string) => `assethub.rig:${live.repo}:${animPath.slice(0, animPath.lastIndexOf('/'))}`
+
+export function rememberedRig(live: LiveContext, animPath: string): string | undefined {
+  try {
+    return localStorage.getItem(rigKey(live, animPath)) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function rememberRig(live: LiveContext, animPath: string, rigPath: string): void {
+  try {
+    localStorage.setItem(rigKey(live, animPath), rigPath)
+  } catch {
+    // Not remembered: the choice still applies to this clip.
+  }
+}
+
+/** Candidates to try, the model remembered for the clip's folder first. */
+export function rigOrder(live: LiveContext, animPath: string, candidates: readonly string[]): string[] {
+  const remembered = rememberedRig(live, animPath)
+  return remembered ? [remembered, ...candidates.filter((c) => c !== remembered)] : [...candidates]
 }

@@ -101,6 +101,31 @@ describe('rigCandidates', () => {
     expect(rigs.indexOf('p/Assets/Game/FBXs/Enemy/Enemy_Goblin@Run.fbx')).toBeGreaterThan(0)
     expect(rigs.indexOf('p/Assets/Game/Animation/Enemy/BigFoot/Standing Melee Attack.fbx')).toBeGreaterThan(0)
     expect(rigs).not.toContain('p/Other/Goblin.fbx')
+    // Unrelated models are not offered at all.
+    expect(rigs).not.toContain('p/Assets/Game/FBXs/Prop/Tree.fbx')
+    // The clip's name is an action: other characters' "Idle" files do not outrank the character.
+    const idle = rigCandidates('p/Assets/Game/Animation/Enemy/Goblin_Melee/Idle.anim', {
+      root: 'p/',
+      byPath: new Map<string, TreeEntry>([...byPath, ['p/Assets/Game/Animation/Enemy/Orc/Idle.fbx', { path: 'p/Assets/Game/Animation/Enemy/Orc/Idle.fbx', type: 'blob', sha: 'x' }]])
+    })
+    expect(idle[0]).toBe('p/Assets/Game/FBXs/Enemy/Enemy_Goblin.fbx')
+    expect(idle).not.toContain('p/Assets/Game/Animation/Enemy/Orc/Idle.fbx')
     expect(animationHandler.match({ path: 'a/Run.ANIM', type: 'blob', sha: 'x' })).toBe(true)
+  })
+})
+
+import { isStatsSummary, summarizeStats } from '../checks/playable'
+
+describe('models holding clips', () => {
+  const fbx = (name: string) => ({ id: name, type: 'fbx', path: name, name, sha: name, lfs: false })
+  it('are listed with animations when measured with clips, or named Model@Clip', () => {
+    expect(animationHandler.alsoShows?.(fbx('Goblin.fbx'), undefined)).toBe(false)
+    expect(animationHandler.alsoShows?.(fbx('Goblin@Run.fbx'), undefined)).toBe(true)
+    const stats = summarizeStats({ triangles: 1, vertices: 3, meshes: 1, materials: 1, bones: 20, animations: ['Run', 'Attack'], textures: [], fileBytes: 10 }, 'thumb')
+    expect(stats).toMatchObject({ clips: 2, clipNames: ['Run', 'Attack'] })
+    expect(isStatsSummary(stats)).toBe(true)
+    expect(isStatsSummary({ ...stats, clipNames: [1] })).toBe(false)
+    expect(animationHandler.alsoShows?.(fbx('Goblin.fbx'), stats)).toBe(true)
+    expect(animationHandler.alsoShows?.({ ...fbx('Run.anim'), type: 'animation' }, stats)).toBe(false)
   })
 })

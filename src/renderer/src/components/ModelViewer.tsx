@@ -24,13 +24,15 @@ interface Props {
   onThumb(dataUrl: string): void
   /** True while the model is downloading / loading, so background work can wait. */
   onLoading?(loading: boolean): void
+  /** Starts the first animation clip once loaded (when browsing animations). */
+  autoPlay?: boolean
 }
 
 const MAX_TEXTURES = 16
 
 type Status = 'loading' | 'ready' | 'error'
 
-export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThumb, onLoading }: Props) {
+export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThumb, onLoading, autoPlay }: Props) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
@@ -42,6 +44,8 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
   const [wireframe, setWireframe] = useState(false)
   const [clips, setClips] = useState<string[]>([])
   const [clip, setClip] = useState('')
+  const autoPlayRef = useRef(autoPlay)
+  autoPlayRef.current = autoPlay
   const callbacks = useRef({ onStats, onThumb, onLoading })
   callbacks.current = { onStats, onThumb, onLoading }
   useEffect(() => {
@@ -100,9 +104,17 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
         // Textures named in the FBX but not wired to a slot: place them by file name.
         if (!v.hasColorMaps() && byName.size) await v.applyMaterialSlots(guessedSlots([...byName.values()]))
         if (cancelled) return
-        setClips(v.stats(0, []).animations)
+        const clipList = v.stats(0, []).animations
+        setClips(clipList)
         setStatus('ready')
+        // The thumbnail is taken first, in the bind pose like other models; then the clip starts.
         publish()
+        if (autoPlayRef.current && clipList.length)
+          setTimeout(() => {
+            if (cancelled || v.isDisposed()) return
+            v.playAnimation(0)
+            setClip('0')
+          }, 400)
       } catch (err) {
         if (cancelled) return
         setError(err instanceof Error ? err.message : String(err))

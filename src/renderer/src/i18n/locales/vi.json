@@ -472,7 +472,9 @@
     "warn": {
       "baked": "Key ở gần như mọi frame (baked): bật Keyframe Reduction trong import settings có thể giảm nhiều.",
       "legacy": "Clip Legacy (component Animation, không phải Animator)."
-    }
+    },
+    "otherModel": "Model khác…",
+    "searchModel": "Gõ để tìm model"
   },
   "download": {
     "button": "Tải về",

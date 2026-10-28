@@ -2,7 +2,7 @@ import type { StatsSummary } from '@core/checks/playable'
 import { parseAnimClip, sampleCurve, type AnimClipInfo } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
-import { pickRig, THUMB_POSE, toThreeClip } from './animPlayer'
+import { pickRig, rigOrder, THUMB_POSE, toThreeClip } from './animPlayer'
 import { offscreenHost } from './backgroundThumb'
 import { FbxViewer } from './FbxViewer'
 
@@ -59,7 +59,7 @@ export async function renderAnimThumbnail(live: LiveContext, path: string): Prom
   const info = parseAnimClip(new TextDecoder().decode(bytes))
   const stats: StatsSummary = { triangles: 0, vertices: 0, bones: 0, clips: 1, materials: 0, fileBytes: bytes.byteLength, textureBytes: 0, maxTextureSize: 0, clipLength: info.length, source: 'viewer' }
   const posable = (info.kind === 'generic' || info.kind === 'legacy') && !info.compressed
-  const best = posable && report.rigs?.length ? await pickRig(live, info, report.rigs, { background: true, tries: 3 }) : undefined
+  const best = posable && report.rigs?.length ? await pickRig(live, info, rigOrder(live, path, report.rigs), { background: true, tries: 3 }) : undefined
   if (!best) return { url: curveCard(info, CARD_LABEL[info.kind]), stats }
   const viewer = new FbxViewer(offscreenHost())
   try {

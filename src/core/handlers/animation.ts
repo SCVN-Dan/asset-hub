@@ -10,6 +10,8 @@ export const animationHandler: AssetTypeHandler = {
   badge: 'ANIM',
   match: (entry) => ANIM_EXT.test(entry.path),
   resolveDependencies: resolveAnimationDependencies,
+  // Models holding clips (measured), or named like animation files (Model@Run.fbx), are animations too.
+  alsoShows: (asset, stats) => asset.type === 'fbx' && ((stats?.clips ?? 0) > 0 || asset.name.includes('@')),
   preview: {
     kind: 'animation',
     // Played in the renderer with three.js; nothing to prepare here.

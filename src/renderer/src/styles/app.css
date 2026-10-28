@@ -266,3 +266,4 @@ button { cursor: pointer; }
 .sprite-list li > span { display: inline-block; vertical-align: bottom; }
 .sprite-list .dep-name { max-width: 60%; margin-right: 8px; }
 .viewer-select { height: 28px; font-size: 12px; max-width: 200px; background: rgba(15, 17, 21, 0.85); }
+.clips-badge { position: absolute; left: 8px; bottom: 8px; padding: 2px 7px; border-radius: 999px; background: rgba(47, 111, 224, 0.9); color: #fff; font-size: 11px; font-weight: 700; }

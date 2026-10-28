@@ -1,5 +1,6 @@
 import type { DepContext } from './deps/fbx'
 import type { DependencyReport } from './deps/types'
+import type { StatsSummary } from './checks/playable'
 
 // Shared domain types. Keep this file free of DOM / Node / Electron imports so
 // it can be used from both the main process (indexer) and the renderer.
@@ -81,6 +82,11 @@ export interface AssetTypeHandler {
   materialsFromPrefabs?: boolean
   /** False when `resolveDependencies` never looks a GUID up (a texture is just itself + .meta). */
   usesGuids?: boolean
+  /**
+   * Assets of other types this type's tab also lists, judged by what is known
+   * about them (an FBX that holds animation clips is listed with animations).
+   */
+  alsoShows?(asset: Asset, stats: StatsSummary | undefined): boolean
   /** How a user takes it: a `.unitypackage` with its dependencies (default), or the file itself (a texture). */
   delivery?: 'unitypackage' | 'file'
 }

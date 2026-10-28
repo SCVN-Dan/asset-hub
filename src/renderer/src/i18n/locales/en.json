@@ -487,7 +487,9 @@
     "warn": {
       "baked": "Keys on nearly every frame (baked): Keyframe Reduction in the import settings could shrink it a lot.",
       "legacy": "Legacy clip (Animation component, not Animator)."
-    }
+    },
+    "otherModel": "Other model…",
+    "searchModel": "Type to find a model"
   },
   "download": {
     "button": "Download",

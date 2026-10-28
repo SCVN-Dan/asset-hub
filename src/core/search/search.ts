@@ -106,6 +106,8 @@ export type MatchKind = 'name' | 'related' | 'folder' | 'typo'
 interface Indexed {
   asset: Asset
   name: string
+  /** Other names the asset answers to (clips inside a model), normalised and joined. */
+  extra: string
   words: string[]
   folders: string[]
 }
@@ -140,21 +142,23 @@ export class AssetSearch {
   /** A name word as it appears in file names (before singular), for display. */
   private readonly spelling = new Map<string, string>()
 
-  constructor(assets: readonly Asset[]) {
+  /** `extraNames`: other names an asset answers to, e.g. the animation clips inside a model. */
+  constructor(assets: readonly Asset[], extraNames?: (asset: Asset) => readonly string[]) {
     this.items = assets.map((asset) => {
-      const raw = nameWords(asset.name)
+      const extras = extraNames?.(asset) ?? []
+      const raw = [...nameWords(asset.name), ...extras.flatMap(nameWords)]
       const words = raw.map(singular)
       const folders = asset.path.split('/').slice(0, -1).flatMap(nameWords).map(singular)
       words.forEach((w, i) => this.spelling.has(w) || this.spelling.set(w, raw[i]))
       for (const w of new Set(words)) if (w.length > 1) this.vocabulary.set(w, (this.vocabulary.get(w) ?? 0) + 1)
-      return { asset, name: normalize(asset.name), words, folders }
+      return { asset, name: normalize(asset.name), extra: extras.map(normalize).join(' '), words, folders }
     })
   }
 
   private matchTerm(item: Indexed, term: QueryTerm): { kind: MatchKind; word?: string } | undefined {
     // Short group names ("ca", "xe") would match inside unrelated names (Cactus); for them only the group counts.
     const literal = term.text.length >= 3 || !term.related.size
-    if (literal && (item.name.includes(term.text) || item.name.includes(term.text.replace(/ /g, '')))) return { kind: 'name' }
+    if (literal && [item.name, item.extra].some((n) => n.includes(term.text) || n.includes(term.text.replace(/ /g, '')))) return { kind: 'name' }
     const related = item.words.find((w) => term.related.has(w))
     if (related) return { kind: 'related', word: related }
     if (item.folders.some((f) => f === singular(term.text) || term.related.has(f))) return { kind: 'folder' }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AssetSearch,
@@ -224,9 +224,26 @@ export function Browse({
   }, [tree, roots, root, registry])
   const assets = useMemo(() => allAssets.filter((a) => !isInExcludedFolder(a.path, excludedFolders)), [allAssets, excludedFolders])
   const hiddenCount = allAssets.length - assets.length
-  const ofType = useMemo(() => (typeFilter === ALL ? assets : assets.filter((a) => a.type === typeFilter)), [assets, typeFilter])
+  // Clip names of measured models, keyed so the search is rebuilt only when they change (not on every thumbnail).
+  const clipKey = Object.entries(modelStats)
+    .filter(([, s]) => s.clips > 0 && s.clipNames)
+    .map(([sha, s]) => `${sha}:${s.clipNames!.join(',')}`)
+    .sort()
+    .join('|')
+  const clipNames = useMemo(() => new Map(Object.entries(modelStats).flatMap(([sha, s]) => (s.clipNames ? [[sha, s.clipNames] as const] : []))), [clipKey])
+  /** Shas of models known to hold clips, for tabs that list them (`alsoShows`). */
+  const withClips = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.clips > 0).map(([sha]) => sha).sort().join('|'), [modelStats])
+  /** In the open tab: its own type, or another type the tab's handler also lists. */
+  const inTab = useCallback(
+    (a: Asset, tab: string) => tab === ALL || a.type === tab || !!registry.get(tab)?.alsoShows?.(a, modelStats[a.sha]),
+    // modelStats matters only through which models hold clips.
+    [registry, withClips]
+  )
+  /** Every model of the branch, as repo paths (rigs to play clips on). */
+  const modelPaths = useMemo(() => assets.filter((a) => registry.get(a.type)?.preview.kind === 'three').map((a) => root + a.path), [assets, registry, root])
+  const ofType = useMemo(() => (typeFilter === ALL ? assets : assets.filter((a) => inTab(a, typeFilter))), [assets, typeFilter, inTab])
   const folderRoot = useMemo(() => buildFolderTree(ofType), [ofType])
-  const searcher = useMemo(() => new AssetSearch(ofType), [ofType])
+  const searcher = useMemo(() => new AssetSearch(ofType, (a) => clipNames.get(a.sha) ?? []), [ofType, clipNames])
   // Matches groups (fish → shark), typos and folder names, best matches first.
   const found = useMemo(() => searcher.search(query), [searcher, query])
   const visible = useMemo(() => found.assets.filter((a) => isInFolder(a.path, folder)), [found, folder])
@@ -267,14 +284,14 @@ export function Browse({
     () =>
       (catalog.assets ?? []).filter(
         (a) =>
-          (typeFilter === ALL || a.type === typeFilter) &&
+          inTab(a, typeFilter) &&
           (!catalogRepo && !catalogBranch
             ? true
             : a.locations.some((l) => (!catalogRepo || l.repo === catalogRepo) && (!catalogBranch || l.branches.includes(catalogBranch))))
       ),
-    [catalog.assets, typeFilter, catalogRepo, catalogBranch]
+    [catalog.assets, typeFilter, catalogRepo, catalogBranch, inTab]
   )
-  const catalogSearch = useMemo(() => new AssetSearch(catalogOfType), [catalogOfType])
+  const catalogSearch = useMemo(() => new AssetSearch(catalogOfType, (a) => clipNames.get(a.sha) ?? []), [catalogOfType, clipNames])
   const catalogFound = useMemo(() => catalogSearch.search(query), [catalogSearch, query])
   const catalogShown = catalogFound.assets as CatalogAsset[]
   const catalogSelected = catalogShown.find((a) => a.sha === catalogSel)
@@ -508,7 +525,12 @@ export function Browse({
 
   const saveStats = (key: string, summary: StatsSummary) => {
     // A thumbnail's measurement never replaces one taken in the viewer (which counts every texture).
-    setModelStats((prev) => (summary.source === 'thumb' && prev[key]?.source === 'viewer' ? prev : { ...prev, [key]: summary }))
+    setModelStats((prev) => {
+      const kept = prev[key]
+      if (summary.source !== 'thumb' || kept?.source !== 'viewer') return { ...prev, [key]: summary }
+      // A full measurement stays; clip names measured since are added to it.
+      return summary.clipNames && !kept.clipNames ? { ...prev, [key]: { ...kept, clipNames: summary.clipNames } } : prev
+    })
     void window.api.stats.save(key, summary)
   }
   const saveThumb = (key: string, dataUrl: string, summary?: StatsSummary) => {
@@ -525,18 +547,21 @@ export function Browse({
   useEffect(() => {
     if (!thumbsLoaded || viewerLoading || thumbQueue.busy.size || (!inCatalog && !live)) return
     renderable
-      .filter((a) => !thumbs[a.sha] && !thumbQueue.failedRecently(a.sha))
+      // Models measured before clip names were kept get one more render for them.
+      .filter((a) => (!thumbs[a.sha] || (modelStats[a.sha]?.clips > 0 && !modelStats[a.sha]?.clipNames)) && !thumbQueue.failedRecently(a.sha))
       .slice(0, 4)
       .forEach((a, i) => requestThumb(a, 1_000_000 + i))
-  }, [thumbsLoaded, viewerLoading, thumbQueue.busy, thumbs, gridItems, inCatalog, live])
+  }, [thumbsLoaded, viewerLoading, thumbQueue.busy, thumbs, modelStats, gridItems, inCatalog, live])
 
   /** Counts for the type tabs: of the open branch, or of the cross-branch results. */
   const typeSource: readonly Asset[] = inCatalog ? (catalog.assets ?? []) : assets
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const a of typeSource) counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
+    // Tabs that also list other types count them too.
+    for (const h of registry.all()) if (h.alsoShows) counts.set(h.id, (counts.get(h.id) ?? 0) + typeSource.filter((a) => a.type !== h.id && inTab(a, h.id)).length)
     return counts
-  }, [typeSource])
+  }, [typeSource, registry, inTab])
 
   return (
     <div className="browse">
@@ -828,6 +853,8 @@ export function Browse({
           onModelStats={saveStats}
           asset={selected}
           handler={selected && registry.get(selected.type)}
+          playClips={registry.get(typeFilter)?.preview.kind === 'animation'}
+          models={modelPaths}
           live={live}
           onThumb={saveThumb}
           onReport={rememberReport}

@@ -52,6 +52,12 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       <span className="asset-thumb">
         {thumb ? <img className="asset-img" src={thumb} alt="" loading="lazy" /> : handler?.preview.kind === 'image' ? <ImageIcon size={52} /> : handler?.preview.kind === 'material' ? <SphereIcon size={52} /> : handler?.preview.kind === 'audio' ? <AudioIcon size={52} /> : handler?.preview.kind === 'animation' ? <AnimIcon size={52} /> : <CubeIcon size={56} />}
         {handler && <span className="type-badge">{handler.badge}</span>}
+        {/* A model holding animation clips. */}
+        {handler?.preview.kind === 'three' && stats && stats.clips > 0 ? (
+          <span className="clips-badge" title={stats.clipNames?.join(', ')}>
+            ▶ {stats.clips}
+          </span>
+        ) : null}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
         {generating && !thumb && <span className="thumb-spinner" aria-label={t('browse.generatingThumb')} />}
       </span>

@@ -39,6 +39,10 @@ interface Props {
   /** Opens the same file in another branch or repo. */
   onOpenLocation(repo: string, branch: string, path: string): void
   onViewerLoading?(loading: boolean): void
+  /** Every model of the branch (repo paths), for picking a rig to play a clip on. */
+  models?: readonly string[]
+  /** Opened from a tab of animations: a model starts playing its first clip. */
+  playClips?: boolean
 }
 
 type PrefabSearch =
@@ -393,7 +397,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
@@ -541,6 +545,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           path={repoPath}
           report={report}
           prefabMaterial={prefabMaterial}
+          autoPlay={playClips}
           onStats={(s) => {
             setStats(s)
             onModelStats?.(asset.sha, summarizeStats(s, 'viewer'))
@@ -562,7 +567,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onLoading={onViewerLoading}
         />
       ) : live && repoPath && handler?.preview.kind === 'animation' ? (
-        <AnimViewer key={repoPath} live={live} path={repoPath} report={report} onInfo={setAnimInfo} onThumb={(url) => onThumb(asset.sha, url)} onLoading={onViewerLoading} />
+        <AnimViewer key={repoPath} live={live} path={repoPath} report={report} models={models} onInfo={setAnimInfo} onThumb={(url) => onThumb(asset.sha, url)} onLoading={onViewerLoading} />
       ) : live && repoPath && handler?.preview.kind === 'material' ? (
         <MaterialViewer
           key={repoPath}
