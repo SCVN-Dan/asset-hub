@@ -64,6 +64,8 @@ export async function describeMaterials(
     if (p) matPaths.set(m.guid, p)
   }
   const matTexts = await ctx.readTexts([...new Set(matPaths.values())])
+  const shaderFiles: string[] = []
+  const parents: string[] = []
   const materials: MaterialRef[] = refs.map((m) => {
     const path = matPaths.get(m.guid)
     if (!path) {
@@ -76,6 +78,15 @@ export async function describeMaterials(
     if (shader?.kind === 'project') {
       warnings.add('customShader')
       addWithMeta(shader.path!)
+      shaderFiles.push(shader.path!)
+    }
+    // A Material Variant needs its parent material to import correctly.
+    if (parsed.parentGuid) {
+      const parent = ctx.pathForGuid(parsed.parentGuid)
+      if (parent) {
+        addWithMeta(parent)
+        parents.push(parent)
+      }
     }
     const textures: TextureRef[] = parsed.textures.map((t) => {
       const tp = ctx.pathForGuid(t.guid)
@@ -86,9 +97,75 @@ export async function describeMaterials(
       addWithMeta(tp)
       return { prop: t.prop, guid: t.guid, path: tp, name: baseName(tp), matchedBy: 'guid', missing: false, size: entrySize(ctx.byPath.get(tp)) }
     })
-    return { name: parsed.name ?? m.name ?? baseName(path), guid: m.guid, path, missing: false, shader, textures }
+    return { name: parsed.name ?? m.name ?? baseName(path), sourceName: m.name, guid: m.guid, path, missing: false, shader, textures }
   })
+  // Parents of variants bring their own textures and shaders.
+  if (parents.length) {
+    const parentTexts = await ctx.readTexts(parents)
+    for (const p of parents) {
+      const parsed = parseMaterial(parentTexts.get(p) ?? '')
+      for (const t of parsed.textures) {
+        const tp = ctx.pathForGuid(t.guid)
+        if (tp) addWithMeta(tp)
+      }
+      const sp = parsed.shader && ctx.pathForGuid(parsed.shader.guid)
+      if (sp) {
+        addWithMeta(sp)
+        shaderFiles.push(sp)
+      }
+    }
+  }
+  for (const f of await shaderDependencies(shaderFiles, ctx)) addWithMeta(f)
   return { materials, files: [...files], warnings: [...warnings] }
+}
+
+/**
+ * Files a project shader needs to compile: #include'd .hlsl/.cginc (relative
+ * to the shader or to the project) and, for Shader Graphs, every asset they
+ * reference by GUID (sub-graphs, textures). Followed a few levels deep.
+ */
+async function shaderDependencies(start: readonly string[], ctx: DepContext): Promise<string[]> {
+  const seen = new Set<string>(start)
+  const found: string[] = []
+  let frontier = [...seen]
+  for (let depth = 0; depth < 4 && frontier.length; depth++) {
+    const texts = await ctx.readTexts(frontier)
+    const next: string[] = []
+    for (const file of frontier) {
+      const text = texts.get(file) ?? ''
+      const refs = new Set<string>()
+      for (const m of text.matchAll(/#include\s+"([^"]+)"/g)) {
+        const inc = m[1].replace(/\\/g, '/')
+        const candidates = [`${dirName(file)}/${inc}`, `${ctx.root}${inc}`].map(normalisePath)
+        const hit = candidates.find((c) => ctx.byPath.has(c))
+        if (hit) refs.add(hit)
+      }
+      if (/\.shader(sub)?graph$/i.test(file)) {
+        for (const m of text.matchAll(/"guid"\s*:\s*"([0-9a-f]{32})"/g)) {
+          const p = ctx.pathForGuid(m[1])
+          if (p) refs.add(p)
+        }
+      }
+      for (const r of refs) {
+        if (seen.has(r)) continue
+        seen.add(r)
+        found.push(r)
+        if (/\.(hlsl|cginc|shader|shadersubgraph|shadergraph)$/i.test(r)) next.push(r)
+      }
+    }
+    frontier = next
+  }
+  return found
+}
+
+/** Resolves "." and ".." segments. */
+function normalisePath(p: string): string {
+  const out: string[] = []
+  for (const s of p.split('/')) {
+    if (s === '..') out.pop()
+    else if (s && s !== '.') out.push(s)
+  }
+  return out.join('/')
 }
 
 /**

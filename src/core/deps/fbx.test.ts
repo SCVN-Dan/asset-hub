@@ -189,4 +189,31 @@ describe('resolveFbxDependencies', () => {
     expect(guessTextureRole('Hero_Mask.png')).toBeUndefined()
     expect(guessTextureRole('Hero_Roughness.png')).toBeUndefined()
   })
+
+  it('reads Unity 5-era texture slots and CRLF line endings', () => {
+    const old = '--- !u!21 &2100000\r\nMaterial:\r\n  m_Name: Old\r\n  m_SavedProperties:\r\n    m_TexEnvs:\r\n    - first:\r\n        name: _MainTex\r\n      second:\r\n        m_Texture: {fileID: 2800000, guid: ' + G(3) + ', type: 3}\r\n    m_Floats: []\r\n'
+    expect(parseMaterial(old)).toMatchObject({ name: 'Old', textures: [{ prop: '_MainTex', guid: G(3) }] })
+  })
+
+  it('follows material variant parents and shader includes / sub-graphs', async () => {
+    const variant = `--- !u!21 &2100000\nMaterial:\n  m_Name: M_Body\n  m_Parent: {fileID: 2100000, guid: ${G(30)}, type: 2}\n  m_Shader: {fileID: 4800000, guid: ${G(7)}, type: 3}\n  m_SavedProperties:\n    m_TexEnvs: []\n    m_Floats: []\n`
+    const parent = `--- !u!21 &2100000\nMaterial:\n  m_Name: M_Base\n  m_Shader: {fileID: 4800000, guid: ${G(7)}, type: 3}\n  m_SavedProperties:\n    m_TexEnvs:\n    - _BaseMap:\n        m_Texture: {fileID: 2800000, guid: ${G(31)}, type: 3}\n    m_Floats: []\n`
+    const shader = 'Shader "Custom/Toon" { HLSLINCLUDE\n#include "Include/Toon.hlsl"\n#include "Assets/Shared/Common.cginc"\nENDHLSL }'
+    const ctx = ctxFor(
+      {
+        'proj/Assets/Hero/Hero.fbx.meta': fbxMetaA.replace(G(99), G(98)),
+        'proj/Assets/Mats/M_Body.mat': variant,
+        'proj/Assets/Mats/M_Base.mat': parent,
+        'proj/Assets/Shaders/Toon.shader': shader,
+        'proj/Assets/Shaders/Include/Toon.hlsl': '// toon',
+        'proj/Assets/Shared/Common.cginc': '// common'
+      },
+      { [G(2)]: 'proj/Assets/Mats/M_Body.mat', [G(30)]: 'proj/Assets/Mats/M_Base.mat', [G(31)]: 'proj/Assets/Tex/Base.png', [G(7)]: 'proj/Assets/Shaders/Toon.shader' }
+    )
+    const report = await resolveFbxDependencies('proj/Assets/Hero/Hero.fbx', ctx)
+    expect(report.materials[0]).toMatchObject({ name: 'M_Body', sourceName: 'M_Body' })
+    expect(report.files).toEqual(
+      expect.arrayContaining(['proj/Assets/Mats/M_Base.mat', 'proj/Assets/Tex/Base.png', 'proj/Assets/Shaders/Include/Toon.hlsl', 'proj/Assets/Shared/Common.cginc'])
+    )
+  })
 })

@@ -1,6 +1,6 @@
 # Asset Hub — Roadmap
 
-- Cập nhật: 2026-10-27
+- Cập nhật: 2026-10-28
 - Chi tiết kỹ thuật: [PLAN.md](PLAN.md)
 - Canvas (prototype + docs): https://claude.ai/artifact/VsfxZnDZguqCF2ASwwZfoP
 
@@ -203,6 +203,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | **Rà soát trước khi đóng gói** (review độc lập, 14 lỗi): file tạm cache trùng tên khi ghi song song; nhận LFS pointer kể cả khi thiếu `.gitattributes`; không cache kết quả đọc lỗi (GUID, prefab) và text GraphQL bị cắt; material variant (`m_Parent`) + `#include` shader / Shader Graph sub-graph vào gói; `.mat` kiểu Unity 5 + CRLF; git chạy tuần tự theo repo, `ls-tree -z` (tên file tiếng Việt/Unicode); progress index báo cho mọi màn chờ; khôi phục offline thử lại, nhận diện rate-limit; chặn điều hướng khi kéo-thả file vào cửa sổ, chỉ 1 instance; bỏ kết quả tìm prefab cũ khi đổi FBX; xoá gói khi đổi project; không đọc branch cũ khi đổi repo; giải phóng texture/blob URL của viewer; thumbnail lỗi thử lại sau 2 phút, chờ cache thumbnail trước khi render, bỏ qua FBX > 40 MB; nén gói bất đồng bộ (không đơ cửa sổ). |
 | 2026-10-28 | Material từ prefab: Fish_Tuna_A.fbx không có material — được gán ở FishModel.prefab. Thêm nút tìm material trong prefab (1,8 s), preview + export dùng material đó. Sửa tên material URP và ưu tiên `_BaseMap` hơn `_MainTex`. |
 | 2026-10-28 | Thumbnail tự tạo chạy nền + nạp dần, gộp file giống hệt, phím mũi tên. Sửa mất cache khi mở lại app (trùng thư mục `Cache` của Chromium). |
 | 2026-10-27 | Chỉ mục GUID nhanh hơn ~13 lần: git fetch một lần + cache GUID theo SHA `.meta`. Không gọi git trên macOS khi chưa có Command Line Tools. |

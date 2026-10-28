@@ -131,11 +131,16 @@ export class FbxViewer {
           jobs.push(
             loadTex(slot.file, color || EMISSION_PROPS.has(prop)).then((tex) => {
               if (!tex || this.disposed) return
+              const replace = (old: THREE.Texture | null) => old !== tex && old?.dispose()
               if (color) {
+                replace(m.map)
                 m.map = tex
                 m.color?.set(0xffffff)
-              } else if (NORMAL_PROPS.has(prop)) m.normalMap = tex
-              else {
+              } else if (NORMAL_PROPS.has(prop)) {
+                replace(m.normalMap)
+                m.normalMap = tex
+              } else {
+                replace(m.emissiveMap)
                 m.emissiveMap = tex
                 m.emissive?.set(0xffffff)
               }

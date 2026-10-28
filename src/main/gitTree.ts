@@ -53,9 +53,19 @@ function gitEnv(token: string): NodeJS.ProcessEnv {
   }
 }
 
+/** Git work on one cache repo runs one command chain at a time (config and fetch take locks). */
+const repoQueues = new Map<string, Promise<unknown>>()
+function serially<T>(dir: string, task: () => Promise<T>): Promise<T> {
+  const next = (repoQueues.get(dir) ?? Promise.resolve()).catch(() => undefined).then(task)
+  repoQueues.set(dir, next.catch(() => undefined))
+  return next
+}
+
 /** Bare partial-clone cache repo: objects are fetched on demand, nothing is checked out. */
+const repoDir = (cacheDir: string, repo: string) => join(cacheDir, 'repos', `${repo.replace('/', '__')}.git`)
+
 async function ensureRepo(cacheDir: string, repo: string, env: NodeJS.ProcessEnv): Promise<string> {
-  const dir = join(cacheDir, 'repos', `${repo.replace('/', '__')}.git`)
+  const dir = repoDir(cacheDir, repo)
   if (!existsSync(join(dir, 'config'))) {
     await mkdir(dir, { recursive: true })
     await git(['init', '--bare', '--quiet'], env, dir)
@@ -90,6 +100,10 @@ export function parseCatFileBatch(out: Buffer): Map<string, Buffer> {
  */
 export async function readBlobsWithGit(cacheDir: string, repo: string, oids: readonly string[], token: string): Promise<Map<string, Buffer>> {
   const env = gitEnv(token)
+  return serially(repoDir(cacheDir, repo), () => readBlobsLocked(cacheDir, repo, oids, env))
+}
+
+async function readBlobsLocked(cacheDir: string, repo: string, oids: readonly string[], env: NodeJS.ProcessEnv): Promise<Map<string, Buffer>> {
   const dir = await ensureRepo(cacheDir, repo, env)
   // In a partial clone, asking for a missing object makes git fetch it on its
   // own, one request each. Only ever ask for objects already on disk.
@@ -109,11 +123,14 @@ export async function readBlobsWithGit(cacheDir: string, repo: string, oids: rea
  */
 export async function listTreeWithGit(cacheDir: string, repo: string, commitSha: string, token: string): Promise<TreeEntry[]> {
   const env = gitEnv(token)
-  const dir = await ensureRepo(cacheDir, repo, env)
-  await git(['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', 'origin', commitSha], env, dir)
-  const out = (await git(['ls-tree', '-r', '-t', commitSha], env, dir)).toString()
+  const out = await serially(repoDir(cacheDir, repo), async () => {
+    const dir = await ensureRepo(cacheDir, repo, env)
+    await git(['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', 'origin', commitSha], env, dir)
+    // -z: paths are NUL-separated and not C-quoted, so non-ASCII names stay intact.
+    return (await git(['ls-tree', '-r', '-t', '-z', commitSha], env, dir)).toString()
+  })
   const entries: TreeEntry[] = []
-  for (const line of out.split('\n')) {
+  for (const line of out.split('\0')) {
     const tab = line.indexOf('\t')
     if (tab === -1) continue
     const [, type, sha] = line.slice(0, tab).split(' ')

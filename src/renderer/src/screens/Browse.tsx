@@ -43,6 +43,8 @@ interface Props {
 const ALL = 'all'
 /** Cards rendered per step while scrolling. */
 const PAGE = 60
+/** Models bigger than this are only rendered when opened, not for grid thumbnails. */
+const THUMB_MAX_BYTES = 40 * 1024 * 1024
 const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
 
 /** PNG preview for Unity's import dialog, from a cached thumbnail data URL. */
@@ -86,6 +88,8 @@ export function Browse({
   const [repo, setRepo] = useState('')
   const [branches, setBranches] = useState<string[]>([])
   const [branch, setBranch] = useState('')
+  /** Repo the current branch was listed for; until it matches `repo`, the branch is stale. */
+  const [branchRepo, setBranchRepo] = useState('')
   const [tree, setTree] = useState<Load<TreeEntry[]>>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [root, setRoot] = useState('')
@@ -94,6 +98,8 @@ export function Browse({
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string>()
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
+  /** Saved thumbnails are known; only then is it worth rendering missing ones. */
+  const [thumbsLoaded, setThumbsLoaded] = useState(false)
   const [mergeCopies, setMergeCopies] = useState(true)
   const [limit, setLimit] = useState(PAGE)
   const sentinel = useRef<HTMLDivElement>(null)
@@ -108,12 +114,12 @@ export function Browse({
     () => window.api.exporter.onProgress((progress) => setExportState((s) => (s.status === 'running' ? { status: 'running', progress } : s))),
     []
   )
-  // A pack belongs to one repo + branch.
+  // A pack belongs to one repo + branch + project (its paths are relative to the project root).
   useEffect(() => {
     setPack([])
     reports.current.clear()
     prefabFiles.current.clear()
-  }, [repo, branch])
+  }, [repo, branch, root])
 
   useEffect(() => {
     let cancelled = false
@@ -146,6 +152,7 @@ export function Browse({
       (list) => {
         if (cancelled) return
         setBranches(list)
+        setBranchRepo(repo)
         const preferred = repoList.find((r) => r.fullName === repo)?.defaultBranch
         if (repo === initialRepo && initialBranch && list.includes(initialBranch)) setBranch(initialBranch)
         else setBranch(preferred && list.includes(preferred) ? preferred : (list[0] ?? ''))
@@ -159,7 +166,7 @@ export function Browse({
   }, [source, repo])
 
   useEffect(() => {
-    if (!repo || !branch) return
+    if (!repo || !branch || branchRepo !== repo) return
     onOpenBranch(repo, branch)
     let cancelled = false
     setTree({ status: 'loading' })
@@ -177,7 +184,7 @@ export function Browse({
     return () => {
       cancelled = true
     }
-  }, [source, repo, branch, reloadKey])
+  }, [source, repo, branch, reloadKey, branchRepo])
 
   const roots = useMemo(() => (tree.status === 'ready' ? findUnityProjectRoots(tree.data) : []), [tree])
   const allAssets = useMemo(() => {
@@ -243,13 +250,24 @@ export function Browse({
     card?.scrollIntoView({ block: 'nearest' })
     if (document.activeElement?.classList.contains('asset-card')) card?.focus({ preventScroll: true })
   }, [selectedId])
-  const live = useMemo(() => (source.isDemo || !repo || !branch ? undefined : { repo, branch, root }), [source, repo, branch, root])
+  const live = useMemo(
+    () => (source.isDemo || !repo || !branch || branchRepo !== repo ? undefined : { repo, branch, root }),
+    [source, repo, branch, branchRepo, root]
+  )
 
   // Thumbnails rendered earlier, keyed by the model's content hash.
   useEffect(() => {
+    setThumbsLoaded(false)
     if (source.isDemo || !allAssets.length) return
     let cancelled = false
-    void window.api.thumbs.get(allAssets.map((a) => a.sha)).then((found) => !cancelled && setThumbs(found))
+    void window.api.thumbs.get(allAssets.map((a) => a.sha)).then(
+      (found) => {
+        if (cancelled) return
+        setThumbs(found)
+        setThumbsLoaded(true)
+      },
+      () => !cancelled && setThumbsLoaded(true)
+    )
     return () => {
       cancelled = true
     }
@@ -449,7 +467,7 @@ export function Browse({
                     selected={a.id === selectedId || (!!selected && mergeCopies && selected.sha === a.sha)}
                     onSelect={() => setSelectedId(a.id)}
                     onVisible={
-                      live && registry.get(a.type)?.preview.kind === 'three'
+                      live && thumbsLoaded && registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
                         ? (on) => (on ? !thumbs[a.sha] && thumbQueue.request(a.sha, root + a.path) : thumbQueue.cancel(a.sha))
                         : undefined
                     }

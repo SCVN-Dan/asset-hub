@@ -77,6 +77,8 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     } catch (err) {
       // A revoked token should not be retried on every launch.
       if (err instanceof SourceError && err.code === 'unauthorized') store.clear()
+      // Offline or GitHub unreachable: try again on the next status check instead of signing out.
+      if (err instanceof SourceError && (err.code === 'network' || err.code === 'rateLimited' || err.code === 'unknown')) restored = false
     }
   }
 

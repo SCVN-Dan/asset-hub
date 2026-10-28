@@ -45,11 +45,15 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
 
   /** Downloads texture files once per viewer and serves them as blob URLs. */
   const fetchTextures = async (paths: readonly string[]) => {
+    const owner = viewer.current
     const wanted = [...new Set(paths)].filter((p) => DRAWABLE.test(p) && !files.current.has(p)).slice(0, MAX_TEXTURES)
     await Promise.all(
       wanted.map(async (p) => {
         const file = await fetchTextureFile(live, p)
-        if (file) files.current.set(p, file)
+        if (!file) return
+        // The viewer closed (or moved to another model) while downloading: nobody will revoke this URL later.
+        if (!owner || owner.isDisposed() || owner !== viewer.current) URL.revokeObjectURL(file.url)
+        else files.current.set(p, file)
       })
     )
   }
@@ -112,7 +116,8 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
   useEffect(() => {
     if (status !== 'ready') return
     const slotsOf = (m: MaterialRef, material: string) => m.textures.filter((tex) => tex.path).map((tex) => ({ material, prop: tex.prop ?? '', path: tex.path! }))
-    const textures = [...(report?.kind === 'A' ? report.materials.flatMap((m) => slotsOf(m, m.name)) : []), ...(prefabMaterial ? slotsOf(prefabMaterial, '*') : [])]
+    // Kind A slots are matched to the FBX material the .mat replaces (its name inside the FBX), not the .mat's own name.
+    const textures = [...(report?.kind === 'A' ? report.materials.flatMap((m) => slotsOf(m, m.sourceName ?? m.name)) : []), ...(prefabMaterial ? slotsOf(prefabMaterial, '*') : [])]
     if (!textures.length) return
     let cancelled = false
     void (async () => {

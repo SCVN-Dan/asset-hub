@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, type ModelStats } from '@core/checks/playable'
 import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
@@ -90,11 +90,14 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [picked, setPicked] = useState<{ material: MaterialRef; files: string[] }>()
   const [prefabProgress, setPrefabProgress] = useState<{ done: number; total: number }>()
   const repoPath = asset && live ? live.root + asset.path : undefined
+  /** Bumped when the selection changes, so a search started for another model is ignored. */
+  const searchToken = useRef(0)
 
   useEffect(() => window.api.assets.onIndexProgress(setProgress), [])
   useEffect(() => window.api.assets.onPrefabProgress(setPrefabProgress), [])
 
   useEffect(() => {
+    searchToken.current++
     setStats(undefined)
     setCopied(false)
     setProgress(undefined)
@@ -150,14 +153,16 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
   const searchPrefabs = async (scope: 'near' | 'all') => {
     if (!live || !repoPath) return
+    const token = ++searchToken.current
     setPrefab({ status: 'running', scope })
     setPrefabProgress(undefined)
     try {
       const result = unwrap(await window.api.assets.findPrefabMaterials(live.repo, live.branch, repoPath, live.root, scope, excludedFolders))
+      if (token !== searchToken.current) return
       setPrefab({ status: 'ready', result })
       onPrefabFiles(repoPath, result.files)
     } catch (error) {
-      setPrefab({ status: 'error', error })
+      if (token === searchToken.current) setPrefab({ status: 'error', error })
     }
   }
   const issues = stats ? checkPlayableBudget(stats) : []

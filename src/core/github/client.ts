@@ -113,22 +113,28 @@ export class GitHubClient {
     try {
       const result = new Map<string, string>()
       const fields = batch
-        .map((p, i) => `f${i}: object(expression: ${JSON.stringify(`${commitSha}:${p}`)}) { ... on Blob { text } }`)
+        .map((p, i) => `f${i}: object(expression: ${JSON.stringify(`${commitSha}:${p}`)}) { ... on Blob { text isTruncated oid } }`)
         .join('\n')
       const query = `query { repository(owner: ${JSON.stringify(owner)}, name: ${JSON.stringify(name)}) { ${fields} } }`
       const { data } = await this.request<{
-        data?: { repository: Record<string, { text: string | null } | null> | null }
+        data?: { repository: Record<string, { text: string | null; isTruncated?: boolean; oid?: string } | null> | null }
         errors?: Array<{ type?: string; message: string }>
       }>('/graphql', { method: 'POST', body: JSON.stringify({ query }) })
       const repoData = data.data?.repository
       if (!repoData) {
         const err = data.errors?.[0]
-        throw new SourceError(err?.type === 'NOT_FOUND' ? 'notFound' : 'unknown', err?.message ?? 'GraphQL request failed')
+        const code = err?.type === 'NOT_FOUND' ? 'notFound' : err?.type === 'RATE_LIMITED' ? 'rateLimited' : 'unknown'
+        throw new SourceError(code, err?.message ?? 'GraphQL request failed')
       }
+      const truncated: Array<{ path: string; oid: string }> = []
       batch.forEach((p, i) => {
-        const text = repoData[`f${i}`]?.text
-        if (typeof text === 'string') result.set(p, text)
+        const blob = repoData[`f${i}`]
+        if (blob?.isTruncated && blob.oid) truncated.push({ path: p, oid: blob.oid })
+        else if (typeof blob?.text === 'string') result.set(p, blob.text)
       })
+      // GraphQL cuts long texts (large prefabs, big .meta files); read those whole from the blob API.
+      const dec = new TextDecoder()
+      for (const t of truncated) result.set(t.path, dec.decode(await this.getBlobBytes(`${owner}/${name}`, t.oid)))
       return result
     } catch (err) {
       if (!isTransient(err) || attempt >= MAX_RETRIES) throw err
@@ -233,7 +239,10 @@ async function toSourceError(res: Awaited<ReturnType<FetchLike>>): Promise<Sourc
   const status = res.status
   if (status === 401) return new SourceError('unauthorized', message, { status })
   if (status === 403 && sso) return new SourceError('sso', message, { status, ssoUrl: /url=(\S+)/.exec(sso)?.[1] })
-  if (status === 429 || (status === 403 && remaining === '0')) return new SourceError('rateLimited', message, { status, resetAt })
+  // Secondary (abuse) limits come as 403 with Retry-After or a message, not remaining=0.
+  const retryAfter = Number(res.headers.get('retry-after'))
+  if (status === 429 || (status === 403 && (remaining === '0' || retryAfter > 0 || /rate limit/i.test(message))))
+    return new SourceError('rateLimited', message, { status, resetAt: resetAt ?? (retryAfter > 0 ? Date.now() + retryAfter * 1000 : undefined) })
   if (status === 403) return new SourceError('forbidden', message, { status })
   if (status === 404) return new SourceError('notFound', message, { status })
   return new SourceError('unknown', message, { status })

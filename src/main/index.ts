@@ -24,6 +24,11 @@ function createWindow(): void {
 
   win.once('ready-to-show', () => win.show())
 
+  // The window only ever shows the app itself: a dropped file or a stray link must not replace it.
+  win.webContents.on('will-navigate', (event, url) => {
+    if (url !== win.webContents.getURL()) event.preventDefault()
+  })
+
   // Never open new Electron windows; send https links to the system browser.
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://')) void shell.openExternal(url)
@@ -36,6 +41,14 @@ function createWindow(): void {
     void win.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
+
+// One window per machine: a second launch focuses the first (two would fight over the cache).
+if (!app.requestSingleInstanceLock()) app.quit()
+app.on('second-instance', () => {
+  const win = BrowserWindow.getAllWindows()[0]
+  if (win?.isMinimized()) win.restore()
+  win?.focus()
+})
 
 app.whenReady().then(() => {
   const userData = app.getPath('userData')

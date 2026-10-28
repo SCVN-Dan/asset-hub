@@ -50,7 +50,7 @@ interface Snapshot {
 
 /** .meta files worth indexing: anything a model, material or shader can reference. */
 // Models are left out: their .meta files are large and nothing a material uses points at them.
-const INDEXED = /\.(mat|png|jpe?g|tga|psd|tiff?|exr|bmp|gif|hdr|shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i
+const INDEXED = /\.(mat|png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture|shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i
 const INDEX_CONCURRENCY = 6
 const INDEX_BATCH = 120
 /** Meta blob SHA → GUID ('' when the file has none), shared by every commit and branch of a repo. */
@@ -69,8 +69,10 @@ export class GitHubAssetSource implements AssetSource {
   readonly id = 'github'
   readonly isDemo = false
   private readonly snapshots = new Map<string, Snapshot>()
-  /** GUID index builds in flight, per repo@commit: concurrent callers share one build. */
-  private readonly guidBuilds = new Map<string, Promise<Map<string, string>>>()
+  /** GUID index builds in flight, per repo@commit: concurrent callers share one build and its progress. */
+  private readonly guidBuilds = new Map<string, { promise: Promise<Map<string, string>>; listeners: Set<(p: IndexProgress) => void> }>()
+  /** File downloads in flight, per content key, so two callers never fetch the same blob twice. */
+  private readonly reads = new Map<string, Promise<Uint8Array>>()
   /**
    * Per-repo caches loaded once and shared by every caller. Each search adds to
    * the same object, so concurrent searches can no longer overwrite each other.
@@ -207,7 +209,9 @@ export class GitHubAssetSource implements AssetSource {
       if (!chunk.length) continue
       const texts = await this.readManyTexts(repo, snap, chunk.map((r) => r.e), dec)
       for (const r of chunk) {
-        known[r.e.sha] = modelMaterials(texts.get(r.e.sha) ?? '')
+        const text = texts.get(r.e.sha)
+        if (text === undefined) continue // not read: leave it for a later scan
+        known[r.e.sha] = modelMaterials(text)
         if (known[r.e.sha][modelGuid]?.length) bestFound = Math.max(bestFound, r.score)
       }
       read += chunk.length
@@ -291,7 +295,7 @@ export class GitHubAssetSource implements AssetSource {
     }
     const missing = entries.filter((e) => !out.has(e.sha))
     const texts = await this.client.getBlobTexts(repo, snap.commit, missing.map((e) => e.path))
-    for (const e of missing) out.set(e.sha, texts.get(e.path) ?? '')
+    for (const e of missing) if (texts.has(e.path)) out.set(e.sha, texts.get(e.path)!)
     return out
   }
 
@@ -319,18 +323,29 @@ export class GitHubAssetSource implements AssetSource {
     return this.snapshots.get(`${repo}@${branch}`)!
   }
 
-  private async readEntry(repo: string, entry: TreeEntry): Promise<Uint8Array> {
-    const cache = this.options.blobCache
+  private readEntry(repo: string, entry: TreeEntry): Promise<Uint8Array> {
     const key = entry.lfsOid ?? entry.sha
-    const hit = await cache?.get(key)
+    let read = this.reads.get(key)
+    if (!read) {
+      read = this.downloadEntry(repo, entry, key).finally(() => this.reads.delete(key))
+      this.reads.set(key, read)
+    }
+    return read
+  }
+
+  private async downloadEntry(repo: string, entry: TreeEntry, key: string): Promise<Uint8Array> {
+    const cache = this.options.blobCache
+    const hit = await cache?.get(key).catch(() => undefined)
     if (hit) return hit
     let bytes = await this.client.getBlobBytes(repo, entry.sha)
-    if (entry.lfs) {
-      // The blob is the pointer; the real file comes from LFS storage.
+    // An LFS pointer is followed whatever .gitattributes says: nested Unity
+    // projects often keep their own .gitattributes, which the root check misses.
+    if (entry.lfs || bytes.length <= 1024) {
       const pointer = parseLfsPointer(new TextDecoder().decode(bytes))
       if (pointer) bytes = await this.client.getLfsObject(repo, pointer.oid, pointer.size)
     }
-    await cache?.set(key, bytes)
+    // The cache is an optimisation: a failed write must not fail the read.
+    await cache?.set(key, bytes).catch(() => undefined)
     return bytes
   }
 
@@ -345,10 +360,13 @@ export class GitHubAssetSource implements AssetSource {
     const key = `${repo}@${snap.commit}`
     let build = this.guidBuilds.get(key)
     if (!build) {
-      build = this.buildGuidIndex(repo, snap, onProgress).finally(() => this.guidBuilds.delete(key))
+      const listeners = new Set<(p: IndexProgress) => void>()
+      const promise = this.buildGuidIndex(repo, snap, (p) => listeners.forEach((l) => l(p))).finally(() => this.guidBuilds.delete(key))
+      build = { promise, listeners }
       this.guidBuilds.set(key, build)
     }
-    return build
+    if (onProgress) build.listeners.add(onProgress)
+    return build.promise
   }
 
   private async buildGuidIndex(repo: string, snap: Snapshot, onProgress?: (p: IndexProgress) => void): Promise<Map<string, string>> {
@@ -373,6 +391,7 @@ export class GitHubAssetSource implements AssetSource {
         const blobs = await this.options.readBlobsBulk(repo, [...new Set(remaining.map((m) => m.sha))])
         const dec = new TextDecoder()
         for (const [sha, bytes] of blobs) learn(sha, dec.decode(bytes))
+        // Anything not returned is retried through the API below, never cached as empty.
         remaining = remaining.filter((m) => !(m.sha in bySha))
         done = metas.length - remaining.length
         onProgress?.({ done, total: metas.length })
@@ -389,7 +408,8 @@ export class GitHubAssetSource implements AssetSource {
         while (next < batches.length) {
           const batch = batches[next++]
           const texts = await this.client.getBlobTexts(repo, snap.commit, batch.map((m) => m.path))
-          for (const m of batch) learn(m.sha, texts.get(m.path) ?? '')
+          // Only what actually came back is remembered; failed reads are tried again next time.
+          for (const m of batch) if (texts.has(m.path)) learn(m.sha, texts.get(m.path)!)
           done += batch.length
           onProgress?.({ done, total: metas.length })
         }
@@ -403,7 +423,8 @@ export class GitHubAssetSource implements AssetSource {
       if (guid) guids.set(guid, m.path.slice(0, -'.meta'.length))
     }
     if (todo.length) await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha)
-    await this.options.cache?.set('guids', repo, snap.commit, Object.fromEntries(guids))
+    // A commit's index is stored only when every .meta was read, so a failed read is retried next time.
+    if (metas.every((m) => m.sha in bySha)) await this.options.cache?.set('guids', repo, snap.commit, Object.fromEntries(guids))
     snap.guids = guids
     return guids
   }

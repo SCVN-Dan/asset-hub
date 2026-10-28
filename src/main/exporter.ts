@@ -1,10 +1,12 @@
 import { writeFile } from 'fs/promises'
-import { gzipSync } from 'zlib'
+import { promisify } from 'util'
+import { gzip } from 'zlib'
 import type { GitHubAssetSource } from '@core/github/source'
 import { planPackage, unityPackageTar, type PackageFile } from '@core/export/unitypackage'
 import type { ExportProgress, ExportRequest, ExportResult } from '@shared/ipc'
 
 const DOWNLOAD_CONCURRENCY = 4
+const gzipAsync = promisify(gzip)
 
 /** Resolves every requested asset, downloads files + .meta, and writes a gzipped .unitypackage. */
 export async function exportUnityPackage(
@@ -47,7 +49,8 @@ export async function exportUnityPackage(
 
   onProgress({ stage: 'write', done: 0, total: 1 })
   const plan = planPackage(packed, req.root, req.layout, req.repo)
-  const bytes = gzipSync(unityPackageTar(plan))
+  // Off the main thread: a big package would otherwise freeze the window while compressing.
+  const bytes = await gzipAsync(unityPackageTar(plan))
   await writeFile(target, bytes)
   onProgress({ stage: 'write', done: 1, total: 1 })
   return {

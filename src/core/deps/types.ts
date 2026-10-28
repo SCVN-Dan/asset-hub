@@ -22,6 +22,8 @@ export interface TextureRef {
 
 export interface MaterialRef {
   name: string
+  /** Material name inside the FBX that this .mat replaces (externalObjects), used to place textures in the preview. */
+  sourceName?: string
   guid?: string
   path?: string
   missing: boolean

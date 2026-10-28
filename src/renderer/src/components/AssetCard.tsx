@@ -30,7 +30,8 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
     const observer = new IntersectionObserver(([entry]) => visibleRef.current?.(entry.isIntersecting), { rootMargin: '200px' })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [])
+    // Re-observed when the callback appears, so a card already on screen reports itself.
+  }, [!!onVisible])
 
   return (
     <button

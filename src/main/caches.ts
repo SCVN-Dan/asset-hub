@@ -1,14 +1,22 @@
-import { mkdir, readFile, rename, writeFile } from 'fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'fs/promises'
 import { join } from 'path'
 import type { BlobCache, CommitCache } from '@core/github/source'
 
 const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_')
 
+let tmpCounter = 0
+
+/** Write to a unique temp file, then rename over the target: overlapping writes of one key no longer collide. */
 async function writeAtomic(file: string, data: string | Uint8Array): Promise<void> {
   await mkdir(join(file, '..'), { recursive: true })
-  const tmp = `${file}.${process.pid}.tmp`
-  await writeFile(tmp, data)
-  await rename(tmp, file)
+  const tmp = `${file}.${process.pid}.${++tmpCounter}.tmp`
+  try {
+    await writeFile(tmp, data)
+    await rename(tmp, file)
+  } catch (err) {
+    await rm(tmp, { force: true }).catch(() => {})
+    throw err
+  }
 }
 
 /** `<cacheDir>/<kind>/<owner>__<repo>/<commit>.json` — trees, GUID indexes… */

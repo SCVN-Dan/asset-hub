@@ -39,6 +39,8 @@ export function parseFbxMeta(metaText: string): FbxMetaInfo {
 export interface MaterialInfo {
   name?: string
   shader?: { fileID: string; guid: string }
+  /** Material Variant parent (Unity 2022+). */
+  parentGuid?: string
   /** Texture slots that reference a texture (empty slots are skipped). */
   textures: Array<{ prop: string; guid: string }>
 }
@@ -56,17 +58,24 @@ export function parseMaterial(matText: string): MaterialInfo {
     const end = rest.search(/\n {4}m_\w+:/)
     const block = end === -1 ? rest : rest.slice(0, end)
     let prop: string | undefined
-    for (const line of block.split('\n')) {
+    for (const line of block.split(/\r?\n/)) {
       const p = /^\s*- (\w+):\s*$/.exec(line)
-      if (p) {
+      if (p && p[1] !== 'first') {
         prop = p[1]
+        continue
+      }
+      // Unity 5-era layout: "- first:\n    name: _MainTex\n  second:\n    m_Texture: …"
+      const old = /^\s*name: (\w+)\s*$/.exec(line)
+      if (old) {
+        prop = old[1]
         continue
       }
       const t = new RegExp(`m_Texture: \\{fileID: (-?\\d+)(?:, guid: (${GUID}))?`).exec(line)
       if (t && prop && t[1] !== '0' && t[2]) textures.push({ prop, guid: t[2] })
     }
   }
-  return { name, shader: shaderMatch ? { fileID: shaderMatch[1], guid: shaderMatch[2] } : undefined, textures }
+  const parentGuid = new RegExp(`m_Parent: \\{fileID: -?\\d+, guid: (${GUID})`).exec(matText)?.[1]
+  return { name, shader: shaderMatch ? { fileID: shaderMatch[1], guid: shaderMatch[2] } : undefined, parentGuid, textures }
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|tga|psd|tiff?|exr|bmp|gif|hdr)$/i
