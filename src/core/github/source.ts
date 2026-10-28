@@ -59,7 +59,7 @@ const SHA_KEY = 'by-sha'
 /** Prefab blob SHA → model GUID → material GUIDs. */
 const PREFAB_KIND = 'prefabmodels'
 /** Bytes of prefabs read by a "nearby" search before it stops. */
-const NEAR_BUDGET = 40 * 1024 * 1024
+const NEAR_BUDGET = 16 * 1024 * 1024
 /** Bytes per bulk read, so progress can move during a big scan. */
 const PREFAB_CHUNK = 24 * 1024 * 1024
 /** Smaller steps for nearby searches, so they can stop as soon as the model is found. */
@@ -69,6 +69,13 @@ export class GitHubAssetSource implements AssetSource {
   readonly id = 'github'
   readonly isDemo = false
   private readonly snapshots = new Map<string, Snapshot>()
+  /** GUID index builds in flight, per repo@commit: concurrent callers share one build. */
+  private readonly guidBuilds = new Map<string, Promise<Map<string, string>>>()
+  /**
+   * Per-repo caches loaded once and shared by every caller. Each search adds to
+   * the same object, so concurrent searches can no longer overwrite each other.
+   */
+  private readonly shared = new Map<string, Promise<Record<string, unknown>>>()
 
   constructor(
     private readonly client: GitHubClient,
@@ -153,7 +160,7 @@ export class GitHubAssetSource implements AssetSource {
     const prefabs = snap.entries.filter(
       (e) => e.type === 'blob' && e.path.endsWith('.prefab') && e.path.startsWith(root + 'Assets/') && !isInExcludedFolder(e.path.slice(root.length), excludedFolders)
     )
-    const known = (await this.options.cache?.get<Record<string, Record<string, string[]>>>(PREFAB_KIND, repo, SHA_KEY)) ?? {}
+    const known = (await this.sharedCache(PREFAB_KIND, repo)) as Record<string, Record<string, string[]>>
     const ranked = prefabs
       .map((e) => ({ e, score: folderAffinity(path, e.path, root) }))
       .sort((a, b) => b.score - a.score || (a.e.size ?? 0) - (b.e.size ?? 0))
@@ -163,6 +170,22 @@ export class GitHubAssetSource implements AssetSource {
       candidates = candidates.filter((r) => r.score > 0 && (budget -= r.e.size ?? 0) >= 0)
     }
 
+    if (candidates.length) await this.scanPrefabs(repo, snap, candidates, known, ranked, modelGuid, scope, onProgress)
+    return this.prefabAnswer(repo, snap, root, guids, prefabs, ranked, known, modelGuid, scope)
+  }
+
+  /** Reads candidate prefabs (skipping ones another scan has read meanwhile) into the shared cache. */
+  private async scanPrefabs(
+    repo: string,
+    snap: Snapshot,
+    all: Array<{ e: TreeEntry; score: number }>,
+    known: Record<string, Record<string, string[]>>,
+    ranked: Array<{ e: TreeEntry; score: number }>,
+    modelGuid: string,
+    scope: PrefabScope,
+    onProgress?: (p: IndexProgress) => void
+  ): Promise<void> {
+    const candidates = all.filter((r) => !(r.e.sha in known))
     const total = candidates.reduce((s, r) => s + (r.e.size ?? 0), 0)
     let done = 0
     onProgress?.({ done, total })
@@ -176,9 +199,12 @@ export class GitHubAssetSource implements AssetSource {
       if (scope === 'near' && bestFound >= 0 && candidates[i].score < bestFound) break
       const chunk: Array<(typeof candidates)[number]> = []
       for (let bytes = 0; i < candidates.length && (bytes === 0 || bytes < chunkBytes); i++) {
+        // Another search running at the same time may have read it already.
+        if (candidates[i].e.sha in known) continue
         chunk.push(candidates[i])
         bytes += candidates[i].e.size ?? 0
       }
+      if (!chunk.length) continue
       const texts = await this.readManyTexts(repo, snap, chunk.map((r) => r.e), dec)
       for (const r of chunk) {
         known[r.e.sha] = modelMaterials(texts.get(r.e.sha) ?? '')
@@ -189,7 +215,19 @@ export class GitHubAssetSource implements AssetSource {
       onProgress?.({ done, total })
     }
     if (read) await this.options.cache?.set(PREFAB_KIND, repo, SHA_KEY, known)
+  }
 
+  private async prefabAnswer(
+    repo: string,
+    snap: Snapshot,
+    root: string,
+    guids: Map<string, string>,
+    prefabs: TreeEntry[],
+    ranked: Array<{ e: TreeEntry; score: number }>,
+    known: Record<string, Record<string, string[]>>,
+    modelGuid: string,
+    scope: PrefabScope
+  ): Promise<PrefabMaterialsResult> {
     const ctx = this.depContext(repo, snap, root, guids)
     const usages: PrefabUsage[] = []
     const files = new Set<string>()
@@ -212,6 +250,17 @@ export class GitHubAssetSource implements AssetSource {
       files: [...files],
       warnings: [...warnings]
     }
+  }
+
+  /** One shared, lazily loaded object per cache kind and repo. */
+  private sharedCache(kind: string, repo: string): Promise<Record<string, unknown>> {
+    const key = `${kind}:${repo}`
+    let p = this.shared.get(key)
+    if (!p) {
+      p = this.options.cache?.get<Record<string, unknown>>(kind, repo, SHA_KEY).then((v) => v ?? {}) ?? Promise.resolve({})
+      this.shared.set(key, p)
+    }
+    return p
   }
 
   private depContext(repo: string, snap: Snapshot, root: string, guids: Map<string, string>): DepContext {
@@ -290,9 +339,19 @@ export class GitHubAssetSource implements AssetSource {
     return present.length ? this.client.getBlobTexts(repo, snap.commit, present) : new Map()
   }
 
-  /** GUID → repo path for every indexed .meta in the commit. */
+  /** GUID → repo path for every indexed .meta in the commit; concurrent callers share one build. */
   private async guidIndex(repo: string, snap: Snapshot, onProgress?: (p: IndexProgress) => void): Promise<Map<string, string>> {
     if (snap.guids) return snap.guids
+    const key = `${repo}@${snap.commit}`
+    let build = this.guidBuilds.get(key)
+    if (!build) {
+      build = this.buildGuidIndex(repo, snap, onProgress).finally(() => this.guidBuilds.delete(key))
+      this.guidBuilds.set(key, build)
+    }
+    return build
+  }
+
+  private async buildGuidIndex(repo: string, snap: Snapshot, onProgress?: (p: IndexProgress) => void): Promise<Map<string, string>> {
     const cached = await this.options.cache?.get<Record<string, string>>('guids', repo, snap.commit)
     if (cached) {
       snap.guids = new Map(Object.entries(cached))
@@ -300,7 +359,7 @@ export class GitHubAssetSource implements AssetSource {
     }
     const metas = snap.entries.filter((e) => e.type === 'blob' && INDEXED.test(e.path))
     // .meta files rarely change between commits and branches: only read the ones not seen before.
-    const bySha = (await this.options.cache?.get<Record<string, string>>(SHA_KIND, repo, SHA_KEY)) ?? {}
+    const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
     const todo = metas.filter((m) => !(m.sha in bySha))
     let done = metas.length - todo.length
     onProgress?.({ done, total: metas.length })

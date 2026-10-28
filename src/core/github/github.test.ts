@@ -334,6 +334,13 @@ describe('GUID index speed-ups', () => {
     }
   }
 
+  it('builds the GUID index once when several callers need it at the same time', async () => {
+    const t = make({ bulk: true })
+    await t.src.listTree('o/r', 'main')
+    await Promise.all([t.src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/'), t.src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')])
+    expect(t.bulkCalls).toHaveLength(1)
+  })
+
   it('reads metas with the bulk reader when available, not GraphQL', async () => {
     const t = make({ bulk: true })
     await t.src.listTree('o/r', 'main')
@@ -399,6 +406,19 @@ describe('findPrefabMaterials', () => {
     })
     return { src, reads }
   }
+
+  it('keeps every result when searches run at the same time', async () => {
+    const { src } = make()
+    const fbx = 'p/Assets/Game/Models/Fish/Fish.fbx'
+    await Promise.all([
+      src.findPrefabMaterials('o/r', 'main', fbx, 'p/', 'near', []),
+      src.findPrefabMaterials('o/r', 'main', fbx, 'p/', 'all', []),
+      src.findPrefabMaterials('o/r', 'main', fbx, 'p/', 'cached', [])
+    ])
+    const after = await src.findPrefabMaterials('o/r', 'main', fbx, 'p/', 'cached', [])
+    expect(after.prefabs.map((p) => p.path)).toEqual(['p/Assets/Game/Prefabs/Fish/FishModel.prefab'])
+    expect(after).toMatchObject({ scanned: 2, remaining: 0 })
+  })
 
   it('finds the materials a nearby prefab puts on the model, then reuses what it read', async () => {
     const { src, reads } = make()
