@@ -7,7 +7,7 @@ import type { AssetTypeHandler, RepoRef, TreeEntry } from '../types'
 import { isInExcludedFolder } from '../unity'
 import { folderAffinity, modelMaterials } from '../unity/prefab'
 import { metaGuid } from '../unity/yaml'
-import type { GitHubClient } from './client'
+import type { BranchHead, GitHubClient } from './client'
 import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
 
 /** JSON values stored per repo + commit; commits are immutable, so entries never go stale. */
@@ -31,6 +31,8 @@ export interface GitHubSourceOptions {
   blobCache?: BlobCache
   /** Lists a commit's files with git when the Trees API response is truncated (very large repos). */
   gitFallback?(repo: string, commitSha: string): Promise<TreeEntry[]>
+  /** Same, for background catalog scans: must not hold up `gitFallback` work. */
+  backgroundGitFallback?(repo: string, commitSha: string): Promise<TreeEntry[]>
   /** Fast path for many small blobs at once (e.g. one git fetch); falls back to GraphQL when absent or failing. */
   readBlobsBulk?(repo: string, oids: readonly string[]): Promise<Map<string, Uint8Array>>
 }
@@ -73,6 +75,8 @@ export class GitHubAssetSource implements AssetSource {
   private readonly guidBuilds = new Map<string, { promise: Promise<Map<string, string>>; listeners: Set<(p: IndexProgress) => void> }>()
   /** File downloads in flight, per content key, so two callers never fetch the same blob twice. */
   private readonly reads = new Map<string, Promise<Uint8Array>>()
+  /** .gitattributes texts by blob SHA. */
+  private readonly attributes = new Map<string, Promise<string>>()
   /**
    * Per-repo caches loaded once and shared by every caller. Each search adds to
    * the same object, so concurrent searches can no longer overwrite each other.
@@ -92,6 +96,11 @@ export class GitHubAssetSource implements AssetSource {
     return this.client.listBranches(repo)
   }
 
+  /** Branches with their tip commits and dates, for the catalog. */
+  listBranchHeads(repo: string): Promise<BranchHead[]> {
+    return this.client.listBranchHeads(repo)
+  }
+
   async listTree(repo: string, branch: string): Promise<TreeEntry[]> {
     const commit = await this.client.getBranchHead(repo, branch)
     let entries = await this.options.cache?.get<TreeEntry[]>('tree', repo, commit)
@@ -107,6 +116,27 @@ export class GitHubAssetSource implements AssetSource {
     }
     this.remember(repo, branch, commit, entries)
     return entries
+  }
+
+  /**
+   * Asset files of a commit, for the cross-branch catalog. Uses the tree cache
+   * when the branch was browsed, but never stores whole trees: a catalog scan
+   * walks every branch and would fill the disk.
+   */
+  async assetEntriesAt(repo: string, commit: string, isAsset: (entry: TreeEntry) => boolean): Promise<TreeEntry[]> {
+    let entries = await this.options.cache?.get<TreeEntry[]>('tree', repo, commit)
+    if (!entries) {
+      const tree = await this.client.getTree(repo, commit)
+      entries = tree.entries
+      if (tree.truncated) {
+        const fallback = this.options.backgroundGitFallback ?? this.options.gitFallback
+        if (!fallback) throw new SourceError('truncated', 'Repository tree is too large for the GitHub API')
+        entries = await fallback(repo, commit)
+      }
+      // Flags LFS files without reading their pointers (one request per file); their size stays unknown.
+      await this.markLfs(repo, commit, entries, false)
+    }
+    return entries.filter((e) => e.type === 'blob' && isAsset(e))
   }
 
   /** Contents of a file on the branch, from the blob cache when possible. */
@@ -430,11 +460,19 @@ export class GitHubAssetSource implements AssetSource {
   }
 
   /** Flags LFS files from the root .gitattributes and reads real sizes from their pointers. */
-  private async markLfs(repo: string, commit: string, entries: TreeEntry[]): Promise<void> {
-    if (!entries.some((e) => e.path === '.gitattributes')) return
-    const attributes = await this.client.getFileText(repo, commit, '.gitattributes')
-    if (!attributes) return
-    const rules = parseLfsAttributes(attributes)
+  private async markLfs(repo: string, commit: string, entries: TreeEntry[], resolve = true): Promise<void> {
+    const file = entries.find((e) => e.path === '.gitattributes')
+    if (!file) return
+    // Branches almost always share the same .gitattributes: read each version once.
+    let attributes = this.attributes.get(file.sha)
+    if (!attributes) {
+      attributes = this.client.getFileText(repo, commit, '.gitattributes').then((t) => t ?? '')
+      this.attributes.set(file.sha, attributes)
+      attributes.catch(() => this.attributes.delete(file.sha))
+    }
+    const text = await attributes
+    if (!text) return
+    const rules = parseLfsAttributes(text)
     if (!rules.length) return
 
     const toResolve: TreeEntry[] = []
@@ -443,7 +481,7 @@ export class GitHubAssetSource implements AssetSource {
       entry.lfs = true
       // Pointers are ~130 bytes; anything much larger was committed without LFS.
       if ((entry.size ?? 0) > 1024) entry.lfs = false
-      else if (this.options.shouldResolveLfs(entry)) toResolve.push(entry)
+      else if (resolve && this.options.shouldResolveLfs(entry)) toResolve.push(entry)
     }
     if (!toResolve.length) return
 

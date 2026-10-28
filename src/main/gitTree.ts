@@ -64,8 +64,11 @@ function serially<T>(dir: string, task: () => Promise<T>): Promise<T> {
 /** Bare partial-clone cache repo: objects are fetched on demand, nothing is checked out. */
 const repoDir = (cacheDir: string, repo: string) => join(cacheDir, 'repos', `${repo.replace('/', '__')}.git`)
 
-async function ensureRepo(cacheDir: string, repo: string, env: NodeJS.ProcessEnv): Promise<string> {
-  const dir = repoDir(cacheDir, repo)
+function ensureRepo(cacheDir: string, repo: string, env: NodeJS.ProcessEnv): Promise<string> {
+  return ensureRepoAt(repoDir(cacheDir, repo), repo, env)
+}
+
+async function ensureRepoAt(dir: string, repo: string, env: NodeJS.ProcessEnv): Promise<string> {
   if (!existsSync(join(dir, 'config'))) {
     await mkdir(dir, { recursive: true })
     await git(['init', '--bare', '--quiet'], env, dir)
@@ -117,18 +120,57 @@ async function readBlobsLocked(cacheDir: string, repo: string, oids: readonly st
   return wanted.length ? parseCatFileBatch(await git(['cat-file', '--batch'], env, dir, wanted.join('\n') + '\n')) : new Map()
 }
 
+/** Tree listings waiting for the next git run, per cache repo: requests that arrive together share one fetch. */
+const pendingTrees = new Map<string, Map<string, Array<{ resolve(e: TreeEntry[]): void; reject(err: unknown): void }>>>()
+
 /**
  * Lists every file of a commit with git — used when the Trees API truncates
- * very large repos. Fetches only trees (no file contents).
+ * very large repos. Fetches only trees (no file contents). Commits asked for
+ * while git is busy are fetched together in one request.
+ *
+ * `background` work (the branch catalog) uses its own cache repo, so it never
+ * holds up git work for what the user is looking at.
  */
-export async function listTreeWithGit(cacheDir: string, repo: string, commitSha: string, token: string): Promise<TreeEntry[]> {
+export function listTreeWithGit(cacheDir: string, repo: string, commitSha: string, token: string, background = false): Promise<TreeEntry[]> {
   const env = gitEnv(token)
-  const out = await serially(repoDir(cacheDir, repo), async () => {
-    const dir = await ensureRepo(cacheDir, repo, env)
-    await git(['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', 'origin', commitSha], env, dir)
-    // -z: paths are NUL-separated and not C-quoted, so non-ASCII names stay intact.
-    return (await git(['ls-tree', '-r', '-t', '-z', commitSha], env, dir)).toString()
+  const dir = background ? repoDir(cacheDir, repo).replace(/\.git$/, '.catalog.git') : repoDir(cacheDir, repo)
+  return new Promise((resolve, reject) => {
+    let batch = pendingTrees.get(dir)
+    const first = !batch
+    if (!batch) {
+      batch = new Map()
+      pendingTrees.set(dir, batch)
+    }
+    const waiters = batch.get(commitSha) ?? []
+    waiters.push({ resolve, reject })
+    batch.set(commitSha, waiters)
+    if (!first) return
+    void serially(dir, async () => {
+      // Everything queued until git is free goes into this run.
+      const run = pendingTrees.get(dir)!
+      pendingTrees.delete(dir)
+      const commits = [...run.keys()]
+      try {
+        await ensureRepoAt(dir, repo, env)
+        await git(['fetch', '--quiet', '--depth=1', '--filter=blob:none', '--no-tags', 'origin', ...commits], env, dir)
+      } catch (err) {
+        for (const list of run.values()) list.forEach((w) => w.reject(err))
+        return
+      }
+      for (const [commit, list] of run) {
+        try {
+          // -z: paths are NUL-separated and not C-quoted, so non-ASCII names stay intact.
+          const entries = parseLsTree((await git(['ls-tree', '-r', '-t', '-z', commit], env, dir)).toString())
+          list.forEach((w) => w.resolve(entries))
+        } catch (err) {
+          list.forEach((w) => w.reject(err))
+        }
+      }
+    })
   })
+}
+
+function parseLsTree(out: string): TreeEntry[] {
   const entries: TreeEntry[] = []
   for (const line of out.split('\0')) {
     const tab = line.indexOf('\t')

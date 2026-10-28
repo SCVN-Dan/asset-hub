@@ -7,7 +7,7 @@ const safe = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_')
 let tmpCounter = 0
 
 /** Write to a unique temp file, then rename over the target: overlapping writes of one key no longer collide. */
-async function writeAtomic(file: string, data: string | Uint8Array): Promise<void> {
+export async function writeAtomic(file: string, data: string | Uint8Array): Promise<void> {
   await mkdir(join(file, '..'), { recursive: true })
   const tmp = `${file}.${process.pid}.${++tmpCounter}.tmp`
   try {

@@ -1,4 +1,4 @@
-import type { DependencyReport, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { CatalogAsset, CatalogLocation, DependencyReport, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { Settings } from './settings'
 
 export const IPC = {
@@ -28,7 +28,14 @@ export const IPC = {
   saveThumb: 'thumbs:save',
   exportPackage: 'export:unitypackage',
   exportProgress: 'export:progress',
-  showItemInFolder: 'shell:show-item'
+  showItemInFolder: 'shell:show-item',
+  catalogScan: 'catalog:scan',
+  catalogPause: 'catalog:pause',
+  catalogResume: 'catalog:resume',
+  catalogStatus: 'catalog:status',
+  catalogList: 'catalog:list',
+  catalogWhere: 'catalog:where',
+  catalogProgress: 'catalog:progress'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
@@ -62,6 +69,17 @@ export interface ExportResult {
 }
 
 export type ExportProgress = { stage: 'resolve' | 'download' | 'write'; done: number; total: number }
+
+/** Background indexing of every branch (Phase 4.5). */
+export interface CatalogStatus {
+  state: 'idle' | 'running' | 'paused' | 'error'
+  /** Branches listed in this run, out of `total`. */
+  done: number
+  total: number
+  /** repo@branch being listed. */
+  current?: string
+  error?: IpcError
+}
 
 export interface IpcError {
   code: AppErrorCode
@@ -123,6 +141,19 @@ export interface AssetHubApi {
     findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: PrefabScope, excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
     /** Bytes read so far by findPrefabMaterials. */
     onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
+  }
+  catalog: {
+    /** Indexes every branch of `repo`, or of every repo when it is omitted; returns at once and runs in the background. */
+    /** `current` (the open repo / branch) is indexed first. */
+    scan(repo?: string, current?: { repo: string; branch?: string }): Promise<IpcResult<CatalogStatus>>
+    pause(): Promise<IpcResult<CatalogStatus>>
+    resume(): Promise<IpcResult<CatalogStatus>>
+    status(): Promise<IpcResult<CatalogStatus>>
+    /** Indexed assets of `repo` (every indexed repo when null), identical files grouped. */
+    list(repo: string | null, excludedFolders: string[]): Promise<IpcResult<CatalogAsset[]>>
+    /** Every repo, branch and path holding a file with this blob SHA. */
+    whereIs(sha: string): Promise<IpcResult<CatalogLocation[]>>
+    onStatus(listener: (status: CatalogStatus) => void): () => void
   }
   thumbs: {
     get(keys: string[]): Promise<Record<string, string>>

@@ -18,3 +18,4 @@ export * from './search/search'
 export function createDefaultRegistry(): HandlerRegistry {
   return new HandlerRegistry().register(fbxHandler)
 }
+export * from './catalog/catalog'

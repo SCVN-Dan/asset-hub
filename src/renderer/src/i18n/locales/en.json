@@ -247,5 +247,45 @@
     "related": "Also showing related names: {{names}}",
     "typos": "Close spellings: {{names}}",
     "includes": "{{names}}…"
+  },
+  "catalog": {
+    "scope": "Search in",
+    "scopes": {
+      "branch": "This branch",
+      "repo": "All branches",
+      "all": "All repos"
+    },
+    "title": {
+      "repo": "All branches of {{repo}}",
+      "all": "All repos"
+    },
+    "indexing": "Indexing branches {{done}}/{{total}}",
+    "paused": "Indexing paused at {{done}}/{{total}}",
+    "pause": "Pause",
+    "resume": "Resume",
+    "retry": "Try again",
+    "rateLimited": "GitHub request limit reached — indexing resumes at {{time}}.",
+    "failed": "Indexing stopped: {{message}}",
+    "emptyYet": "Nothing found yet — branches are still being indexed.",
+    "branchCount_one": "{{count}} branch",
+    "branchCount_other": "{{count}} branches",
+    "repoCount_one": "{{count}} repo",
+    "repoCount_other": "{{count}} repos",
+    "openIn": "Open in {{branch}}",
+    "more": "+{{count}} more",
+    "less": "Show less",
+    "pick": "Select a result to see where it is.",
+    "open": "Open in {{branch}}",
+    "openHint": "Opens that branch to preview the model and export it.",
+    "locations": "Where it is",
+    "alsoIn_one": "Also in {{count}} other branch",
+    "alsoIn_other": "Also in {{count}} other branches",
+    "foldersBranchOnly": "Folders apply to one branch.",
+    "filterRepo": "Filter by repo",
+    "filterBranch": "Filter by branch",
+    "allRepos": "All repos ({{count}})",
+    "allBranches": "All branches ({{count}})",
+    "foundIn_one": "on {{count}} branch",
+    "foundIn_other": "on {{count}} branches"
   }
 }

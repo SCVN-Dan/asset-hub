@@ -1,24 +1,41 @@
 import { join } from 'path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell } from 'electron'
-import { createDefaultRegistry, SourceError } from '@core/index'
+import { createDefaultRegistry, SourceError, type RepoRef } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
-import { IPC, type AuthMethod, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
+import { IPC, type AuthMethod, type CatalogStatus, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
 import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { exportUnityPackage } from './exporter'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
 import { FileBlobCache, FileCommitCache, ThumbnailStore } from './caches'
+import { CatalogService } from './catalog'
 
 interface Session {
   source: GitHubAssetSource
+  catalog: CatalogService
   status: AuthStatus
+  /** Repo list kept for a few minutes, for catalog scans. */
+  repos?: { at: number; list: Promise<RepoRef[]> }
 }
 
 function toIpcError(err: unknown): IpcError {
   if (err instanceof SourceError) return { code: err.code, message: err.message, ...err.detail }
   if (err instanceof AuthError) return { code: err.code, message: err.message }
   return { code: 'unknown', message: err instanceof Error ? err.message : String(err) }
+}
+
+/** Requests for what the user is looking at; background catalog scans wait while any are running. */
+let foreground = 0
+
+/** Like `wrap`, and marks the request as foreground work. */
+async function wrapForeground<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
+  foreground++
+  try {
+    return await wrap(fn)
+  } finally {
+    foreground--
+  }
 }
 
 async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
@@ -55,12 +72,25 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       cache,
       blobCache,
       gitFallback: (repo, commit) => listTreeWithGit(options.cacheDir(), repo, commit, token.trim()),
+      backgroundGitFallback: async (repo, commit) => {
+        if (!(await hasGit())) throw new SourceError('truncated', 'Repository tree is too large for the GitHub API')
+        return listTreeWithGit(options.cacheDir(), repo, commit, token.trim(), true)
+      },
       readBlobsBulk: async (repo, oids) => {
         if (!(await hasGit())) throw new Error('git is not available')
         return readBlobsWithGit(options.cacheDir(), repo, oids, token.trim())
       }
     })
-    session = { source, status: { signedIn: true, login: user.login, method, persisted } }
+    session?.catalog.stop()
+    const catalog = new CatalogService(
+      source,
+      () => join(options.cacheDir(), 'catalog'),
+      (entry) => registry.classify(entry) !== undefined,
+      (path) => registry.classify({ path, type: 'blob', sha: '' })?.id,
+      () => foreground > 0,
+      (status: CatalogStatus) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.catalogProgress, status))
+    )
+    session = { source, catalog, status: { signedIn: true, login: user.login, method, persisted } }
     return session.status
   }
 
@@ -151,6 +181,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   app.on('before-quit', () => pending?.cancel())
   ipcMain.handle(IPC.signOut, () =>
     wrap(async () => {
+      session?.catalog.stop()
       session = undefined
       store.clear()
       return { signedIn: false }
@@ -159,17 +190,17 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
 
   ipcMain.handle(IPC.listRepos, () => wrap(() => requireSession().listRepos()))
   ipcMain.handle(IPC.listBranches, (_e, repo: string) => wrap(() => requireSession().listBranches(String(repo))))
-  ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) => wrap(() => requireSession().listTree(String(repo), String(branch))))
+  ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) => wrapForeground(() => requireSession().listTree(String(repo), String(branch))))
 
   ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string) =>
-    wrap(() =>
+    wrapForeground(() =>
       requireSession().resolve(String(repo), String(branch), String(path), String(root), (progress) => {
         if (!event.sender.isDestroyed()) event.sender.send(IPC.indexProgress, progress)
       })
     )
   )
   ipcMain.handle(IPC.findPrefabMaterials, (event, repo: string, branch: string, path: string, root: string, scope: unknown, excluded: unknown) =>
-    wrap(() =>
+    wrapForeground(() =>
       requireSession().findPrefabMaterials(
         String(repo),
         String(branch),
@@ -183,14 +214,14 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       )
     )
   )
-  ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string) => wrap(() => requireSession().readFile(String(repo), String(branch), String(path))))
+  ipcMain.handle(IPC.readFile, (_e, repo: string, branch: string, path: string) => wrapForeground(() => requireSession().readFile(String(repo), String(branch), String(path))))
   ipcMain.handle(IPC.findByNames, (_e, repo: string, branch: string, names: unknown, nearPath: string, root: string) =>
-    wrap(() =>
+    wrapForeground(() =>
       requireSession().findByNames(String(repo), String(branch), Array.isArray(names) ? names.map(String) : [], String(nearPath), String(root))
     )
   )
   ipcMain.handle(IPC.exportPackage, (event, raw: ExportRequest) =>
-    wrap(async () => {
+    wrapForeground(async () => {
       const src = requireSession()
       const req: ExportRequest = {
         repo: String(raw.repo),
@@ -223,6 +254,36 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.showItemInFolder, (_e, path: unknown) => {
     if (typeof path === 'string' && path.endsWith('.unitypackage')) shell.showItemInFolder(path)
   })
+  const requireCatalog = (): CatalogService => {
+    if (!session) throw new SourceError('unauthorized', 'Not signed in')
+    return session.catalog
+  }
+  const repoList = (): Promise<RepoRef[]> => {
+    const s = session!
+    if (!s.repos || Date.now() - s.repos.at > 10 * 60_000) {
+      const list = s.source.listRepos()
+      s.repos = { at: Date.now(), list }
+      list.catch(() => s.repos?.list === list && (s.repos = undefined))
+    }
+    return s.repos.list
+  }
+  ipcMain.handle(IPC.catalogScan, (_e, repo: unknown, current: unknown) =>
+    wrap(async () => {
+      const catalog = requireCatalog()
+      const repos = await repoList()
+      const wanted = typeof repo === 'string' ? repos.filter((r) => r.fullName === repo) : repos
+      // Returns once branch lists are read; listing the branches goes on in the background.
+      const open = current as { repo?: unknown; branch?: unknown } | undefined
+      return catalog.scan(wanted, typeof open?.repo === 'string' ? { repo: open.repo, branch: typeof open.branch === 'string' ? open.branch : undefined } : undefined)
+    })
+  )
+  ipcMain.handle(IPC.catalogPause, () => wrap(async () => requireCatalog().pause()))
+  ipcMain.handle(IPC.catalogResume, () => wrap(async () => requireCatalog().resume()))
+  ipcMain.handle(IPC.catalogStatus, () => wrap(async () => requireCatalog().status()))
+  ipcMain.handle(IPC.catalogList, (_e, repo: unknown, excluded: unknown) =>
+    wrap(() => requireCatalog().list(typeof repo === 'string' ? [repo] : [], Array.isArray(excluded) ? excluded.map(String) : []))
+  )
+  ipcMain.handle(IPC.catalogWhere, (_e, sha: unknown) => wrap(() => requireCatalog().whereIs(String(sha))))
   ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 5000) : []))
   ipcMain.handle(IPC.saveThumb, (_e, key: unknown, dataUrl: unknown) =>
     typeof key === 'string' && typeof dataUrl === 'string' ? thumbs.save(key, dataUrl) : undefined

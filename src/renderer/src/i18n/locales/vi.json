@@ -232,5 +232,45 @@
     "related": "Hiện cả tên liên quan: {{names}}",
     "typos": "Gần đúng chính tả: {{names}}",
     "includes": "{{names}}…"
+  },
+  "catalog": {
+    "scope": "Tìm trong",
+    "scopes": {
+      "branch": "Branch này",
+      "repo": "Mọi branch",
+      "all": "Mọi repo"
+    },
+    "title": {
+      "repo": "Mọi branch của {{repo}}",
+      "all": "Mọi repo"
+    },
+    "indexing": "Đang lập chỉ mục branch {{done}}/{{total}}",
+    "paused": "Tạm dừng ở {{done}}/{{total}}",
+    "pause": "Tạm dừng",
+    "resume": "Tiếp tục",
+    "retry": "Thử lại",
+    "rateLimited": "Đã chạm giới hạn request của GitHub — tự chạy lại lúc {{time}}.",
+    "failed": "Lập chỉ mục dừng: {{message}}",
+    "emptyYet": "Chưa thấy kết quả — vẫn đang lập chỉ mục các branch.",
+    "branchCount_one": "{{count}} branch",
+    "branchCount_other": "{{count}} branch",
+    "repoCount_one": "{{count}} repo",
+    "repoCount_other": "{{count}} repo",
+    "openIn": "Mở ở {{branch}}",
+    "more": "+{{count}} nữa",
+    "less": "Thu gọn",
+    "pick": "Chọn một kết quả để xem nó nằm ở đâu.",
+    "open": "Mở ở {{branch}}",
+    "openHint": "Mở branch đó để xem model và xuất gói.",
+    "locations": "Nằm ở đâu",
+    "alsoIn_one": "Cũng có ở {{count}} branch khác",
+    "alsoIn_other": "Cũng có ở {{count}} branch khác",
+    "foldersBranchOnly": "Thư mục chỉ áp dụng cho một branch.",
+    "filterRepo": "Lọc theo repo",
+    "filterBranch": "Lọc theo branch",
+    "allRepos": "Mọi repo ({{count}})",
+    "allBranches": "Mọi branch ({{count}})",
+    "foundIn_one": "có ở {{count}} branch",
+    "foundIn_other": "có ở {{count}} branch"
   }
 }

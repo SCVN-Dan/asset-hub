@@ -14,6 +14,23 @@ export type FetchLike = (
   arrayBuffer(): Promise<ArrayBuffer>
 }>
 
+interface RefsPage {
+  pageInfo: { hasNextPage: boolean; endCursor: string | null }
+  nodes: Array<{ name: string; target: { oid: string; committedDate?: string } | null }>
+}
+
+interface RefsResponse {
+  data?: { repository: { refs: RefsPage } | null }
+  errors?: Array<{ type?: string; message: string }>
+}
+
+export interface BranchHead {
+  name: string
+  commit: string
+  /** ISO date of the tip commit. */
+  date?: string
+}
+
 export interface GitHubUser {
   login: string
   name?: string
@@ -66,6 +83,34 @@ export class GitHubClient {
   async listBranches(repo: string): Promise<string[]> {
     const branches = await this.paginate<{ name: string }>(`/repos/${repoPath(repo)}/branches?per_page=100`)
     return branches.map((b) => b.name)
+  }
+
+  /** Every branch with its tip commit and commit date, 100 per GraphQL request. */
+  async listBranchHeads(repo: string): Promise<BranchHead[]> {
+    const [owner, name] = splitRepo(repo)
+    const heads: BranchHead[] = []
+    let after: string | null = null
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const query = `query($owner: String!, $name: String!, $after: String) {
+        repository(owner: $owner, name: $name) {
+          refs(refPrefix: "refs/heads/", first: 100, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            nodes { name target { oid ... on Commit { committedDate } } }
+          }
+        }
+      }`
+      const { data }: { data: RefsResponse } = await this.request<RefsResponse>('/graphql', { method: 'POST', body: JSON.stringify({ query, variables: { owner, name, after } }) })
+      const refs: RefsPage | undefined = data.data?.repository?.refs
+      if (!refs) {
+        const err = data.errors?.[0]
+        const code = err?.type === 'NOT_FOUND' ? 'notFound' : err?.type === 'RATE_LIMITED' ? 'rateLimited' : 'unknown'
+        throw new SourceError(code, err?.message ?? 'GraphQL request failed')
+      }
+      for (const node of refs.nodes) if (node.target) heads.push({ name: node.name, commit: node.target.oid, date: node.target.committedDate })
+      if (!refs.pageInfo.hasNextPage) break
+      after = refs.pageInfo.endCursor
+    }
+    return heads
   }
 
   /** Commit SHA at the tip of a branch. */

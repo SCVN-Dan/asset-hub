@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AssetSearch,
+  type CatalogAsset,
   buildFolderTree,
   findUnityProjectRoots,
   isInExcludedFolder,
@@ -26,6 +27,8 @@ import { FolderTree } from '../components/FolderTree'
 import { CubeIcon, GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 import { SearchBox } from '../components/SearchBox'
+import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
+import { useCatalog, type SearchScope } from '../useCatalog'
 
 interface Props {
   source: AssetSource
@@ -47,6 +50,11 @@ const ALL = 'all'
 const PAGE = 60
 /** Models bigger than this are only rendered when opened, not for grid thumbnails. */
 const THUMB_MAX_BYTES = 40 * 1024 * 1024
+/** Unity project folder of a repo path (the part before "Assets/"), for textures looked up next to it. */
+const projectRootOf = (path: string) => {
+  const i = path.indexOf('Assets/')
+  return i < 0 ? '' : path.slice(0, i)
+}
 const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
 
 /** PNG preview for Unity's import dialog, from a cached thumbnail data URL. */
@@ -98,6 +106,11 @@ export function Browse({
   const [typeFilter, setTypeFilter] = useState(ALL)
   const [folder, setFolder] = useState('')
   const [query, setQuery] = useState('')
+  const [scope, setScope] = useState<SearchScope>('branch')
+  /** Selected result in the other-branches / other-repos views (its blob SHA). */
+  const [catalogSel, setCatalogSel] = useState<string>()
+  /** Where to land once a branch opened from another view has loaded. */
+  const nav = useRef<{ repo: string; branch: string; path: string }>()
   const [selectedId, setSelectedId] = useState<string>()
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   /** Saved thumbnails are known; only then is it worth rendering missing ones. */
@@ -156,7 +169,9 @@ export function Browse({
         setBranches(list)
         setBranchRepo(repo)
         const preferred = repoList.find((r) => r.fullName === repo)?.defaultBranch
-        if (repo === initialRepo && initialBranch && list.includes(initialBranch)) setBranch(initialBranch)
+        const wanted = nav.current?.repo === repo ? nav.current.branch : undefined
+        if (wanted && list.includes(wanted)) setBranch(wanted)
+        else if (repo === initialRepo && initialBranch && list.includes(initialBranch)) setBranch(initialBranch)
         else setBranch(preferred && list.includes(preferred) ? preferred : (list[0] ?? ''))
       },
       (error: unknown) => !cancelled && setTree({ status: 'error', error })
@@ -180,6 +195,7 @@ export function Browse({
         setRoot((current) => (roots.includes(current) ? current : (roots[0] ?? '')))
         setFolder('')
         setSelectedId(undefined)
+        if (nav.current?.repo === repo && nav.current.branch === branch) land(entries, nav.current.path)
       },
       (error: unknown) => !cancelled && setTree({ status: 'error', error })
     )
@@ -217,7 +233,79 @@ export function Browse({
   const merged = visible.length - shown.length
   const selected = visible.find((a) => a.id === selectedId)
 
-  useEffect(() => setLimit(PAGE), [shown])
+  const catalog = useCatalog(scope, repo, branch, excludedFolders, !source.isDemo)
+  const [catalogRepo, setCatalogRepo] = useState('')
+  const [catalogBranch, setCatalogBranch] = useState('')
+  useEffect(() => {
+    setCatalogRepo('')
+    setCatalogBranch('')
+  }, [scope])
+  /** Repos and branches present in the results, most files first, for the filters. */
+  const catalogFacets = useMemo(() => {
+    const repos = new Map<string, number>()
+    const branches = new Map<string, number>()
+    for (const a of catalog.assets ?? [])
+      for (const l of a.locations) {
+        repos.set(l.repo, (repos.get(l.repo) ?? 0) + 1)
+        if (!catalogRepo || l.repo === catalogRepo) for (const b of l.branches) branches.set(b, (branches.get(b) ?? 0) + 1)
+      }
+    const sorted = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    return { repos: sorted(repos), branches: sorted(branches) }
+  }, [catalog.assets, catalogRepo])
+  const catalogOfType = useMemo(
+    () =>
+      (catalog.assets ?? []).filter(
+        (a) =>
+          (typeFilter === ALL || a.type === typeFilter) &&
+          (!catalogRepo && !catalogBranch
+            ? true
+            : a.locations.some((l) => (!catalogRepo || l.repo === catalogRepo) && (!catalogBranch || l.branches.includes(catalogBranch))))
+      ),
+    [catalog.assets, typeFilter, catalogRepo, catalogBranch]
+  )
+  const catalogSearch = useMemo(() => new AssetSearch(catalogOfType), [catalogOfType])
+  const catalogFound = useMemo(() => catalogSearch.search(query), [catalogSearch, query])
+  const catalogShown = catalogFound.assets as CatalogAsset[]
+  const catalogSelected = catalogShown.find((a) => a.sha === catalogSel)
+  const inCatalog = scope !== 'branch'
+  /** Cards in the grid, whichever view is open. */
+  const gridItems: readonly Asset[] = inCatalog ? catalogShown : shown
+  const gridSelected = inCatalog ? catalogSel : selectedId
+  const setGridSelected = inCatalog ? setCatalogSel : setSelectedId
+  const searchFound = inCatalog ? catalogFound : found
+
+  // Saved thumbnails of results from other branches (same content = same thumbnail).
+  useEffect(() => {
+    if (!catalog.assets?.length) return
+    let cancelled = false
+    void window.api.thumbs.get(catalog.assets.slice(0, 5000).map((a) => a.sha)).then((more) => !cancelled && setThumbs((prev) => ({ ...more, ...prev })))
+    return () => {
+      cancelled = true
+    }
+  }, [catalog.assets])
+
+  /** Selects `repoPath` in the loaded branch: picks its Unity project and clears filters that would hide it. */
+  function land(entries: readonly TreeEntry[], repoPath: string) {
+    nav.current = undefined
+    const roots = findUnityProjectRoots(entries)
+    const projectRoot = [...roots].reverse().find((r) => repoPath.startsWith(r + 'Assets/')) ?? ''
+    setRoot(projectRoot)
+    setFolder('')
+    setQuery('')
+    setTypeFilter(ALL)
+    setSelectedId(repoPath.slice(projectRoot.length))
+  }
+
+  /** Opens a file found in another branch or repo there, in the normal branch view. */
+  const openLocation = (toRepo: string, toBranch: string, path: string) => {
+    setScope('branch')
+    nav.current = { repo: toRepo, branch: toBranch, path }
+    if (toRepo !== repo) setRepo(toRepo)
+    else if (toBranch !== branch) setBranch(toBranch)
+    else if (tree.status === 'ready') land(tree.data, path)
+  }
+
+  useEffect(() => setLimit(PAGE), [gridItems])
   // Render more cards as the end of the grid scrolls into view.
   useEffect(() => {
     const el = sentinel.current
@@ -225,33 +313,40 @@ export function Browse({
     const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && setLimit((l) => l + PAGE), { rootMargin: '600px' })
     observer.observe(el)
     return () => observer.disconnect()
-  }, [shown, limit])
+  }, [gridItems, limit])
 
   // Arrow keys move the selection through the grid (Up/Down jump a row).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!ARROWS.has(e.key) || e.altKey || e.metaKey || e.ctrlKey || !shown.length) return
+      if (!ARROWS.has(e.key) || e.altKey || e.metaKey || e.ctrlKey || !gridItems.length) return
       const target = e.target as HTMLElement
       if (target.closest('input, select, textarea, .picker-pop, .viewer')) return
       const grid = document.querySelector('.grid')
       const cols = grid ? getComputedStyle(grid).gridTemplateColumns.split(' ').length : 1
-      const index = shown.findIndex((a) => a.id === selectedId)
+      const index = gridItems.findIndex((a) => a.id === gridSelected)
       const step = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : e.key === 'ArrowUp' ? -cols : cols
-      const next = index < 0 ? 0 : Math.min(shown.length - 1, Math.max(0, index + step))
+      const next = index < 0 ? 0 : Math.min(gridItems.length - 1, Math.max(0, index + step))
       e.preventDefault()
-      setSelectedId(shown[next].id)
+      setGridSelected(gridItems[next].id)
       if (next >= limit) setLimit(next + PAGE)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [shown, selectedId, limit])
+  }, [gridItems, gridSelected, limit, inCatalog])
 
   useEffect(() => {
-    if (!selectedId) return
-    const card = document.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(selectedId)}"]`)
+    if (!gridSelected) return
+    // A card further down than the cards rendered so far (e.g. opened from another branch): render up to it first.
+    const target = gridItems.find((a) => a.id === gridSelected) ?? (selected && gridItems.find((a) => a.sha === selected.sha))
+    const index = target ? gridItems.indexOf(target) : -1
+    if (index >= limit) {
+      setLimit(index + PAGE)
+      return
+    }
+    const card = target && document.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(target.id)}"]`)
     card?.scrollIntoView({ block: 'nearest' })
     if (document.activeElement?.classList.contains('asset-card')) card?.focus({ preventScroll: true })
-  }, [selectedId])
+  }, [gridSelected, gridItems, limit])
   const live = useMemo(
     () => (source.isDemo || !repo || !branch || branchRepo !== repo ? undefined : { repo, branch, root }),
     [source, repo, branch, branchRepo, root]
@@ -305,13 +400,17 @@ export function Browse({
     setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
     void window.api.thumbs.save(key, dataUrl)
   }
-  const thumbQueue = useThumbnailQueue(live, saveThumb)
+  /** The opened model is loading: thumbnails wait so it gets the bandwidth. */
+  const [viewerLoading, setViewerLoading] = useState(false)
+  const thumbQueue = useThumbnailQueue(live, saveThumb, viewerLoading)
 
+  /** Counts for the type tabs: of the open branch, or of the cross-branch results. */
+  const typeSource: readonly Asset[] = inCatalog ? (catalog.assets ?? []) : assets
   const typeCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const a of assets) counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
+    for (const a of typeSource) counts.set(a.type, (counts.get(a.type) ?? 0) + 1)
     return counts
-  }, [assets])
+  }, [typeSource])
 
   return (
     <div className="browse">
@@ -365,7 +464,7 @@ export function Browse({
         >
           <RefreshIcon />
         </button>
-        <SearchBox value={query} search={searcher} onChange={setQuery} />
+        <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={setQuery} />
         <LangToggle value={language} onChange={onLanguage} />
         <button type="button" className="btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
           <GearIcon />
@@ -386,7 +485,7 @@ export function Browse({
             <span className="label-caps">{t('browse.types')}</span>
             <div className="tabs" role="group" aria-label={t('browse.types')}>
               <button type="button" className="tab" aria-pressed={typeFilter === ALL} onClick={() => setTypeFilter(ALL)}>
-                {t('assetTypes.all')} <span className="muted">{assets.length}</span>
+                {t('assetTypes.all')} <span className="muted">{typeSource.length}</span>
               </button>
               {registry.all().map((h) => (
                 <button key={h.id} type="button" className="tab" aria-pressed={typeFilter === h.id} onClick={() => setTypeFilter(h.id)}>
@@ -398,15 +497,18 @@ export function Browse({
           <nav aria-label={t('browse.folders')} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="label-caps">{t('browse.folders')}</span>
             {/* Mount only once the branch is loaded so the initial expansion sees real folders. */}
-            {tree.status === 'ready' && (
+            {inCatalog && <p className="muted small" style={{ margin: 0 }}>{t('catalog.foldersBranchOnly')}</p>}
+            {!inCatalog && tree.status === 'ready' && (
               <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={setFolder} />
             )}
           </nav>
+          {!inCatalog && (
           <label className="check">
             <input type="checkbox" checked={mergeCopies} onChange={(e) => setMergeCopies(e.target.checked)} />
             {t('browse.mergeCopies')}
           </label>
-          {hiddenCount > 0 && (
+          )}
+          {!inCatalog && hiddenCount > 0 && (
             <p className="muted small" style={{ margin: 0 }}>
               {t('browse.hidden', { count: hiddenCount, folders: excludedFolders.join(', ') })}
             </p>
@@ -414,23 +516,91 @@ export function Browse({
         </aside>
 
         <main className="content">
+          {!source.isDemo && <ScopeTabs scope={scope} onScope={setScope} />}
           <div className="content-head">
-            <h1>{folder || t('browse.allFolders')}</h1>
+            <h1>{inCatalog ? t(`catalog.title.${scope}`, { repo: repo.split('/').pop() }) : folder || t('browse.allFolders')}</h1>
             <span className="muted small">
-              {t('browse.assetCount', { count: shown.length })}
-              {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
+              {inCatalog
+                ? t('browse.assetCount', { count: catalogShown.length })
+                : <>
+                    {t('browse.assetCount', { count: shown.length })}
+                    {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
+                  </>}
             </span>
           </div>
-          {(found.related.length > 0 || found.typos.length > 0) && (
+          {inCatalog && catalog.assets && (
+            <div className="catalog-filters">
+              {scope === 'all' && (
+                <select className="select" aria-label={t('catalog.filterRepo')} value={catalogRepo} onChange={(e) => (setCatalogRepo(e.target.value), setCatalogBranch(''))}>
+                  <option value="">{t('catalog.allRepos', { count: catalogFacets.repos.length })}</option>
+                  {catalogFacets.repos.map(([r, n]) => (
+                    <option key={r} value={r}>
+                      {r.split('/').pop()} ({n})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select className="select" aria-label={t('catalog.filterBranch')} value={catalogBranch} onChange={(e) => setCatalogBranch(e.target.value)}>
+                <option value="">{t('catalog.allBranches', { count: catalogFacets.branches.length })}</option>
+                {catalogFacets.branches.map(([b, n]) => (
+                  <option key={b} value={b}>
+                    {b} ({n})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {inCatalog && <CatalogStatusLine status={catalog.status} error={catalog.error} onPause={catalog.pause} onResume={catalog.resume} />}
+          {(searchFound.related.length > 0 || searchFound.typos.length > 0) && (
             <p className="muted small" style={{ margin: '-8px 0 0' }}>
-              {found.related.length > 0 && t('search.related', { names: found.related.slice(0, 8).join(', ') })}
-              {found.related.length > 0 && found.typos.length > 0 && ' · '}
-              {found.typos.length > 0 && t('search.typos', { names: found.typos.slice(0, 5).join(', ') })}
+              {searchFound.related.length > 0 && t('search.related', { names: searchFound.related.slice(0, 8).join(', ') })}
+              {searchFound.related.length > 0 && searchFound.typos.length > 0 && ' · '}
+              {searchFound.typos.length > 0 && t('search.typos', { names: searchFound.typos.slice(0, 5).join(', ') })}
             </p>
+          )}
+          {inCatalog && !catalog.assets && !catalog.error && (
+            <div className="grid">
+              {Array.from({ length: 12 }, (_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          )}
+          {inCatalog && catalog.assets && catalogShown.length === 0 && (
+            <p className="empty">{catalog.status.state === 'running' ? t('catalog.emptyYet') : t('browse.noResults')}</p>
+          )}
+          {inCatalog && catalogShown.length > 0 && (
+            <>
+              <div className="grid">
+                {catalogShown.slice(0, limit).map((a, i) => (
+                  <AssetCard
+                    key={a.id}
+                    asset={a}
+                    handler={registry.get(a.type)}
+                    thumb={thumbs[a.sha]}
+                    selected={a.sha === catalogSel}
+                    onSelect={() => setCatalogSel(a.sha)}
+                    note={locationNote(a, scope, t)}
+                    generating={thumbQueue.busy.has(a.sha)}
+                    onVisible={
+                      thumbsLoaded && registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
+                        ? (on) => {
+                            if (!on) return thumbQueue.cancel(a.sha)
+                            if (thumbs[a.sha]) return
+                            const at = a.locations.find((l) => !catalogRepo || l.repo === catalogRepo) ?? a.locations[0]
+                            const ctx = { repo: at.repo, branch: catalogBranch && at.branches.includes(catalogBranch) ? catalogBranch : at.branches[0], root: projectRootOf(at.path) }
+                            thumbQueue.request(a.sha, at.path, i, ctx)
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+              </div>
+              {limit < catalogShown.length && <div ref={sentinel} className="grid-sentinel" />}
+            </>
           )}
           {repos.status === 'error' && <ErrorNote error={repos.error} />}
           {repos.status === 'ready' && repoList.length === 0 && <p className="empty">{t('browse.noRepos')}</p>}
-          {tree.status === 'loading' && repo && (
+          {!inCatalog && tree.status === 'loading' && repo && (
             <>
               <p className="muted small" role="status" style={{ margin: 0 }}>
                 {t('browse.loading')}
@@ -442,8 +612,8 @@ export function Browse({
               </div>
             </>
           )}
-          {tree.status === 'error' && <ErrorNote error={tree.error} />}
-          {tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
+          {!inCatalog && tree.status === 'error' && <ErrorNote error={tree.error} />}
+          {!inCatalog && tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
           {(pack.length > 0 || exportState.status !== 'idle') && (
             <ExportBar
               items={pack}
@@ -456,10 +626,10 @@ export function Browse({
               onDismiss={() => setExportState({ status: 'idle' })}
             />
           )}
-          {tree.status === 'ready' && shown.length > 0 && (
+          {!inCatalog && tree.status === 'ready' && shown.length > 0 && (
             <>
               <div className="grid">
-                {shown.slice(0, limit).map((a) => (
+                {shown.slice(0, limit).map((a, i) => (
                   <AssetCard
                     key={a.id}
                     asset={a}
@@ -471,7 +641,7 @@ export function Browse({
                     onSelect={() => setSelectedId(a.id)}
                     onVisible={
                       live && thumbsLoaded && registry.get(a.type)?.preview.kind === 'three' && (a.size ?? 0) <= THUMB_MAX_BYTES
-                        ? (on) => (on ? !thumbs[a.sha] && thumbQueue.request(a.sha, root + a.path) : thumbQueue.cancel(a.sha))
+                        ? (on) => (on ? !thumbs[a.sha] && thumbQueue.request(a.sha, root + a.path, i) : thumbQueue.cancel(a.sha))
                         : undefined
                     }
                   />
@@ -482,7 +652,12 @@ export function Browse({
           )}
         </main>
 
+        {inCatalog ? (
+          <CatalogDetails asset={catalogSelected} thumb={catalogSelected && thumbs[catalogSelected.sha]} onOpen={openLocation} />
+        ) : (
         <AssetDetails
+          onOpenLocation={openLocation}
+          onViewerLoading={setViewerLoading}
           asset={selected}
           handler={selected && registry.get(selected.type)}
           live={live}
@@ -497,6 +672,7 @@ export function Browse({
           excludedFolders={excludedFolders}
           onPrefabFiles={(path, files) => prefabFiles.current.set(path, files)}
         />
+        )}
       </div>
     </div>
   )

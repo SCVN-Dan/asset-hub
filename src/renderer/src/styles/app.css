@@ -218,3 +218,21 @@ button { cursor: pointer; }
 @media (max-width: 1200px) {
   .browse-body { grid-template-columns: 220px minmax(0, 1fr) 360px; }
 }
+
+/* Search across branches / repos */
+.scope-tabs { display: flex; gap: 6px; }
+.catalog-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: -8px 0 0; }
+.catalog-status .progress { width: 160px; }
+.asset-note { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.catalog-thumb { max-width: 100%; max-height: 100%; object-fit: contain; }
+.location-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.location-path { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+.location-path .mono { color: var(--text-2); word-break: break-all; }
+.location-repo { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { height: 24px; padding: 0 8px; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: var(--text-2); font-size: 11px; cursor: pointer; }
+.chip:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
+.chip[aria-current='true'] { background: var(--accent-soft); border-color: var(--accent); color: var(--text); cursor: default; }
+.chip-more { border-style: dashed; }
+.catalog-filters { display: flex; gap: 8px; flex-wrap: wrap; margin: -6px 0 0; }
+.catalog-filters .select { height: 32px; font-size: 13px; max-width: 280px; }

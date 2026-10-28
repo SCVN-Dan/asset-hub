@@ -22,13 +22,15 @@ interface Props {
   prefabMaterial?: MaterialRef
   onStats(stats: ModelStats): void
   onThumb(dataUrl: string): void
+  /** True while the model is downloading / loading, so background work can wait. */
+  onLoading?(loading: boolean): void
 }
 
 const MAX_TEXTURES = 16
 
 type Status = 'loading' | 'ready' | 'error'
 
-export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThumb }: Props) {
+export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThumb, onLoading }: Props) {
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
@@ -40,8 +42,13 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
   const [wireframe, setWireframe] = useState(false)
   const [clips, setClips] = useState<string[]>([])
   const [clip, setClip] = useState('')
-  const callbacks = useRef({ onStats, onThumb })
-  callbacks.current = { onStats, onThumb }
+  const callbacks = useRef({ onStats, onThumb, onLoading })
+  callbacks.current = { onStats, onThumb, onLoading }
+  useEffect(() => {
+    callbacks.current.onLoading?.(status === 'loading')
+  }, [status])
+  // Closing the viewer mid-load must not leave background work paused.
+  useEffect(() => () => callbacks.current.onLoading?.(false), [])
 
   /** Downloads texture files once per viewer and serves them as blob URLs. */
   const fetchTextures = async (paths: readonly string[]) => {

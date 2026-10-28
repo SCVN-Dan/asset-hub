@@ -23,12 +23,13 @@
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
-| B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ⏳ |
+| B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
 | C | 6 | ~~Render pipeline & Shader Mapping~~ — gộp vào Phase 5 | — | — |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
+| **E · Phát hành** | 10 | Đóng gói `.dmg` / installer, code signing, tự cập nhật — **làm cuối cùng** (trong lúc phát triển vẫn chạy `npm run dev` để test) | ~2–3 ngày | ⏳ |
 
 ---
 
@@ -137,12 +138,13 @@ Mục tiêu: tìm được asset khi không biết nó ở repo / branch nào. C
 
 | Việc | State |
 |---|---|
-| Chỉ mục nhẹ: tên, path, blob SHA, dung lượng, repo, branch — không tải nội dung | ⏳ |
-| Gộp theo SHA: cùng file ở nhiều branch chỉ lưu một lần + danh sách branch | ⏳ |
-| Cập nhật tăng dần: branch có commit không đổi thì bỏ qua (dùng cache cây theo commit) | ⏳ |
-| Ưu tiên quét: branch mặc định + branch push trong 30 ngày; branch cũ quét khi rảnh | ⏳ |
-| Ô tìm kiếm có phạm vi: Branch này / Mọi branch của repo / Mọi repo; lọc theo loại, repo | ⏳ |
-| "Asset này còn ở đâu?": cùng SHA hoặc cùng GUID ở repo / branch khác | ⏳ |
+| Chỉ mục nhẹ: tên, path, blob SHA, dung lượng, repo, branch — không tải nội dung (`src/core/catalog`, 1 file JSON / repo, ~3,8 MB cho 104 branch) | ✅ |
+| Gộp theo SHA: cùng file ở nhiều branch chỉ lưu một lần + danh sách branch | ✅ |
+| Cập nhật tăng dần: branch có commit không đổi thì bỏ qua — mở lại chỉ mất ~3 s (1 GraphQL đọc đầu branch) | ✅ |
+| Ưu tiên quét: branch đang mở → repo đang mở → branch mặc định + push trong 30 ngày → branch cũ. Quét nền nhường chỗ khi người dùng đang tải file; tạm dừng / tiếp tục; tự chạy lại sau rate-limit | ✅ |
+| Ô tìm kiếm có phạm vi: Branch này / Mọi branch của repo / Mọi repo; lọc theo loại, repo, branch; bấm branch để mở đúng file ở đó | ✅ |
+| "Asset này còn ở đâu?": cùng SHA ở repo / branch khác (mục "Cũng có ở" trong panel chi tiết) | ✅ |
+| "Còn ở đâu" theo GUID (cùng asset nhưng đã sửa nội dung) | ⏳ |
 | Index SQLite + FTS (thay cho JSON khi dữ liệu lớn) | ⏳ |
 
 ## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
@@ -168,7 +170,6 @@ Phần còn giá trị (cảnh báo pipeline, chỉnh `.mat` khi xuất) đã ch
 | #9 `AudioHandler` + `SpriteHandler` (preview audio, sprite/UI 2D) | ⏳ |
 | pHash cảnh báo texture gần giống | ⏳ |
 | GitHub Actions dựng manifest + thumbnail sẵn | ⏳ |
-| Đóng gói, code signing macOS/Windows | ⏳ |
 
 ## Phase 8 — Lên chính thức (Mốc D, làm song song được)
 | Việc | State |
@@ -193,6 +194,19 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 
 ---
 
+## Phase 10 — Phát hành (làm cuối cùng, Mốc E)
+Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đã có sẵn ở `build/` (svg, png, icns).
+
+| Việc | State |
+|---|---|
+| `electron-builder`: `.dmg` cho Apple Silicon + Intel, ad-hoc sign | ⏳ |
+| Hướng dẫn mở app chưa ký lần đầu (Gatekeeper) cho người không rành kỹ thuật | ⏳ |
+| Code signing + notarize (cần Apple Developer ID của công ty) | ⏳ |
+| Windows installer (nếu team cần) | ⏳ |
+| Tự cập nhật (GitHub Releases) | ⏳ |
+
+---
+
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
@@ -203,6 +217,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | 2026-10-27 | Đưa toàn bộ plan + roadmap lên canvas prototype. |
 | 2026-10-27 | Chốt Import Profile và xử lý shader (PLAN §6b); thêm màn Import Profile. |
 | 2026-10-27 | **Chia lại phase theo mốc**: A Asset Browser (1–3) → B Import (4–5) → C Shader (6) → D Mở rộng (7–9). Spike gộp vào Phase 2. |
+| 2026-10-28 | **Phase 4.5 xong**: tìm trên Mọi branch / Mọi repo. Chỉ mục nền gộp theo SHA; 104 branch của xp_hero: 6.947 FBX trong 200 s lần đầu, ~3 s các lần sau. Cây quá lớn (truncated) tải gộp nhiều commit trong 1 lần git, dùng repo cache riêng để không chặn việc đang xem. Ưu tiên tải thứ đang chọn: quét nền + thumbnail tạm dừng khi model đang mở còn tải; thumbnail render từ trên xuống theo lưới (cả kết quả ở branch khác); lọc theo repo / branch; "Cũng có ở N branch khác" + bấm để mở. Đóng gói `.dmg` dời về Phase 10 (cuối). |
 | 2026-10-28 | Gọn panel chi tiết: bỏ Storage / Blob SHA / Size / badge kiểu material / dòng "import would copy"; ẩn shader built-in & package (Unity có sẵn); gộp texture dùng cho nhiều slot thành 1 dòng; ẩn thông số = 0 (bones, clips) hoặc 1 mesh; gộp cảnh báo ngân sách thành 1 ô; bỏ cảnh báo "thiếu texture/material" trùng với dòng "not in repo"; đường dẫn + nút Copy cùng 1 hàng. |
 | 2026-10-28 | **Tìm kiếm thông minh**: gõ nhóm từ khoá ra cả tên thành viên (fish → Kraken, Octopus, Tuna; weapon → Sword, Ballista…), hiểu tiếng Việt có/không dấu (cá, cây, cá mập), sửa lỗi chính tả (buliding → Building, wolf ↔ Wlof), số nhiều, tên thư mục; ô gợi ý từ khoá kèm số kết quả (↑↓ Enter). Bộ từ khoá ở `src/core/search/concepts.ts`, thêm từ không cần sửa code khác. |
 | 2026-10-28 | **Rà soát trước khi đóng gói** (review độc lập, 14 lỗi): file tạm cache trùng tên khi ghi song song; nhận LFS pointer kể cả khi thiếu `.gitattributes`; không cache kết quả đọc lỗi (GUID, prefab) và text GraphQL bị cắt; material variant (`m_Parent`) + `#include` shader / Shader Graph sub-graph vào gói; `.mat` kiểu Unity 5 + CRLF; git chạy tuần tự theo repo, `ls-tree -z` (tên file tiếng Việt/Unicode); progress index báo cho mọi màn chờ; khôi phục offline thử lại, nhận diện rate-limit; chặn điều hướng khi kéo-thả file vào cửa sổ, chỉ 1 instance; bỏ kết quả tìm prefab cũ khi đổi FBX; xoá gói khi đổi project; không đọc branch cũ khi đổi repo; giải phóng texture/blob URL của viewer; thumbnail lỗi thử lại sau 2 phút, chờ cache thumbnail trước khi render, bỏ qua FBX > 40 MB; nén gói bất đồng bộ (không đơ cửa sổ). |

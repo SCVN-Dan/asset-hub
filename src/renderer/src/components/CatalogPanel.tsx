@@ -1,0 +1,182 @@
+import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { formatBytes, shortPath, type CatalogAsset, type CatalogLocation } from '@core/index'
+import type { CatalogStatus } from '@shared/ipc'
+import type { SearchScope } from '../useCatalog'
+import { ErrorNote } from './ErrorNote'
+import { CubeIcon } from './Icons'
+
+/** Branch chips shown before "+N more". */
+const BRANCHES_SHOWN = 6
+
+const repoName = (repo: string) => repo.split('/').pop() ?? repo
+
+/** Short card line: "xp_hero · 12 branches" or the single branch name. */
+export function locationNote(asset: CatalogAsset, scope: SearchScope, t: (key: string, o?: Record<string, unknown>) => string): string {
+  const first = asset.locations[0]
+  const where = asset.branchCount === 1 ? first.branches[0] : t('catalog.branchCount', { count: asset.branchCount })
+  if (scope === 'all') return asset.repoCount > 1 ? t('catalog.repoCount', { count: asset.repoCount }) + ` · ${where}` : `${repoName(first.repo)} · ${where}`
+  return where
+}
+
+interface ScopeProps {
+  scope: SearchScope
+  onScope(scope: SearchScope): void
+}
+
+export function ScopeTabs({ scope, onScope }: ScopeProps) {
+  const { t } = useTranslation()
+  return (
+    <div className="scope-tabs" role="group" aria-label={t('catalog.scope')}>
+      {(['branch', 'repo', 'all'] as const).map((s) => (
+        <button key={s} type="button" className="tab" aria-pressed={scope === s} onClick={() => onScope(s)}>
+          {t(`catalog.scopes.${s}`)}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+interface StatusProps {
+  status: CatalogStatus
+  error?: unknown
+  onPause(): void
+  onResume(): void
+}
+
+/** One line about background indexing, with pause / resume. */
+export function CatalogStatusLine({ status, error, onPause, onResume }: StatusProps) {
+  const { t } = useTranslation()
+  if (error) return <ErrorNote error={error} />
+  if (status.state === 'idle') return null
+  return (
+    <div className="catalog-status muted small" role="status">
+      {status.state === 'running' && (
+        <>
+          <span>
+            {t('catalog.indexing', { done: status.done, total: status.total })}
+            {status.current && <span className="mono"> · {status.current.split('@').pop()}</span>}
+          </span>
+          <progress className="progress" max={Math.max(1, status.total)} value={status.done} />
+          <button type="button" className="btn btn-small" onClick={onPause}>
+            {t('catalog.pause')}
+          </button>
+        </>
+      )}
+      {status.state === 'paused' && (
+        <>
+          <span>{t('catalog.paused', { done: status.done, total: status.total })}</span>
+          <button type="button" className="btn btn-small" onClick={onResume}>
+            {t('catalog.resume')}
+          </button>
+        </>
+      )}
+      {status.state === 'error' && (
+        <>
+          <span>
+            {status.error?.code === 'rateLimited' && status.error.resetAt
+              ? t('catalog.rateLimited', { time: new Date(status.error.resetAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })
+              : t('catalog.failed', { message: status.error?.message ?? '' })}
+          </span>
+          <button type="button" className="btn btn-small" onClick={onResume}>
+            {t('catalog.retry')}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+interface LocationsProps {
+  locations: readonly CatalogLocation[]
+  /** Shown as current (not clickable). */
+  here?: { repo: string; branch: string }
+  /** Repo names are shown when locations span several repos. */
+  showRepo: boolean
+  onOpen(repo: string, branch: string, path: string): void
+}
+
+/** Where a file is: one row per repo + path, with a chip per branch that opens it there. */
+export function LocationList({ locations, here, showRepo, onOpen }: LocationsProps) {
+  const { t } = useTranslation()
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  return (
+    <ul className="location-list">
+      {locations.map((l) => {
+        const key = `${l.repo}\n${l.path}`
+        const open = expanded.has(key)
+        const branches = open ? l.branches : l.branches.slice(0, BRANCHES_SHOWN)
+        return (
+          <li key={key}>
+            <div className="location-path" title={`${l.repo}/${l.path}`}>
+              {showRepo && <span className="location-repo">{repoName(l.repo)}</span>}
+              <span className="mono small">{shortPath(l.path)}</span>
+            </div>
+            <div className="chips">
+              {branches.map((b) => {
+                const current = here?.repo === l.repo && here.branch === b
+                return (
+                  <button key={b} type="button" className="chip" aria-current={current} disabled={current} onClick={() => onOpen(l.repo, b, l.path)} title={t('catalog.openIn', { branch: b })}>
+                    {b}
+                  </button>
+                )
+              })}
+              {l.branches.length > BRANCHES_SHOWN && (
+                <button
+                  type="button"
+                  className="chip chip-more"
+                  onClick={() => setExpanded((s) => (s.has(key) ? new Set([...s].filter((k) => k !== key)) : new Set([...s, key])))}
+                >
+                  {open ? t('catalog.less') : t('catalog.more', { count: l.branches.length - BRANCHES_SHOWN })}
+                </button>
+              )}
+            </div>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+interface DetailsProps {
+  asset?: CatalogAsset
+  thumb?: string
+  onOpen(repo: string, branch: string, path: string): void
+}
+
+/** Right panel for a result found in other branches / repos. */
+export function CatalogDetails({ asset, thumb, onOpen }: DetailsProps) {
+  const { t } = useTranslation()
+  if (!asset) {
+    return (
+      <aside className="details" aria-label={t('details.label')}>
+        <p className="empty">{t('catalog.pick')}</p>
+      </aside>
+    )
+  }
+  const first = asset.locations[0]
+  return (
+    <aside className="details" aria-label={t('details.label')}>
+      <div className="preview-box">{thumb ? <img className="catalog-thumb" src={thumb} alt="" /> : <CubeIcon size={72} />}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <h2>{asset.name}</h2>
+        <p className="muted small" style={{ margin: 0 }}>
+          {formatBytes(asset.size)} · {t('catalog.foundIn', { count: asset.branchCount })}
+          {asset.repoCount > 1 && ` · ${t('catalog.repoCount', { count: asset.repoCount })}`}
+        </p>
+        <div className="field-row">
+          <button type="button" className="btn btn-primary" onClick={() => onOpen(first.repo, first.branches[0], first.path)}>
+            {t('catalog.open', { branch: first.branches[0] })}
+          </button>
+        </div>
+        <p className="muted small" style={{ margin: 0 }}>
+          {t('catalog.openHint')}
+        </p>
+      </div>
+      <section className="section">
+        <span className="label-caps">{t('catalog.locations')}</span>
+        <LocationList locations={asset.locations} showRepo={asset.repoCount > 1} onOpen={onOpen} />
+      </section>
+    </aside>
+  )
+}

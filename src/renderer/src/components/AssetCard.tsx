@@ -16,9 +16,11 @@ interface Props {
   onSelect(): void
   /** Called when the card enters or leaves the screen, to render thumbnails lazily. */
   onVisible?(visible: boolean): void
+  /** Extra line under the size, e.g. where the file is in other branches. */
+  note?: string
 }
 
-export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible }: Props) {
+export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note }: Props) {
   const { t } = useTranslation()
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
@@ -55,6 +57,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
           <span>{formatBytes(asset.size)}</span>
           {asset.lfs && <span className="badge">LFS</span>}
         </span>
+        {note && <span className="asset-note">{note}</span>}
       </span>
     </button>
   )

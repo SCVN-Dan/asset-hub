@@ -49,6 +49,19 @@ const api: AssetHubApi = {
       return () => ipcRenderer.removeListener(IPC.prefabProgress, handler)
     }
   },
+  catalog: {
+    scan: (repo, current) => ipcRenderer.invoke(IPC.catalogScan, repo, current),
+    pause: () => ipcRenderer.invoke(IPC.catalogPause),
+    resume: () => ipcRenderer.invoke(IPC.catalogResume),
+    status: () => ipcRenderer.invoke(IPC.catalogStatus),
+    list: (repo, excludedFolders) => ipcRenderer.invoke(IPC.catalogList, repo, excludedFolders),
+    whereIs: (sha) => ipcRenderer.invoke(IPC.catalogWhere, sha),
+    onStatus: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
+      ipcRenderer.on(IPC.catalogProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.catalogProgress, handler)
+    }
+  },
   thumbs: {
     get: (keys) => ipcRenderer.invoke(IPC.getThumbs, keys),
     save: (key, dataUrl) => ipcRenderer.invoke(IPC.saveThumb, key, dataUrl)

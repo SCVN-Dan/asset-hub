@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, type ModelStats } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, type DependencyReport, type MaterialRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
+import { LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
@@ -26,6 +27,9 @@ interface Props {
   excludedFolders: string[]
   /** Extra files (prefab materials) to include when this model is exported. */
   onPrefabFiles(path: string, files: string[]): void
+  /** Opens the same file in another branch or repo. */
+  onOpenLocation(repo: string, branch: string, path: string): void
+  onViewerLoading?(loading: boolean): void
 }
 
 type PrefabSearch = { status: 'idle' } | { status: 'running'; scope: 'near' | 'all' } | { status: 'ready'; result: PrefabMaterialsResult } | { status: 'error'; error: unknown }
@@ -108,7 +112,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading }: Props) {
   const { t } = useTranslation()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
   const [stats, setStats] = useState<ModelStats>()
@@ -117,10 +121,29 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [prefab, setPrefab] = useState<PrefabSearch>({ status: 'idle' })
   /** A suggested .mat (next to the FBX) the user chose to try. */
   const [picked, setPicked] = useState<{ material: MaterialRef; files: string[] }>()
+  /** Other branches / repos with this exact file, from the catalog (empty until they are indexed). */
+  const [elsewhere, setElsewhere] = useState<CatalogLocation[]>([])
   const [prefabProgress, setPrefabProgress] = useState<{ done: number; total: number }>()
   const repoPath = asset && live ? live.root + asset.path : undefined
   /** Bumped when the selection changes, so a search started for another model is ignored. */
   const searchToken = useRef(0)
+
+  useEffect(() => {
+    setElsewhere([])
+    if (!live || !asset) return
+    let cancelled = false
+    void window.api.catalog.whereIs(asset.sha).then((r) => {
+      if (cancelled || !r.ok) return
+      // Leave out the branch being viewed.
+      const others = r.data
+        .map((l) => (l.repo === live.repo ? { ...l, branches: l.branches.filter((b) => b !== live.branch) } : l))
+        .filter((l) => l.branches.length)
+      setElsewhere(others)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [live?.repo, live?.branch, asset?.sha])
 
   useEffect(() => window.api.assets.onIndexProgress(setProgress), [])
   useEffect(() => window.api.assets.onPrefabProgress(setPrefabProgress), [])
@@ -215,6 +238,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           prefabMaterial={prefabMaterial}
           onStats={setStats}
           onThumb={(url) => onThumb(asset.sha, url)}
+          onLoading={onViewerLoading}
         />
       ) : (
         <div className="preview-box">
@@ -429,6 +453,13 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               </li>
             ))}
           </ul>
+        </section>
+      )}
+
+      {elsewhere.length > 0 && (
+        <section className="section">
+          <span className="label-caps">{t('catalog.alsoIn', { count: new Set(elsewhere.flatMap((l) => l.branches.map((b) => `${l.repo}@${b}`))).size })}</span>
+          <LocationList locations={elsewhere} showRepo={elsewhere.some((l) => l.repo !== live?.repo)} onOpen={onOpenLocation} />
         </section>
       )}
 
