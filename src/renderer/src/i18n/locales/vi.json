@@ -53,7 +53,7 @@
     "refresh": "Tải lại branch",
     "loadingRepos": "Đang tải repo…",
     "search": "Tìm asset",
-    "searchPlaceholder": "Tìm theo tên file…",
+    "searchPlaceholder": "Tìm tên hoặc từ khoá (cá, cây…)",
     "folders": "Thư mục",
     "allFolders": "Tất cả thư mục",
     "assetCount_other": "{{count}} asset",
@@ -227,5 +227,10 @@
     "found_other": "Được dùng bởi {{count}} prefab — material đầu tiên hiện trong preview, tất cả được kèm khi xuất.",
     "applied": "Preview đang dùng {{name}}.",
     "scanAll_other": "Quét thêm {{count}} prefab ({{size}})"
+  },
+  "search": {
+    "related": "Hiện cả tên liên quan: {{names}}",
+    "typos": "Gần đúng chính tả: {{names}}",
+    "includes": "{{names}}…"
   }
 }

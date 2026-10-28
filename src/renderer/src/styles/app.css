@@ -100,6 +100,9 @@ button { cursor: pointer; }
 .search { flex: 1 1 220px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
 .search:focus-within { border-color: var(--accent); }
 .search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; }
+.search-box { position: relative; }
+.search-suggestions { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; list-style: none; margin: 0; padding: 6px; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+.search-suggestions .picker-option { padding-left: 10px; }
 
 .browse-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 420px; }
 .sidebar { overflow: auto; padding: 16px 12px; border-right: 1px solid var(--border); display: flex; flex-direction: column; gap: 20px; }

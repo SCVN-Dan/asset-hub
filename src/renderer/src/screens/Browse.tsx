@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  AssetSearch,
   buildFolderTree,
   findUnityProjectRoots,
   isInExcludedFolder,
@@ -22,8 +23,9 @@ import { useThumbnailQueue } from '../useThumbnailQueue'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { CubeIcon, GearIcon, InfoIcon, RefreshIcon, SearchIcon } from '../components/Icons'
+import { CubeIcon, GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
+import { SearchBox } from '../components/SearchBox'
 
 interface Props {
   source: AssetSource
@@ -197,10 +199,10 @@ export function Browse({
   const hiddenCount = allAssets.length - assets.length
   const ofType = useMemo(() => (typeFilter === ALL ? assets : assets.filter((a) => a.type === typeFilter)), [assets, typeFilter])
   const folderRoot = useMemo(() => buildFolderTree(ofType), [ofType])
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return ofType.filter((a) => isInFolder(a.path, folder) && (!q || a.name.toLowerCase().includes(q)))
-  }, [ofType, folder, query])
+  const searcher = useMemo(() => new AssetSearch(ofType), [ofType])
+  // Matches groups (fish → shark), typos and folder names, best matches first.
+  const found = useMemo(() => searcher.search(query), [searcher, query])
+  const visible = useMemo(() => found.assets.filter((a) => isInFolder(a.path, folder)), [found, folder])
   // Same blob SHA = byte-identical file; with merging on, one card stands for all copies.
   const copiesBySha = useMemo(() => {
     const map = new Map<string, Asset[]>()
@@ -363,13 +365,7 @@ export function Browse({
         >
           <RefreshIcon />
         </button>
-        <div className="search">
-          <SearchIcon />
-          <label htmlFor="q" className="sr-only">
-            {t('browse.search')}
-          </label>
-          <input id="q" type="search" placeholder={t('browse.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.target.value)} />
-        </div>
+        <SearchBox value={query} search={searcher} onChange={setQuery} />
         <LangToggle value={language} onChange={onLanguage} />
         <button type="button" className="btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
           <GearIcon />
@@ -425,6 +421,13 @@ export function Browse({
               {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
             </span>
           </div>
+          {(found.related.length > 0 || found.typos.length > 0) && (
+            <p className="muted small" style={{ margin: '-8px 0 0' }}>
+              {found.related.length > 0 && t('search.related', { names: found.related.slice(0, 8).join(', ') })}
+              {found.related.length > 0 && found.typos.length > 0 && ' · '}
+              {found.typos.length > 0 && t('search.typos', { names: found.typos.slice(0, 5).join(', ') })}
+            </p>
+          )}
           {repos.status === 'error' && <ErrorNote error={repos.error} />}
           {repos.status === 'ready' && repoList.length === 0 && <p className="empty">{t('browse.noRepos')}</p>}
           {tree.status === 'loading' && repo && (

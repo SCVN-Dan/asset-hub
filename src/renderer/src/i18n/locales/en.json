@@ -53,7 +53,7 @@
     "refresh": "Reload branch",
     "loadingRepos": "Loading repos…",
     "search": "Search assets",
-    "searchPlaceholder": "Search by file name…",
+    "searchPlaceholder": "Search names or keywords (fish, tree…)",
     "folders": "Folders",
     "allFolders": "All folders",
     "assetCount_one": "{{count}} asset",
@@ -242,5 +242,10 @@
     "applied": "Preview uses {{name}}.",
     "scanAll_one": "Scan {{count}} more prefab ({{size}})",
     "scanAll_other": "Scan {{count}} more prefabs ({{size}})"
+  },
+  "search": {
+    "related": "Also showing related names: {{names}}",
+    "typos": "Close spellings: {{names}}",
+    "includes": "{{names}}…"
   }
 }
