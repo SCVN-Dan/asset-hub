@@ -23,7 +23,9 @@ export interface DepContext {
 }
 
 /** What a GUID is expected to point at, so a lookup only reads .meta files of that kind. */
-export type GuidKind = 'material' | 'texture' | 'shader' | 'any'
+export type GuidKind = 'material' | 'texture' | 'shader' | 'any' | ExtraGuidKind
+/** Kinds outside the branch's GUID index (models, prefabs, scripts, other assets): always looked up on demand. */
+export type ExtraGuidKind = 'model' | 'prefab' | 'script' | 'other'
 
 const MAX_SUGGESTED = 8
 

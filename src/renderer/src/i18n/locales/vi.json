@@ -9,7 +9,8 @@
     "fbx": "FBX",
     "texture": "Texture",
     "material": "Material",
-    "audio": "Audio"
+    "audio": "Audio",
+    "prefab": "Prefab"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -146,6 +147,14 @@
     "hint": "Kéo để xoay · cuộn để zoom · kéo chuột phải để di chuyển",
     "needsRepo": "Preview cần repo GitHub (không dùng được với dữ liệu mẫu)."
   },
+  "prefabView": {
+    "loading": "Đang dựng prefab…",
+    "ui": "Prefab UI — không có preview 3D. Sprite được liệt kê bên dưới.",
+    "particles": "Hiệu ứng particle — chưa có preview.",
+    "empty": "Không có gì để hiện 3D (không thấy mesh).",
+    "missing_one": "{{count}} mesh không tìm thấy",
+    "missing_other": "{{count}} mesh không tìm thấy"
+  },
   "stats": {
     "title": "Thông số",
     "triangles": "Tam giác",
@@ -190,12 +199,17 @@
       "textureByName": "Texture được ghép theo tên file — hãy kiểm tra lại cho đúng.",
       "customShader": "Dùng shader custom của project; project đích có thể không có shader này.",
       "noMeta": "File này không có file .meta nên không rõ import settings và GUID.",
-      "noMaterials": "FBX này tắt import material."
+      "noMaterials": "FBX này tắt import material.",
+      "missingModel": "Một số model hoặc prefab nó dùng không có trong repo.",
+      "customScript": "Có script riêng của project: vẫn được xuất kèm, nhưng có thể cần thêm script hoặc package khác mới compile được.",
+      "particles": "Có particle system: preview chưa hiển thị phần này.",
+      "uiPrefab": "Prefab UI: có liệt kê hình ảnh, nhưng không xem 3D được."
     },
     "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
     "suggestedUse": "Dùng",
     "suggestedOn": "Đang dùng ✓",
-    "checking": "đang kiểm tra…"
+    "checking": "đang kiểm tra…",
+    "script": "script riêng"
   },
   "export": {
     "title": "Xuất",

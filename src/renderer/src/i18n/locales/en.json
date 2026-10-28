@@ -9,7 +9,8 @@
     "fbx": "FBX",
     "texture": "Texture",
     "material": "Material",
-    "audio": "Audio"
+    "audio": "Audio",
+    "prefab": "Prefab"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -151,6 +152,14 @@
     "hint": "Drag to rotate · scroll to zoom · right-drag to pan",
     "needsRepo": "Preview needs a GitHub repository (not sample data)."
   },
+  "prefabView": {
+    "loading": "Putting the prefab together…",
+    "ui": "UI prefab — no 3D preview. Its sprites are listed below.",
+    "particles": "Particle effect — not previewed yet.",
+    "empty": "Nothing to show in 3D (no meshes found).",
+    "missing_one": "{{count}} mesh not found",
+    "missing_other": "{{count}} meshes not found"
+  },
   "stats": {
     "title": "Stats",
     "triangles": "Triangles",
@@ -196,12 +205,17 @@
       "textureByName": "Textures were matched by file name — check they are the right ones.",
       "customShader": "Uses a custom shader from the project; it may not exist in the target project.",
       "noMeta": "This file has no .meta file, so its import settings and GUID are unknown.",
-      "noMaterials": "Material import is turned off for this FBX."
+      "noMaterials": "Material import is turned off for this FBX.",
+      "missingModel": "Some models or prefabs it uses are not in the repository.",
+      "customScript": "Uses custom scripts: they are exported too, but may need other scripts or packages to compile.",
+      "particles": "Has particle systems: not shown in the preview yet.",
+      "uiPrefab": "A UI prefab: its images are listed, but it cannot be previewed in 3D."
     },
     "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
     "suggestedUse": "Use",
     "suggestedOn": "Using ✓",
-    "checking": "checking…"
+    "checking": "checking…",
+    "script": "custom script"
   },
   "export": {
     "title": "Export",

@@ -19,7 +19,8 @@ describe('HandlerRegistry', () => {
     expect(registry.classify(blob('A/Hero.fbx.meta'))).toBeUndefined()
     expect(registry.classify({ path: 'A/Folder.fbx', type: 'tree', sha: 'x' })).toBeUndefined()
     expect(registry.classify(blob('A/Hero.mat'))?.id).toBe('material')
-    expect(registry.classify(blob('A/Hero.prefab'))).toBeUndefined()
+    expect(registry.classify(blob('A/Hero.prefab'))?.id).toBe('prefab')
+    expect(registry.classify(blob('A/Hero.cs'))).toBeUndefined()
   })
 
   it('uses the first matching handler in registration order', () => {

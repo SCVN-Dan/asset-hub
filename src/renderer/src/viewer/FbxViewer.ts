@@ -117,12 +117,21 @@ export class FbxViewer {
     if (shape === 'plane') this.setView('front')
   }
 
-  /** Colour, transparency, cutout, emission and gloss from a Unity material, on top of its textures. */
-  setLook(look: MaterialLook): void {
+  /** Shows a group put together elsewhere (a prefab) like a loaded model. */
+  showGroup(group: THREE.Group): void {
+    if (this.model) this.scene.remove(this.model)
+    this.model = group
+    this.scene.add(group)
+    this.frameModel()
+  }
+
+  /** Colour, transparency, cutout, emission and gloss from a Unity material, on top of its textures; `only` limits it to one material by name. */
+  setLook(look: MaterialLook, only?: string): void {
     this.model?.traverse((obj) => {
       const mesh = obj as THREE.Mesh
       if (!mesh.isMesh) return
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (only !== undefined && mat.name !== only) continue
         const m = mat as THREE.MeshPhongMaterial
         // Unity stores colour properties in sRGB; they multiply the colour texture. HDR colours (> 1) would only blow out.
         const c01 = (v: number) => Math.min(1, Math.max(0, v))
@@ -142,7 +151,7 @@ export class FbxViewer {
   }
 
   /** Puts .mat textures onto the FBX materials with matching names. */
-  async applyMaterialSlots(slots: readonly MaterialSlot[]): Promise<void> {
+  async applyMaterialSlots(slots: readonly MaterialSlot[], exact = false): Promise<void> {
     if (!this.model || !slots.length) return
     const byMaterial = new Map<string, MaterialSlot[]>()
     const ordered = [...slots].sort((a, b) => slotRank(a.prop.toLowerCase()) - slotRank(b.prop.toLowerCase()))
@@ -170,7 +179,10 @@ export class FbxViewer {
       if (!mesh.isMesh) return
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const m = mat as THREE.MeshPhongMaterial
-        const slotsFor = byMaterial.get(m.name.toLowerCase()) ?? byMaterial.get('*') ?? (byMaterial.size === 1 ? [...byMaterial.values()][0] : undefined)
+        // `exact`: only materials named in the slots (a prefab's materials are named by GUID).
+        const slotsFor = exact
+          ? byMaterial.get(m.name.toLowerCase())
+          : (byMaterial.get(m.name.toLowerCase()) ?? byMaterial.get('*') ?? (byMaterial.size === 1 ? [...byMaterial.values()][0] : undefined))
         let colorTaken = false
         for (const slot of slotsFor ?? []) {
           const prop = slot.prop.toLowerCase()

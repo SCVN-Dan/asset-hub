@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, PLAYABLE_BUDGET, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type SpriteBorder, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
@@ -9,6 +9,7 @@ import { CubeIcon } from './Icons'
 import { ModelViewer, type LiveContext } from './ModelViewer'
 import { ImageViewer, type ImageInfo } from './ImageViewer'
 import { MaterialViewer } from './MaterialViewer'
+import { PrefabViewer } from './PrefabViewer'
 import { AudioViewer } from './AudioViewer'
 import { audioStats, formatDuration, type DecodedAudio } from '../viewer/audio'
 import { DownloadButton } from './DownloadButton'
@@ -323,6 +324,25 @@ function mergeSlots(textures: readonly TextureRef[]): TextureRef[] {
   return [...byFile.values()]
 }
 
+const PART_TYPES: Record<PartRef['kind'], string> = { model: 'FBX', prefab: 'PFB', script: 'CS', other: 'FILE' }
+
+/** A model, nested prefab, script or other file a prefab uses. */
+function PartRow({ part }: { part: PartRef }) {
+  const { t } = useTranslation()
+  const tone = part.unsure ? 'info' : part.missing ? 'warn' : part.kind === 'script' ? 'info' : 'ok'
+  return (
+    <li className="dep-row" title={part.path ?? part.guid}>
+      <Dot tone={tone} />
+      <span className="dep-type">{part.kind === 'model' && part.path && !/\.fbx$/i.test(part.path) ? (part.path.split('.').pop() ?? '').toUpperCase() : PART_TYPES[part.kind]}</span>
+      <span className="dep-name">
+        {part.name}
+        {part.uses > 1 && <span className="muted"> ×{part.uses}</span>}
+      </span>
+      <span className="dep-meta">{part.unsure ? t('deps.checking') : part.missing ? t('deps.missing') : part.kind === 'script' ? t('deps.script') : formatBytes(part.size)}</span>
+    </li>
+  )
+}
+
 function TextureRow({ tex }: { tex: TextureRef }) {
   const { t } = useTranslation()
   const tone = tex.unsure ? 'info' : tex.missing ? 'warn' : tex.matchedBy === 'name' ? 'info' : 'ok'
@@ -491,6 +511,19 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
         />
+      ) : live && repoPath && handler?.preview.kind === 'prefab' ? (
+        <PrefabViewer
+          key={repoPath}
+          live={live}
+          path={repoPath}
+          report={report}
+          onStats={(s) => {
+            setStats(s)
+            onModelStats?.(asset.sha, summarizeStats(s, report?.partial ? 'thumb' : 'viewer'))
+          }}
+          onThumb={(url) => onThumb(asset.sha, url)}
+          onLoading={onViewerLoading}
+        />
       ) : live && repoPath && handler?.preview.kind === 'material' ? (
         <MaterialViewer
           key={repoPath}
@@ -584,7 +617,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
             <>
               {report.warnings
                 // Missing files already say "not in repo" on their own row.
-                .filter((w) => w !== 'missingTexture' && w !== 'missingMaterial')
+                .filter((w) => w !== 'missingTexture' && w !== 'missingMaterial' && w !== 'missingModel')
                 .filter((w) => w !== 'textureByName' || report.embeddedTextures.some((x) => !x.missing))
                 .map((w) => (
                   <p key={w} className={w === 'textureByName' ? 'note' : 'warn-note'}>
@@ -592,6 +625,9 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
                   </p>
                 ))}
               <ul className="dep-list">
+                {report.parts?.map((p) => (
+                  <PartRow key={p.guid} part={p} />
+                ))}
                 {report.materials.map((m) => (
                   <MaterialRows key={m.guid ?? m.name} m={m} />
                 ))}

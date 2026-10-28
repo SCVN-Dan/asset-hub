@@ -5,10 +5,11 @@ import { renderThumbnail } from './viewer/backgroundThumb'
 import { renderImageThumbnail } from './viewer/imageThumb'
 import { renderMaterialThumbnail } from './viewer/materialThumb'
 import { renderAudioThumbnail } from './viewer/audio'
+import { renderPrefabThumbnail } from './viewer/prefabThumb'
 
-export type ThumbKind = 'three' | 'material' | 'image' | 'audio'
+export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab'
 
-const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail }
+const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail }
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
@@ -21,7 +22,7 @@ interface Job {
   order: number
   /** Repo + branch to read from, when not the open branch (results from other branches). */
   ctx?: LiveContext
-  /** How it is drawn: a 3D model, a material on a sphere, an image file as it is, or a clip's waveform. */
+  /** How it is drawn: a 3D model, a material on a sphere, a prefab put together, an image file as it is, or a clip's waveform. */
   kind: ThumbKind
 }
 

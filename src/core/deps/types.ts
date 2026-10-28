@@ -42,6 +42,10 @@ export type DependencyWarning =
   | 'customShader'
   | 'noMeta'
   | 'noMaterials'
+  | 'missingModel'
+  | 'customScript'
+  | 'particles'
+  | 'uiPrefab'
 
 /**
  * `known` only names prefabs read before that use the model (nothing loaded);
@@ -68,6 +72,19 @@ export interface PrefabMaterialsResult {
   warnings: DependencyWarning[]
 }
 
+/** A model, nested prefab, script or other asset a prefab uses. */
+export interface PartRef {
+  kind: 'model' | 'prefab' | 'script' | 'other'
+  guid: string
+  name: string
+  path?: string
+  missing: boolean
+  unsure?: boolean
+  size?: number
+  /** How many times the prefab (and the prefabs inside it) uses it. */
+  uses: number
+}
+
 export interface DependencyReport {
   /** A: materials extracted to .mat; B: embedded in the FBX; none: material import disabled. */
   kind: 'A' | 'B' | 'none'
@@ -84,4 +101,8 @@ export interface DependencyReport {
   suggested: Array<{ material: MaterialRef; files: string[] }>
   /** Every repo path that an import would copy (assets and their .meta files). */
   files: string[]
+  /** Prefabs: models, nested prefabs, scripts and other assets, in order of use. */
+  parts?: PartRef[]
+  /** Prefabs: GUID → repo path of everything found, so a preview can put the prefab together. */
+  guidPaths?: Record<string, string>
 }

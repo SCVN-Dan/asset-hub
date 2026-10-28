@@ -26,7 +26,7 @@
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
 | B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn preset ngân sách, dung lượng gồm dependency) |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
-| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | 🔄 Texture, Material, Audio, Sprite xong |
+| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | 🔄 Texture, Material, Audio, Sprite, Prefab tĩnh xong |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
@@ -99,7 +99,7 @@ Mục tiêu: chọn một FBX → thấy preview 3D có texture, danh sách depe
 |---|---|
 | Đọc `.meta` / `.mat` qua GraphQL theo lô (thay cho sparse-checkout — không cần git trên máy người dùng), chia lô + thử lại khi GitHub 502/504 | ✅ |
 | Chỉ mục GUID → path theo commit (material, texture, shader), cache trên đĩa. Lần đầu ~130 s với repo test, sau đó tức thì | ✅ |
-| Resolver GUID tổng quát đệ quy (cho prefab/particle) — dời sang Phase 9, FBX dùng resolver riêng | ⏳ |
+| Resolver GUID tổng quát đệ quy (cho prefab/particle) | ✅ (Phase 6, prefab tĩnh) |
 | `FbxHandler.resolveDependencies`: kiểu A (GUID → .mat → shader + texture) + kiểu B (tên texture trong FBX → file gần nhất) | ✅ |
 | Tải on-demand FBX + texture: git blob API, LFS batch API; cache nội dung theo hash | ✅ |
 | Preview three.js + gán texture (texture trong FBX theo tên, texture `.mat` theo material) | ✅ |
@@ -182,7 +182,7 @@ Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, prev
 | **Audio** (wav, mp3, ogg; aif / tracker liệt kê) | Phát trong app trên waveform: bấm để tua, Space phát / dừng, lặp, **Tự phát** khi chọn clip khác (nhớ giữa các lần mở); thumbnail lưới = waveform | Độ dài, kênh, sample rate gốc (đọc header WAV / OGG / MP3 vì Web Audio tự resample), import settings từ `.meta` (Load type, nén + quality, sample rate override, Force To Mono, override theo nền tảng — WebGL ưu tiên) → **dung lượng ước tính khi build**; cảnh báo playable (> 1 MB khi build, > 60 s, PCM, clip dài Decompress on load, âm ngắn stereo); card ghi độ dài + ≈ dung lượng; **Tải về** file như texture | ✅ |
 | **Sprite / UI** (texture kiểu Sprite) | Trong viewer ảnh của Texture: khung từng sprite con (đánh số) + đường 9-slice, bật/tắt; nét vẽ giữ độ dày khi thu nhỏ | Từ `.meta`: chế độ (Single / Multiple / Polygon), số sprite, % sheet đã dùng (cảnh báo khi > 50% trống), Pixels per unit, viền 9-slice, packing tag; danh sách sprite (tên, kích thước, 9-slice) | ✅ chờ user xem trên app |
 | Sprite Atlas (`.spriteatlas`), tab / lọc riêng cho sprite | Atlas: danh sách sprite / thư mục được pack | Tab Sprite cần đọc `.meta` của mọi texture (chỉ mục hiện chỉ có tên) | ⏳ |
-| **Prefab tĩnh** (mesh + material, không particle) | Dựng lại từ FBX + material trong prefab bằng three.js; ảnh Unity render sẵn nếu có | Prefab con, mesh, material, script (cảnh báo script custom không mang theo được) | ⏳ |
+| **Prefab tĩnh** (mesh + material, không particle) | Dựng lại bằng three.js: cây transform (đổi hệ trục Unity → three), mesh từ FBX theo tỉ lệ import (UnitScaleFactor × globalScale), material + texture + màu theo GUID, prefab lồng nhau / Prefab Variant / model kéo thả (override vị trí, xoay, scale, material) tới 4 tầng; mesh khớp theo bảng tên trong `.meta` hoặc tên GameObject (chuẩn hoá, mỗi mesh một lần); thumbnail lưới; prefab UI / particle / chỉ script hiện thẻ chữ | Model, prefab lồng nhau, material (+ texture, shader), script custom, asset khác (sprite, audio, animator…) với số lần dùng; GUID của model / prefab / script / asset khác tra theo nhu cầu (gần nhất trước, đủ cả branch ở bước cuối); cảnh báo thiếu model, script custom, particle, prefab UI; xuất `.unitypackage` đủ file | ✅ chờ user xem trên app |
 | **Animation clip** (.anim, clip trong FBX) | Phát trên model rig phù hợp | Độ dài, số curve | ⏳ |
 | Particle System prefab | → Phase 9 | | ⏳ |
 
@@ -250,6 +250,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-28 | **Phase 6 — Prefab tĩnh xong** (chờ xem trên app): handler `.prefab`, resolver đệ quy (model, prefab lồng nhau, material, script, asset khác) với tra GUID theo nhu cầu cho các loại chỉ mục chưa có; preview ghép mesh FBX theo cây transform + material; thumbnail. Unity 2022 không ghi tên mesh trong `.meta` (fileID là mã băm) → khớp theo tên GameObject; kiểm trên 28 prefab thật (kích thước đúng, mỗi node đúng mesh). 105 test. |
 | 2026-10-28 | **Phase 6 — Sprite xong** (chờ xem trên app): texture kiểu Sprite hiện khung sprite con + 9-slice trên ảnh, phần Sprite trong panel (chế độ, số sprite, % sheet dùng, PPU, viền, danh sách). Parser kiểm trên 49 `.meta` thật (sheet 14 và 4 sprite, 7 ảnh 9-slice). 101 test. |
 | 2026-10-28 | Lưới: hiện **đã tải X/Y** (thumbnail sẵn sàng / card có thể có thumbnail) cạnh số asset, có thanh tiến độ; thumbnail **tải nền hết danh sách** sau khi xong card trên màn hình (4 card / lượt, từ trên xuống, nhường khi đang mở file, bỏ qua card vừa lỗi). |
 | 2026-10-28 | **Phase 6 — Audio xong**: handler audio (tab Audio tự sinh, xp_hero @ net-catch: 249 clip), player + waveform, panel Audio với import settings và dung lượng ước tính khi build, cảnh báo playable riêng cho audio (không dùng ngân sách file model), xếp hạng dùng chung, Tải về. Resolver "file + .meta" tách thành `resolveSelf` dùng chung cho texture + audio. Header khớp `afinfo` trên 10 file thật; parser `.meta` kiểm trên 12 file thật. 98 test. |

@@ -50,6 +50,8 @@ interface Snapshot {
   guids?: Map<string, string>
   /** On-demand GUID lookups while the full index is not built yet. */
   lazy?: LazyGuids
+  /** On-demand lookups for models, prefabs, scripts and other assets, which the GUID index leaves out. */
+  extra?: LazyGuids
 }
 
 /** Timing lines for ASSETHUB_TRACE=1 runs. */
@@ -62,8 +64,15 @@ const KIND_PATTERN: Record<GuidKind, RegExp> = {
   material: /\.mat\.meta$/i,
   texture: /\.(png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture)\.meta$/i,
   shader: /\.(shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i,
-  any: /\.meta$/i
+  any: /\.meta$/i,
+  model: /\.(fbx|obj|blend|dae|3ds|max|ma|mb|asset)\.meta$/i,
+  prefab: /\.(prefab|fbx|obj|blend)\.meta$/i,
+  script: /\.(cs|dll)\.meta$/i,
+  other: /\.(wav|mp3|ogg|aiff?|anim|controller|overridecontroller|asset|ttf|otf|fontsettings|mask|physicmaterial|physicsmaterial2d|playable|signal|spriteatlas|spriteatlasv2|mixer|cubemap|flare|guiskin|renderTexture|lighting|terrainlayer)\.meta$/i
 }
+const EXTRA_KINDS = new Set<GuidKind>(['model', 'prefab', 'script', 'other'])
+/** .meta files of the extra kinds (outside INDEXED). */
+const EXTRA_META = new RegExp(['model', 'prefab', 'script', 'other'].map((k) => KIND_PATTERN[k as GuidKind].source).join('|'), 'i')
 /** .meta files read by one quick lookup before it gives up and leaves the rest to the full index. */
 const LOOKUP_BUDGET = 640
 /** One GraphQL request reads 40 files in about a second; four run side by side. */
@@ -104,7 +113,7 @@ class LazyGuids {
    * out: files named like `hints` first (an FBX names its materials), then
    * the folders nearest the model.
    */
-  find(guids: readonly string[], kind: GuidKind, nearPath: string, hints: readonly string[] = []): Promise<void> {
+  find(guids: readonly string[], kind: GuidKind, nearPath: string, hints: readonly string[] = [], limit = LOOKUP_BUDGET): Promise<void> {
     const wanted = () => [...new Set(guids)].filter((g) => !this.known.has(g))
     if (!wanted().length || this.complete) return Promise.resolve()
     const run = (this.locks.get(kind) ?? Promise.resolve()).then(async () => {
@@ -123,7 +132,7 @@ class LazyGuids {
         .map((m) => ({ m, score: (named.has(stem(m.path)) ? 1000 : 0) + affinity(m.path) }))
         .sort((a, b) => b.score - a.score)
         .map((c) => c.m)
-      let budget = LOOKUP_BUDGET
+      let budget = limit
       for (let i = 0; i < candidates.length && budget > 0 && wanted().length; ) {
         const chunk = candidates.slice(i, i + Math.min(LOOKUP_CHUNK, budget))
         i += chunk.length
@@ -278,13 +287,45 @@ export class GitHubAssetSource implements AssetSource {
       const ctx = await this.quickContext(repo, snap, root, path)
       if (ctx) {
         // `instant` answers with GUIDs already known only; the rest shows as still being checked.
-        const report = await handler.resolveDependencies(path, mode === 'instant' ? { ...ctx, prepare: undefined } : ctx)
-        if (mode === 'quick') await this.saveLearned(repo)
+        const report = await handler.resolveDependencies(path, await this.withExtra(repo, snap, mode === 'instant' ? { ...ctx, prepare: undefined } : ctx, path, mode))
+        if (mode !== 'instant') await this.saveLearned(repo)
         return report
       }
     }
     const guids = await this.guidIndex(repo, snap, onProgress)
-    return handler.resolveDependencies(path, this.depContext(repo, snap, root, guids))
+    const report = await handler.resolveDependencies(path, await this.withExtra(repo, snap, this.depContext(repo, snap, root, guids), path, mode))
+    if (mode !== 'instant' && snap.extra) await this.saveLearned(repo)
+    return report
+  }
+
+  /**
+   * Adds lookups for the kinds the GUID index leaves out (models, prefabs,
+   * scripts…): nearest folders first within a budget, or every file of that
+   * kind for the `full` answer. `instant` only uses what is known already.
+   */
+  private async withExtra(repo: string, snap: Snapshot, ctx: DepContext, nearPath: string, mode: 'instant' | 'quick' | 'full'): Promise<DepContext> {
+    if (!snap.extra) {
+      const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
+      snap.extra = new LazyGuids(
+        snap.entries.filter((e) => e.type === 'blob' && EXTRA_META.test(e.path) && !INDEXED.test(e.path)),
+        bySha,
+        // One bulk git read when possible: a full search may read every model's .meta.
+        (entries) => this.readManyTexts(repo, snap, entries, new TextDecoder())
+      )
+    }
+    const extra = snap.extra
+    const asked = new Set<string>()
+    return {
+      ...ctx,
+      pathForGuid: (guid) => ctx.pathForGuid(guid) ?? extra.known.get(guid),
+      prepare: async (guids, kind, hints) => {
+        if (!EXTRA_KINDS.has(kind)) return ctx.prepare?.(guids, kind, hints)
+        guids.forEach((g) => asked.add(g))
+        if (mode !== 'instant') await extra.find(guids, kind, nearPath, hints, mode === 'full' ? Infinity : LOOKUP_BUDGET)
+      },
+      // After a full search an extra GUID that is still unknown is not in the branch (a package script, a deleted file).
+      unsure: (guid) => (asked.has(guid) ? mode !== 'full' && !extra.complete && !extra.known.has(guid) : (ctx.unsure?.(guid) ?? false))
+    }
   }
 
   /**
