@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isStatsSummary, rankForPlayable, summaryIssues, type StatsSummary } from './playable'
+import { isStatsSummary, mergeStats, rankForPlayable, summaryIssues, type StatsSummary } from './playable'
 
 const stat = (o: Partial<StatsSummary>): StatsSummary => ({
   triangles: 1000,
@@ -56,5 +56,18 @@ describe('budget presets', () => {
     expect(summaryIssues(s, budgetFor('tight')).map((i) => i.key)).toEqual(['triangles', 'textureSize', 'fileBytes'])
     expect(budgetFor('custom', { triangles: 5000 })).toMatchObject({ triangles: 5000, textureSize: 1024 })
     expect(budgetFor(undefined)).not.toBe(TIGHT_BUDGET)
+  })
+})
+
+describe('mergeStats', () => {
+  it('keeps a full measurement over a thumbnail, adding clip names and the effect card version', () => {
+    const kept = stat({ source: 'viewer', textureBytes: 900_000 })
+    const merged = mergeStats(kept, stat({ source: 'thumb', clipNames: ['Run'], fxThumb: 1 }))
+    expect(merged).toMatchObject({ source: 'viewer', textureBytes: 900_000, clipNames: ['Run'], fxThumb: 1 })
+  })
+
+  it('keeps the effect card version when an effect is measured again', () => {
+    expect(mergeStats(stat({ source: 'thumb', fxThumb: 1 }), stat({ source: 'viewer', particles: 40 })).fxThumb).toBe(1)
+    expect(mergeStats(undefined, stat({ source: 'thumb' })).fxThumb).toBeUndefined()
   })
 })

@@ -78,3 +78,32 @@ describe('particle player', () => {
     expect(effect.emitters.every((e) => e.finished)).toBe(false)
   })
 })
+
+describe('camera framing', () => {
+  it('frames where particles really go, tighter than the worst-case reach, and starts the effect over', () => {
+    const root = new THREE.Group()
+    const s = sim({ startLifetime: k(1), startSpeed: k(2), startSize: k(0.2), bursts: [{ time: 0, count: k(60), cycles: 1, interval: 0.01, probability: 1 }] })
+    const player = new EmitterPlayer({ ...emitter('1', s), lifetime: 1 }, { blend: 'additive', tint: [1, 1, 1, 1] })
+    const holder = new THREE.Object3D()
+    root.add(holder)
+    holder.add(player.mesh)
+    const effect = new EffectPlayer([player])
+    const worst = effect.extent().getSize(new THREE.Vector3())
+    const measured = effect.measuredExtent()
+    expect(measured.isEmpty()).toBe(false)
+    const size = measured.getSize(new THREE.Vector3())
+    expect(size.x).toBeLessThanOrEqual(worst.x + 1e-6)
+    expect(size.y).toBeLessThanOrEqual(worst.y + 1e-6)
+    expect(size.z).toBeLessThanOrEqual(worst.z + 1e-6)
+    expect(size.x * size.y * size.z).toBeLessThan(worst.x * worst.y * worst.z)
+    expect(effect.alive).toBe(0)
+  })
+
+  it('falls back on the worst-case reach when nothing is emitted', () => {
+    const root = new THREE.Group()
+    const player = new EmitterPlayer(emitter('1', sim({})), { blend: 'alpha', tint: [1, 1, 1, 1] })
+    root.add(player.mesh)
+    const effect = new EffectPlayer([player])
+    expect(effect.measuredExtent().equals(effect.extent())).toBe(true)
+  })
+})

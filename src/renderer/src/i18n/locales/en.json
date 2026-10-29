@@ -119,7 +119,12 @@
     "excludedHelp": "Comma-separated folder names hidden at any depth, e.g. third-party packs.",
     "cacheDir": "Cache folder",
     "cacheDirHelp": "Branch listings, downloaded files and thumbnails are stored here.",
-    "choose": "Choose…"
+    "choose": "Choose…",
+    "cacheLimit": "Cache size limit",
+    "cacheLimitHelp": "Downloaded files beyond this are removed, least recently used first. They are downloaded again when needed.",
+    "cacheNoLimit": "No limit",
+    "cacheClear": "Clear downloads",
+    "cacheUsage": "Downloads {{downloads}} · thumbnails {{thumbs}} · other {{other}}"
   },
   "errors": {
     "unauthorized": "GitHub rejected the token. Check that it is valid and not expired.",

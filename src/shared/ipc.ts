@@ -32,6 +32,8 @@ export const IPC = {
   knownProgress: 'assets:known-progress',
   getThumbs: 'thumbs:get',
   saveThumb: 'thumbs:save',
+  cacheUsage: 'cache:usage',
+  clearCache: 'cache:clear',
   getStats: 'stats:get',
   saveStats: 'stats:save',
   exportPackage: 'export:unitypackage',
@@ -108,6 +110,15 @@ export interface CatalogStatus {
   /** repo@branch being listed. */
   current?: string
   error?: IpcError
+}
+
+/** Bytes the cache folder holds, by kind. */
+export interface CacheUsage {
+  /** Downloaded files, listings and indexes (count toward the size limit). */
+  downloads: number
+  thumbs: number
+  /** Git clones, measurements and the rest. */
+  other: number
 }
 
 export interface IpcError {
@@ -202,8 +213,15 @@ export interface AssetHubApi {
     onStatus(listener: (status: CatalogStatus) => void): () => void
   }
   thumbs: {
+    /** URLs of the thumbnails rendered earlier, for those of `keys` that have one. */
     get(keys: string[]): Promise<Record<string, string>>
     save(key: string, dataUrl: string): Promise<void>
+  }
+  cache: {
+    /** Bytes the cache folder holds, by kind. */
+    usage(): Promise<IpcResult<CacheUsage>>
+    /** Empties downloaded files (thumbnails and measurements stay). */
+    clear(): Promise<IpcResult<void>>
   }
   /** Model measurements by blob SHA, for ranking results without opening them. */
   stats: {

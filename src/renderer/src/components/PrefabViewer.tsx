@@ -84,7 +84,7 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
         previous?.effect?.dispose()
         built.current = { key, build, effect, stop: effect && owner.addUpdater((dt) => effect.update(dt)) }
         // The camera takes in where particles fly, not only the meshes.
-        owner.showGroup(build.group, effect?.extent())
+        owner.showGroup(build.group, effect?.measuredExtent())
         await dressPrefab(owner, build)
         previous?.build.dispose()
         if (cancelled) return
@@ -98,9 +98,8 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
             return next
           })
           setStatus('ready')
+          // No snapshot: effect cards are filmed through their whole run in the background.
           callbacks.current.onStats(owner.stats(build.modelBytes, build.textures))
-          // Taken once the effect has had time to fill in.
-          setTimeout(() => !owner.isDisposed() && callbacks.current.onThumb(owner.snapshot()), 900)
           return
         }
         // Nothing found yet while models are still being looked up: keep waiting for the next step.

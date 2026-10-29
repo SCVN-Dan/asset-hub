@@ -1,6 +1,6 @@
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
-import { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, shell } from 'electron'
 import { createDefaultRegistry, SourceError, type FactKind, type RepoRef } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
@@ -10,7 +10,7 @@ import { exportUnityPackage } from './exporter'
 import { isUnityProject } from './targetProject'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
-import { FileBlobCache, FileCommitCache, StatsStore, ThumbnailStore } from './caches'
+import { CacheJanitor, FileBlobCache, FileCommitCache, StatsStore, THUMB_SCHEME, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
 
 interface Session {
@@ -52,10 +52,11 @@ async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
 const electronFetch: FetchLike = (url, init) => net.fetch(url, init)
 
 /** Owns the GitHub session in the main process; the token never reaches the renderer. */
-export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; toolsDir: string }): void {
+export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; cacheLimit: () => number; toolsDir: string }): CacheJanitor {
   const store = new AuthStore(options.authFile)
-  const cache = new FileCommitCache(options.cacheDir)
-  const blobCache = new FileBlobCache(options.cacheDir)
+  const janitor = new CacheJanitor(options.cacheDir, options.cacheLimit)
+  const cache = new FileCommitCache(options.cacheDir, janitor.noteWrite)
+  const blobCache = new FileBlobCache(options.cacheDir, janitor.noteWrite)
   const thumbs = new ThumbnailStore(options.cacheDir)
   const statsStore = new StatsStore(options.cacheDir)
   const registry = createDefaultRegistry()
@@ -342,8 +343,20 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.catalogWhere, (_e, sha: unknown) => wrap(() => requireCatalog().whereIs(String(sha))))
   ipcMain.handle(IPC.getStats, (_e, keys: unknown) => statsStore.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 20000) : []))
   ipcMain.handle(IPC.saveStats, (_e, key: unknown, summary: unknown) => (typeof key === 'string' ? statsStore.save(key, summary) : undefined))
-  ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 5000) : []))
+  ipcMain.handle(IPC.getThumbs, (_e, keys: unknown) => thumbs.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 50000) : []))
   ipcMain.handle(IPC.saveThumb, (_e, key: unknown, dataUrl: unknown) =>
     typeof key === 'string' && typeof dataUrl === 'string' ? thumbs.save(key, dataUrl) : undefined
   )
+  // Images load straight from disk, only those on screen; a new version gets a new URL (`?v=`).
+  protocol.handle(THUMB_SCHEME, async (request) => {
+    const found = await thumbs.read(decodeURIComponent(new URL(request.url).pathname.slice(1)))
+    if (!found) return new Response(null, { status: 404 })
+    return new Response(found.bytes as Uint8Array<ArrayBuffer>, { headers: { 'content-type': found.type, 'access-control-allow-origin': '*', 'cache-control': 'no-store' } })
+  })
+
+  ipcMain.handle(IPC.cacheUsage, () => wrap(() => janitor.usage()))
+  ipcMain.handle(IPC.clearCache, () => wrap(() => janitor.clear()))
+  // Leftovers and the size limit are dealt with once the app has settled.
+  setTimeout(() => void janitor.cleanStale().then(() => janitor.prune()), 15_000)
+  return janitor
 }

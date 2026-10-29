@@ -8,6 +8,8 @@ export interface Settings {
   language: Language
   /** Where clones, downloaded files and thumbnails are cached. */
   cacheDir: string
+  /** Most the downloaded files may take, in GB (absent: `DEFAULT_CACHE_LIMIT_GB`; 0: no limit). */
+  cacheLimitGB?: number
   /** Folder names hidden from browsing at any depth (e.g. third-party packs). */
   excludedFolders: string[]
   /** Repo and branch opened last, restored on the next launch. */
@@ -28,6 +30,9 @@ export const DEFAULT_EXPORT_LAYOUT: PackageLayout = 'byType'
 
 export const DEFAULT_EXCLUDED_FOLDERS = ['_ThirdParty']
 
+export const CACHE_LIMITS_GB = [1, 2, 5, 10, 0] as const
+export const DEFAULT_CACHE_LIMIT_GB = 2
+
 export function isLanguage(value: unknown): value is Language {
   return typeof value === 'string' && (LANGUAGES as readonly string[]).includes(value)
 }
@@ -41,6 +46,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
   return {
     language: isLanguage(input.language) ? input.language : defaults.language,
     cacheDir: typeof input.cacheDir === 'string' && input.cacheDir.trim() !== '' ? input.cacheDir : defaults.cacheDir,
+    ...((CACHE_LIMITS_GB as readonly unknown[]).includes(input.cacheLimitGB) ? { cacheLimitGB: input.cacheLimitGB as number } : {}),
     excludedFolders: folders,
     ...(typeof input.lastRepo === 'string' && input.lastRepo ? { lastRepo: input.lastRepo } : {}),
     ...(typeof input.lastBranch === 'string' && input.lastBranch ? { lastBranch: input.lastBranch } : {}),

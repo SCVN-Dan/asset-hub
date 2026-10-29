@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
@@ -7,11 +7,8 @@ import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
-import { ModelViewer, type LiveContext } from './ModelViewer'
-import { ImageViewer, type ImageInfo } from './ImageViewer'
-import { MaterialViewer } from './MaterialViewer'
-import { PrefabViewer } from './PrefabViewer'
-import { AnimViewer } from './AnimViewer'
+import type { LiveContext } from './ModelViewer'
+import type { ImageInfo } from './ImageViewer'
 import { AudioViewer } from './AudioViewer'
 import { audioStats, formatDuration, type DecodedAudio } from '../viewer/audio'
 import { FontViewer } from './FontViewer'
@@ -21,6 +18,13 @@ import { tmpFontStats, type LoadedTmpFont } from '../viewer/tmpFont'
 import { particleStats } from '../viewer/particleThumb'
 import { fontStats, type LoadedFont } from '../viewer/font'
 import { DownloadButton } from './DownloadButton'
+
+// Viewers drawing with three.js load when first opened: the app starts without the 3D engine.
+const ModelViewer = lazy(() => import('./ModelViewer').then((m) => ({ default: m.ModelViewer })))
+const ImageViewer = lazy(() => import('./ImageViewer').then((m) => ({ default: m.ImageViewer })))
+const MaterialViewer = lazy(() => import('./MaterialViewer').then((m) => ({ default: m.MaterialViewer })))
+const PrefabViewer = lazy(() => import('./PrefabViewer').then((m) => ({ default: m.PrefabViewer })))
+const AnimViewer = lazy(() => import('./AnimViewer').then((m) => ({ default: m.AnimViewer })))
 
 interface Props {
   asset: Asset | undefined
@@ -725,6 +729,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
   return (
     <aside className="details" aria-label={t('details.label')}>
+      <Suspense fallback={<div className="viewer" />}>
       {live && repoPath && handler?.preview.kind === 'three' ? (
         <ModelViewer
           key={repoPath}
@@ -784,6 +789,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           <span>{t('viewer.needsRepo')}</span>
         </div>
       )}
+      </Suspense>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{asset.name}</h2>

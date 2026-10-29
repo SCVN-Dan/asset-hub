@@ -5,8 +5,9 @@ import type { LiveContext } from '../components/ModelViewer'
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
 import type { MaterialSlot, TextureFile } from './FbxViewer'
 
-/** Formats the preview can display (PSD through its own decoder); others (EXR, TIFF…) are listed but not drawn. */
-export const DRAWABLE = /\.(png|jpe?g|tga|bmp|gif|webp|psd)$/i
+import { DRAWABLE } from './formats'
+
+export { DRAWABLE }
 const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
 
 async function psdToPng(bytes: Uint8Array): Promise<Blob | undefined> {

@@ -1,8 +1,9 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron'
 import { join, resolve } from 'path'
 import { IPC } from '@shared/ipc'
-import { DEFAULT_EXCLUDED_FOLDERS } from '@shared/settings'
+import { DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXCLUDED_FOLDERS } from '@shared/settings'
 import { registerGitHubIpc } from './github'
+import { THUMB_SCHEME, type CacheJanitor } from './caches'
 import { SettingsStore } from './settingsStore'
 import { isUnityProject } from './targetProject'
 import { LINK_SCHEME } from '@shared/deeplink'
@@ -56,6 +57,13 @@ app.setPath('userData', join(app.getPath('appData'), 'asset-hub'))
 // Chromium keeps its own HTTP cache of every GitHub download, duplicating the blob cache in
 // AssetHubCache (it grew past 300 MB). A small one still lets API calls revalidate with ETags.
 app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
+
+// Thumbnails are served from the cache folder on their own scheme; `corsEnabled` lets the page
+// draw them on a canvas (exported package previews) without tainting it.
+protocol.registerSchemesAsPrivileged([{ scheme: THUMB_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
+
+/** Owns the cache folder's size limit, once signed-in services are set up. */
+let janitor: CacheJanitor | undefined
 
 // assethub:// links open an asset in the app. Under `npm run dev` the protocol points at the dev
 // Electron with the app's path; macOS only hands links to a packaged app (Phase 10).
@@ -120,7 +128,12 @@ app.whenReady().then(() => {
   if (settings.get().cacheDir.toLowerCase() === join(userData, 'cache').toLowerCase()) settings.set({ cacheDir })
 
   ipcMain.handle(IPC.getSettings, () => settings.get())
-  ipcMain.handle(IPC.setSettings, (_event, patch: unknown) => settings.set(patch))
+  ipcMain.handle(IPC.setSettings, (_event, patch: unknown) => {
+    const next = settings.set(patch)
+    // A lower limit applies right away.
+    if (patch && typeof patch === 'object' && 'cacheLimitGB' in patch) void janitor?.prune()
+    return next
+  })
   ipcMain.handle(IPC.chooseFolder, async (event) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const options = { properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'> }
@@ -138,7 +151,12 @@ app.whenReady().then(() => {
     if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url)
   })
 
-  registerGitHubIpc({ authFile: join(userData, 'auth.json'), cacheDir: () => settings.get().cacheDir, toolsDir: join(userData, 'tools') })
+  janitor = registerGitHubIpc({
+    authFile: join(userData, 'auth.json'),
+    cacheDir: () => settings.get().cacheDir,
+    cacheLimit: () => (settings.get().cacheLimitGB ?? DEFAULT_CACHE_LIMIT_GB) * 1024 ** 3,
+    toolsDir: join(userData, 'tools')
+  })
 
   createWindow()
 

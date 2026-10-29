@@ -115,7 +115,12 @@
     "excludedHelp": "Tên thư mục cách nhau bằng dấu phẩy, ẩn ở mọi cấp, vd. gói bên thứ ba.",
     "cacheDir": "Thư mục cache",
     "cacheDirHelp": "Danh sách file của branch, file đã tải và thumbnail được lưu ở đây.",
-    "choose": "Chọn…"
+    "choose": "Chọn…",
+    "cacheLimit": "Giới hạn dung lượng cache",
+    "cacheLimitHelp": "Vượt mức này thì file đã tải lâu không dùng nhất sẽ bị xoá trước, cần thì tải lại.",
+    "cacheNoLimit": "Không giới hạn",
+    "cacheClear": "Xoá file đã tải",
+    "cacheUsage": "File đã tải {{downloads}} · thumbnail {{thumbs}} · khác {{other}}"
   },
   "errors": {
     "unauthorized": "GitHub từ chối token. Kiểm tra token còn hợp lệ và chưa hết hạn.",

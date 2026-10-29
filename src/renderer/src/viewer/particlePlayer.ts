@@ -433,6 +433,16 @@ export class EmitterPlayer {
     this.upload()
   }
 
+  /** Each live particle's position (in the prefab's space) and size, for framing the camera on where they really go. */
+  sample(visit: (at: THREE.Vector3, size: number) => void): void {
+    if (this.emitter.renderMode === 'none' || !this.mesh.parent || !this.count) return
+    this.mesh.updateWorldMatrix(true, false)
+    const s = this.mesh.parent.getWorldScale(scratch)
+    const k = (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3
+    const at = new THREE.Vector3()
+    for (let i = 0; i < this.count; i++) visit(this.mesh.localToWorld(at.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2])), this.size[i] * k)
+  }
+
   /** Space particles may reach, in the emitter's space, to frame the camera. */
   reach(): number {
     const s = this.sim
@@ -772,6 +782,9 @@ export class EmitterPlayer {
   }
 }
 
+/** Share of particles at each end of an axis left out of the camera's frame: the odd stray should not shrink the effect. */
+const STRAYS = 0.02
+
 /** Every emitter of a prefab, played together like Unity plays the root system. */
 export class EffectPlayer {
   paused = false
@@ -800,18 +813,59 @@ export class EffectPlayer {
     for (const e of this.emitters) e.restart()
   }
 
-  /** A moment worth a still: bursts still bright for one-shots, loops filled in. */
-  busyMoment(): number {
+  /**
+   * The stretch a moving thumbnail covers: a one-shot from start to fade-out,
+   * a loop one cycle long once it has filled in (`warm`). Capped so a card stays short.
+   */
+  span(): { warm: number; length: number } {
     const visible = this.emitters.filter((e) => e.emitter.renderMode !== 'none' && !e.isSub)
-    if (!visible.length) return 0
-    if (visible.some((e) => e.emitter.looping)) return Math.min(2, Math.max(...visible.map((e) => e.emitter.lifetime)))
-    const lives = visible.map((e) => e.emitter.lifetime).sort((a, b) => a - b)
-    return Math.min(1, Math.max(0.1, lives[Math.floor(lives.length / 2)] * 0.3))
+    if (!visible.length) return { warm: 0, length: 1 }
+    const loops = visible.filter((e) => e.emitter.looping)
+    const lifetime = Math.max(...visible.map((e) => e.emitter.lifetime))
+    if (loops.length) return { warm: Math.min(3, lifetime), length: Math.min(3, Math.max(1, ...loops.map((e) => e.emitter.duration))) }
+    return { warm: 0, length: Math.min(4, Math.max(0.5, ...visible.map((e) => e.emitter.duration + e.emitter.lifetime))) }
+  }
+
+  /** Particles alive now, over every emitter. */
+  get alive(): number {
+    return this.emitters.reduce((n, e) => n + e.alive, 0)
   }
 
   /** Runs the effect forward without drawing (thumbnails). */
   advance(seconds: number): void {
     for (let t = 0; t < seconds; t += 1 / 30) for (const e of this.emitters) e.update(1 / 30)
+  }
+
+  /**
+   * Where the particles really go: plays the effect through once without
+   * drawing and keeps the box nearly all of them stay in (a few strays left
+   * out), padded by their size. Starts the effect over afterwards. Falls back
+   * on `extent()` when nothing was emitted.
+   */
+  measuredExtent(): THREE.Box3 {
+    const { warm, length } = this.span()
+    const axes: [number[], number[], number[]] = [[], [], []]
+    const sizes: number[] = []
+    this.restart()
+    const step = 1 / 30
+    for (let t = 0, frame = 0; t < warm + length; t += step, frame++) {
+      for (const e of this.emitters) e.update(step)
+      if (frame % 3) continue
+      for (const e of this.emitters)
+        e.sample((at, size) => {
+          axes[0].push(at.x)
+          axes[1].push(at.y)
+          axes[2].push(at.z)
+          sizes.push(size)
+        })
+    }
+    this.restart()
+    if (sizes.length < 8) return this.extent()
+    const pick = (values: number[], q: number) => values.sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(q * values.length))]
+    const pad = pick(sizes, 0.5) / 2
+    const lo = axes.map((v) => pick(v, STRAYS) - pad)
+    const hi = axes.map((v) => pick(v, 1 - STRAYS) + pad)
+    return new THREE.Box3(new THREE.Vector3(lo[0], lo[1], lo[2]), new THREE.Vector3(hi[0], hi[1], hi[2]))
   }
 
   /** How far particles may fly, around each emitter's object (for framing the camera). */

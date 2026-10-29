@@ -115,7 +115,12 @@
     "excludedHelp": "모든 깊이에서 숨길 폴더 이름을 쉼표로 구분해 입력하세요 (예: 서드파티 팩).",
     "cacheDir": "캐시 폴더",
     "cacheDirHelp": "브랜치 목록, 다운로드한 파일, 썸네일이 여기에 저장됩니다.",
-    "choose": "선택…"
+    "choose": "선택…",
+    "cacheLimit": "캐시 용량 제한",
+    "cacheLimitHelp": "이 용량을 넘으면 가장 오래 사용하지 않은 다운로드 파일부터 삭제됩니다. 필요하면 다시 다운로드합니다.",
+    "cacheNoLimit": "제한 없음",
+    "cacheClear": "다운로드 파일 삭제",
+    "cacheUsage": "다운로드 {{downloads}} · 썸네일 {{thumbs}} · 기타 {{other}}"
   },
   "errors": {
     "unauthorized": "GitHub가 토큰을 거부했습니다. 토큰이 유효하고 만료되지 않았는지 확인하세요.",

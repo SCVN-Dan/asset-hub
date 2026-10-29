@@ -325,17 +325,26 @@ export class FbxViewer {
 
   /** Small preview image of the current view. */
   snapshot(width = 320, height = 240): string {
-    this.renderer.render(this.scene, this.camera)
-    const src = this.renderer.domElement
     const canvas = document.createElement('canvas')
     canvas.width = width
     canvas.height = height
-    const ctx = canvas.getContext('2d')!
+    this.drawFrame(canvas.getContext('2d')!, 0, 0, width, height)
+    return canvas.toDataURL('image/webp', 0.85)
+  }
+
+  /** Renders the current view into a cell of another canvas, cropped to fill it (frames of a moving thumbnail). */
+  drawFrame(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number): void {
+    this.renderer.render(this.scene, this.camera)
+    const src = this.renderer.domElement
     const scale = Math.max(width / src.width, height / src.height)
     const w = src.width * scale
     const h = src.height * scale
-    ctx.drawImage(src, (width - w) / 2, (height - h) / 2, w, h)
-    return canvas.toDataURL('image/webp', 0.85)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(x, y, width, height)
+    ctx.clip()
+    ctx.drawImage(src, x + (width - w) / 2, y + (height - h) / 2, w, h)
+    ctx.restore()
   }
 
   isDisposed(): boolean {

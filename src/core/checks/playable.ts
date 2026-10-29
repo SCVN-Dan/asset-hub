@@ -111,6 +111,8 @@ export interface StatsSummary {
   /** For an effect (a prefab with particle systems): most particles alive at once, and how many emitters. */
   particles?: number
   emitters?: number
+  /** Version of the effect card drawn for it (a still plus frames played on hover); older ones are drawn again. */
+  fxThumb?: number
   /** `viewer` counts every texture the model uses; `thumb` the ones named inside the FBX, plus those of its .mat files when `matTextures`. */
   source: 'thumb' | 'viewer'
   /** A model thumbnail that also counted the textures of its .mat files (older ones did not, and are measured again once). */
@@ -153,6 +155,20 @@ export function summaryIssues(s: StatsSummary, budget = PLAYABLE_BUDGET): Budget
 }
 
 /** Checks a summary read back from disk or IPC. */
+/**
+ * What to keep when a new measurement comes in: a thumbnail only sees part of
+ * the textures, so it never replaces a full (viewer) measurement — clip names
+ * and the effect card version it brings are added to it instead.
+ */
+export function mergeStats(kept: StatsSummary | undefined, summary: StatsSummary): StatsSummary {
+  // A remeasured effect keeps the card already drawn for it.
+  if (summary.source !== 'thumb' || kept?.source !== 'viewer') return kept?.fxThumb && !summary.fxThumb ? { ...summary, fxThumb: kept.fxThumb } : summary
+  const merged = { ...kept }
+  if (summary.clipNames && !kept.clipNames) merged.clipNames = summary.clipNames
+  if (summary.fxThumb) merged.fxThumb = summary.fxThumb
+  return merged
+}
+
 export function isStatsSummary(v: unknown): v is StatsSummary {
   const s = v as Record<string, unknown> | null
   return (

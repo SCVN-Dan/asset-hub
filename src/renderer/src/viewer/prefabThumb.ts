@@ -4,7 +4,7 @@ import { unwrap } from '../remoteSource'
 import { offscreenHost } from './backgroundThumb'
 import { FbxViewer } from './FbxViewer'
 import { buildPrefab, dressPrefab } from './prefabBuild'
-import { particleStats } from './particleThumb'
+import { FX_THUMB_VERSION, filmEffect, particleStats } from './particleThumb'
 import { buildEffect } from './effectBuild'
 
 /** A card for prefabs with nothing 3D to draw (UI, effects, scripts only): their kind, written large. */
@@ -26,9 +26,10 @@ function labelCard(label: string): string {
 /**
  * Grid thumbnail of a prefab: its models put together with their materials,
  * using GUIDs known nearby (`quick`). Measured like a model; effects are
- * played to a busy moment before the snapshot, and measured by particles.
+ * filmed through their run (`motion`, played on hover) with the busiest
+ * frame as the card, and measured by particles.
  */
-export async function renderPrefabThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats?: StatsSummary }> {
+export async function renderPrefabThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats?: StatsSummary; motion?: string }> {
   const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick'))
   const build = await buildPrefab(live, path, report, true)
   try {
@@ -37,14 +38,13 @@ export async function renderPrefabThumbnail(live: LiveContext, path: string): Pr
     const viewer = new FbxViewer(offscreenHost())
     const effect = build.anchors.length ? await buildEffect(live, report, build.anchors, true).catch(() => undefined) : undefined
     try {
-      viewer.showGroup(build.group, effect?.extent())
+      viewer.showGroup(build.group, effect?.measuredExtent())
       await dressPrefab(viewer, build)
-      // Effects are caught mid-play, the way they look in the game.
-      effect?.advance(effect.busyMoment())
-      const url = viewer.snapshot()
+      const film = effect && filmEffect(viewer, effect)
+      const url = film?.still ?? viewer.snapshot()
       if (!fx) return { url, stats: summarizeStats(viewer.stats(build.modelBytes, build.textures), report.partial ? 'thumb' : 'viewer') }
       const stats = build.meshes ? particleStats(fx, summarizeStats(viewer.stats(build.modelBytes, build.textures), report.partial ? 'thumb' : 'viewer')) : particleStats(fx)
-      return { url, stats: { ...stats, maxTextureSize: Math.max(stats.maxTextureSize, effect?.maxTextureSize ?? 0) } }
+      return { url, motion: film?.motion, stats: { ...stats, maxTextureSize: Math.max(stats.maxTextureSize, effect?.maxTextureSize ?? 0), ...(film ? { fxThumb: FX_THUMB_VERSION } : {}) } }
     } finally {
       effect?.dispose()
       viewer.dispose()

@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LiveContext } from './components/ModelViewer'
 import type { StatsSummary } from '@core/checks/playable'
-import { renderThumbnail } from './viewer/backgroundThumb'
-import { renderImageThumbnail } from './viewer/imageThumb'
-import { renderMaterialThumbnail } from './viewer/materialThumb'
-import { renderAudioThumbnail } from './viewer/audio'
-import { renderPrefabThumbnail } from './viewer/prefabThumb'
-import { renderAnimThumbnail } from './viewer/animThumb'
-import { renderFontThumbnail } from './viewer/font'
-import { renderTmpFontThumbnail } from './viewer/tmpFont'
-
 export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab' | 'animation' | 'font' | 'tmpfont'
 
-const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail, animation: renderAnimThumbnail, font: renderFontThumbnail, tmpfont: renderTmpFontThumbnail }
+type Render = (ctx: LiveContext, path: string) => Promise<{ url: string; stats?: StatsSummary; motion?: string }>
+
+/** Renderers load with the first thumbnail of their kind (most draw with three.js, kept out of the startup bundle). */
+const RENDER: Record<ThumbKind, () => Promise<Render>> = {
+  three: () => import('./viewer/backgroundThumb').then((m) => m.renderThumbnail),
+  material: () => import('./viewer/materialThumb').then((m) => m.renderMaterialThumbnail),
+  image: () => import('./viewer/imageThumb').then((m) => m.renderImageThumbnail),
+  audio: () => import('./viewer/audio').then((m) => m.renderAudioThumbnail),
+  prefab: () => import('./viewer/prefabThumb').then((m) => m.renderPrefabThumbnail),
+  animation: () => import('./viewer/animThumb').then((m) => m.renderAnimThumbnail),
+  font: () => import('./viewer/font').then((m) => m.renderFontThumbnail),
+  tmpfont: () => import('./viewer/tmpFont').then((m) => m.renderTmpFontThumbnail)
+}
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
@@ -34,7 +37,7 @@ interface Job {
  * the grid first. Cards that scroll away before their turn are dropped.
  * Nothing new starts while `paused` (the model the user opened is loading).
  */
-export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: string, dataUrl: string, stats?: StatsSummary) => void, paused = false) {
+export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: string, dataUrl: string, stats?: StatsSummary, motion?: string) => void, paused = false) {
   const queue = useRef<Job[]>([])
   const active = useRef(new Set<string>())
   const failed = useRef(new Map<string, number>())
@@ -54,8 +57,9 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
       const ctx = job.ctx ?? liveRef.current
       if (!ctx) continue
       active.current.add(job.key)
-      void RENDER[job.kind](ctx, job.path)
-        .then(({ url, stats }) => onThumbRef.current(job.key, url, stats))
+      void RENDER[job.kind]()
+        .then((render) => render(ctx, job.path))
+        .then(({ url, stats, motion }) => onThumbRef.current(job.key, url, stats, motion))
         .catch(() => failed.current.set(job.key, Date.now()))
         .finally(() => {
           active.current.delete(job.key)

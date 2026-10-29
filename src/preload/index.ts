@@ -81,6 +81,10 @@ const api: AssetHubApi = {
     get: (keys) => ipcRenderer.invoke(IPC.getThumbs, keys),
     save: (key, dataUrl) => ipcRenderer.invoke(IPC.saveThumb, key, dataUrl)
   },
+  cache: {
+    usage: () => ipcRenderer.invoke(IPC.cacheUsage),
+    clear: () => ipcRenderer.invoke(IPC.clearCache)
+  },
   stats: {
     get: (keys) => ipcRenderer.invoke(IPC.getStats, keys),
     save: (key, summary) => ipcRenderer.invoke(IPC.saveStats, key, summary)

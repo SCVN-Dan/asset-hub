@@ -1,6 +1,6 @@
 # Asset Hub — Roadmap
 
-- Cập nhật: 2026-10-28
+- Cập nhật: 2026-10-29
 - Chi tiết kỹ thuật: [PLAN.md](PLAN.md)
 - Canvas (prototype + docs): https://claude.ai/artifact/VsfxZnDZguqCF2ASwwZfoP
 
@@ -22,7 +22,7 @@
 | **A · Asset Browser** | 1 | App shell + UI (dữ liệu giả) | ~1 tuần | ✅ |
 | A | 2 | Kết nối GitHub + tìm FBX trong branch | 1–1,5 tuần | ✅ |
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
-| **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
+| **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | ✅ |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
 | B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ |
 | **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ✅ so sánh + chống trùng + URP (chờ xem trên app); còn Shader Mapping, trùng tên shader |
@@ -131,7 +131,7 @@ Mục tiêu: app **chỉ xuất `.unitypackage`**; import làm trong Unity (Asse
 | Tuỳ chọn bỏ texture ghép theo tên khỏi gói | ✅ |
 | Chọn nơi lưu, mở thư mục sau khi xuất; báo file bị bỏ (thiếu `.meta` / trùng GUID) | ✅ |
 | Test gói: GUID khớp `.meta`, `pathname` đúng, texture của `.mat` có trong gói (kiểm tra bằng `tar`) | ✅ |
-| Test import trong Unity (Assets › Import Package › Custom Package) | ⏳ chờ user |
+| Test import trong Unity (Assets › Import Package › Custom Package) | ✅ user xác nhận 2026-10-29 |
 | #10 **Deep link** `assethub://open?repo=…&branch=…&path=…` + nút **Copy link** (panel chi tiết, kết quả Mọi branch); app nhận link khi đang chạy, khi link mở app, hoặc **dán vào ô tìm kiếm**; link được giữ tới khi màn duyệt sẵn sàng (kể cả đang đăng nhập); chặn link có `..`. Bấm link từ Slack / trình duyệt trên macOS chỉ chạy với app đã đóng gói (Phase 10) — lúc `npm run dev` thì dán vào ô tìm kiếm | ✅ chờ user xem trên app |
 | ~~Copy thẳng vào project, màn review import, lịch sử / undo import (#5)~~ — bỏ: import làm trong Unity | — |
 
@@ -246,6 +246,7 @@ Chỉ thêm handler mới, không sửa core (PLAN §8d).
 | **Sub emitter** (birth / death; collision coi như death vì preview không có va chạm): emitter con chỉ phát tại particle cha — burst khi sinh / chết, rate khi cha còn sống; kế thừa màu, size; tìm đúng emitter con dưới object cha khi prefab lồng nhiều lần | ✅ chờ user xem trên app |
 | **Trail** (chế độ Particles): mỗi particle giữ 10 điểm (cách nhau ≥ minVertexDistance), quad nối các điểm hướng về camera; độ rộng theo widthOverTrail (× size nếu bật), màu colorOverTrail × colorOverLifetime (× màu particle nếu bật), mờ dần về cuối; material trail riêng; tối đa 600 trail / emitter | ✅ chờ user xem trên app |
 | **Particle dạng mesh**: mesh FBX thật (tỉ lệ import như prefab), `InstancedMesh`, texture + blend của material; mờ dần bằng tối màu (không có alpha theo từng hạt) | ✅ chờ user xem trên app |
+| **Thumbnail VFX động**: render nền 16 frame suốt hiệu ứng (one-shot: từ đầu tới tắt, tối đa 4 s; loop: 1 chu kỳ sau khi đầy, tối đa 3 s), lưu 1 sheet 4×4 (`<sha>.fx`); card hiện frame đông particle nhất, **rê chuột thì chạy**. Card kiểu cũ (texture chồng nhau / 1 frame) có `fxThumb` cũ → tự vẽ lại nền một lần, không cần mở preview. Mở preview không còn ghi đè card bằng 1 frame. Camera căn theo vùng hạt bay thật (đo khi chạy thử) | ✅ user xác nhận 2026-10-29 |
 | Check script thiếu (MonoBehaviour custom) | ⏳ |
 | ~~Companion `renderPreview` (Unity render GIF/WebM)~~ — bỏ: user chọn preview three.js, không qua Unity | — |
 | ~~CI batchmode render preview sẵn~~ — bỏ (như trên) | — |
@@ -261,6 +262,7 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 | Việc | State |
 |---|---|
 | `electron-builder`: `.dmg` cho Apple Silicon + Intel, ad-hoc sign | ⏳ |
+| Giảm dung lượng gói: chỉ giữ locale Electron en / vi / ko (`electronLanguages`), font chỉ `.woff2` | ⏳ |
 | Hướng dẫn mở app chưa ký lần đầu (Gatekeeper) cho người không rành kỹ thuật | ⏳ |
 | Code signing + notarize (cần Apple Developer ID của công ty) | ⏳ |
 | Windows installer (nếu team cần) | ⏳ |
@@ -271,6 +273,10 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-29 | User xác nhận trên app: thumbnail VFX động, khung camera VFX, tối ưu cache / tốc độ tải. |
+| 2026-10-29 | **VFX căn camera theo vùng hạt thật sự bay** (trước: theo tầm bay ước tính tốc độ × thời gian sống, toả đều mọi hướng → zoom quá xa): chạy thử hiệu ứng 1 lượt không vẽ, lấy hộp chứa 96% vị trí hạt mỗi trục + nửa cỡ hạt; dùng cho cả preview lẫn thumbnail. Card VFX vẽ lại một lần (`FX_THUMB_VERSION` 2). 165 test. |
+| 2026-10-29 | **Tối ưu cache + tốc độ tải** (đo trước: cache 1,7 GB, `blobs` 1,3 GB không bao giờ xoá). (1) **Giới hạn cache** file đã tải (mặc định 2 GB; 1 / 2 / 5 / 10 GB / không giới hạn trong Cài đặt): vượt thì xoá file lâu không dùng nhất trước (đánh dấu khi đọc), kiểm sau mỗi 200 MB tải + lúc mở app; thumbnail, thông số, clone git không bị xoá; Cài đặt hiện dung lượng + nút **Xoá file đã tải**. (2) **Cache tree / GUID nén gzip**: 14,1 MB → 2,2 MB, đọc chậm thêm ~11 ms; file `.json` cũ tự chuyển khi đọc. (3) Tự dọn thư mục phiên bản cũ (`prefabfx`, `prefabfx2`) + file `.tmp` sót. (4) **Thumbnail qua giao thức `assethub-thumb://`**: lưu ảnh nhị phân (nhỏ hơn base64 ~25%), mở branch chỉ trả danh sách URL thay vì đẩy toàn bộ ảnh (19 MB) qua IPC, ảnh tải khi card hiện; thumbnail cũ tự chuyển. (5) **Tách bundle**: viewer + three.js tải khi cần, bundle khởi động 1,9 MB → 681 KB. 163 test. |
+| 2026-10-29 | **Phase 4 xong** (import `.unitypackage` trong Unity OK). **Thumbnail VFX động**: tự render nền, card = frame đông nhất, rê chuột chạy 16 frame cả hiệu ứng; card VFX cũ tự vẽ lại. Bỏ code card ghép texture không còn dùng. 150 test. |
 | 2026-10-29 | **Kiểm tra playable thành tuỳ chọn, mặc định tắt** (bỏ cảnh báo kiểu "texture 2.048 px vượt 1.024 px", bỏ lọc / sắp xếp theo ngân sách khi tắt). **Deep link** `assethub://` + Copy link + dán link vào ô tìm kiếm (Phase 4 #10). |
 | 2026-10-28 | **Phase 5 — So với project đích**: chọn project Unity (chỉ đọc); khi xuất bỏ file đã có, **dùng lại file giống hệt khác GUID** (đổi tham chiếu, không thêm bản trùng), báo trước file bị ghi đè / đổi tên, cảnh báo khác URP. 146 test. |
 | 2026-10-28 | **Phase 6 xong**: tab Sprite (quét `.meta` texture), font TextMeshPro trong tab Font (atlas, ký tự, độ phủ, Static/Dynamic). Cơ chế quét theo nội dung dùng chung cho VFX / Sprite / TMP (`knownAssets`, lưu theo SHA, hiện dần); loại asset ẩn (`hidden`) cho file chỉ hiện qua tab khác. 140 test. |

@@ -31,12 +31,13 @@ import { GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
 import { LogoMark } from '../components/Logo'
 import { flyToPack } from '../motion'
 import { SearchBox } from '../components/SearchBox'
-import { DRAWABLE } from '../viewer/textures'
+import { DRAWABLE } from '../viewer/formats'
 import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
-import { BUDGET_PRESETS, rankForPlayable, summaryIssues, type BudgetPreset, type SortMode, type StatsSummary } from '@core/checks/playable'
+import { BUDGET_PRESETS, mergeStats, rankForPlayable, summaryIssues, type BudgetPreset, type SortMode, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
 import { parseAssetLink } from '@shared/deeplink'
+import { FX_THUMB_VERSION, motionKey } from '../viewer/particleThumb'
 
 interface Props {
   source: AssetSource
@@ -79,10 +80,12 @@ const projectRootOf = (path: string) => {
 const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'])
 
 /** PNG preview for Unity's import dialog, from a cached thumbnail data URL. */
-async function thumbToPng(dataUrl: string, size = 128): Promise<Uint8Array | undefined> {
+async function thumbToPng(src: string, size = 128): Promise<Uint8Array | undefined> {
   try {
     const img = new Image()
-    img.src = dataUrl
+    // Thumbnails from the cache come from their own scheme: drawn without tainting the canvas.
+    img.crossOrigin = 'anonymous'
+    img.src = src
     await img.decode()
     const canvas = document.createElement('canvas')
     canvas.width = canvas.height = size
@@ -360,7 +363,7 @@ export function Browse({
   useEffect(() => {
     if (!catalog.assets?.length) return
     let cancelled = false
-    void window.api.thumbs.get(catalog.assets.slice(0, 5000).map((a) => a.sha)).then((more) => !cancelled && setThumbs((prev) => ({ ...more, ...prev })))
+    void window.api.thumbs.get(catalog.assets.map((a) => a.sha)).then((more) => !cancelled && setThumbs((prev) => ({ ...more, ...prev })))
     void window.api.stats.get(catalog.assets.map((a) => a.sha)).then((more) => !cancelled && setModelStats((prev) => ({ ...more, ...prev })))
     return () => {
       cancelled = true
@@ -405,12 +408,14 @@ export function Browse({
   const renderable = gridItems.filter(canRender)
   const loadedCount = renderable.filter((a) => thumbs[a.sha]).length
 
-  /** Prefab cards drawn without numbers (effects as a plain "FX" before particles were read): tried once per session. */
+  /** Prefab cards drawn without numbers (effects as a plain "FX" before particles were read), or effects drawn the old way: tried once per session. */
   const unmeasuredPrefabs = useRef(new Set<string>())
+  /** An effect card older than the current way of drawing them (textures piled up, one frame). */
+  const staleEffect = (a: Asset) => kindOf(a) === 'prefab' && !!modelStats[a.sha]?.particles && modelStats[a.sha]?.fxThumb !== FX_THUMB_VERSION && !unmeasuredPrefabs.current.has(a.sha)
   const remeasure = (a: Asset) => {
     const s = modelStats[a.sha]
     if (!s) return kindOf(a) === 'prefab' && !!thumbs[a.sha] && !unmeasuredPrefabs.current.has(a.sha)
-    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures)
+    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures) || staleEffect(a)
   }
 
   /** Queues a card's thumbnail, read from the open branch or (for results elsewhere) its main location. */
@@ -621,17 +626,15 @@ export function Browse({
 
   const saveStats = (key: string, summary: StatsSummary) => {
     // A thumbnail's measurement never replaces one taken in the viewer (which counts every texture).
-    setModelStats((prev) => {
-      const kept = prev[key]
-      if (summary.source !== 'thumb' || kept?.source !== 'viewer') return { ...prev, [key]: summary }
-      // A full measurement stays; clip names measured since are added to it.
-      return summary.clipNames && !kept.clipNames ? { ...prev, [key]: { ...kept, clipNames: summary.clipNames } } : prev
-    })
+    setModelStats((prev) => ({ ...prev, [key]: mergeStats(prev[key], summary) }))
     void window.api.stats.save(key, summary)
   }
-  const saveThumb = (key: string, dataUrl: string, summary?: StatsSummary) => {
+  const saveThumb = (key: string, dataUrl: string, summary?: StatsSummary, motion?: string) => {
     setThumbs((prev) => ({ ...prev, [key]: dataUrl }))
     void window.api.thumbs.save(key, dataUrl)
+    if (motion) void window.api.thumbs.save(motionKey(key), motion)
+    // Drawn this session: not drawn again, even if it is still not up to date.
+    unmeasuredPrefabs.current.add(key)
     if (summary) saveStats(key, summary)
   }
   /** The opened model is loading: thumbnails wait so it gets the bandwidth. */
@@ -877,7 +880,7 @@ export function Browse({
                       thumbsLoaded && canRender(a)
                         ? (on) => {
                             if (!on) return thumbQueue.cancel(a.sha)
-                            if (thumbs[a.sha] && modelStats[a.sha]) return
+                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a)) return
                             const src = catalogSource(a)
                             thumbQueue.request(a.sha, src.path, i, src.ctx, kindOf(a))
                           }
@@ -947,7 +950,11 @@ export function Browse({
                     stats={modelStats[a.sha]}
                     onVisible={
                       live && thumbsLoaded && canRender(a)
-                        ? (on) => (on ? (!thumbs[a.sha] || !modelStats[a.sha]) && thumbQueue.request(a.sha, root + a.path, i, undefined, kindOf(a)) : thumbQueue.cancel(a.sha))
+                        ? (on) => {
+                            if (!on) return thumbQueue.cancel(a.sha)
+                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a)) return
+                            thumbQueue.request(a.sha, root + a.path, i, undefined, kindOf(a))
+                          }
                         : undefined
                     }
                   />

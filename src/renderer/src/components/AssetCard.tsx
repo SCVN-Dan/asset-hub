@@ -1,10 +1,11 @@
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type AssetTypeHandler } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import { StatsLine } from './CatalogPanel'
 import { AnimIcon, FontIcon, AudioIcon, CubeIcon, ImageIcon, SphereIcon } from './Icons'
 import { WeightBar } from './WeightBar'
+import { motionKey } from '../viewer/particleThumb'
 
 interface Props {
   asset: Asset
@@ -30,6 +31,18 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
   visibleRef.current = onVisible
+  // An effect filmed through its run plays on hover; read from the cache the first time.
+  const filmed = !!stats?.fxThumb && !!thumb
+  const [motion, setMotion] = useState<string | null>()
+  const [hover, setHover] = useState(false)
+  useEffect(() => setMotion(undefined), [asset.sha, thumb])
+  const startMotion = () => {
+    setHover(true)
+    if (!filmed || motion !== undefined) return
+    setMotion(null)
+    const key = motionKey(asset.sha)
+    void window.api.thumbs.get([key]).then((found) => setMotion(found[key] ?? null), () => setMotion(null))
+  }
 
   useEffect(() => {
     const el = ref.current
@@ -48,6 +61,10 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       data-asset-id={asset.id}
       aria-pressed={selected}
       onClick={onSelect}
+      onMouseEnter={startMotion}
+      onMouseLeave={() => setHover(false)}
+      onFocus={startMotion}
+      onBlur={() => setHover(false)}
       title={asset.path}
     >
       <span className="asset-thumb">
@@ -64,6 +81,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
           </span>
         ) : null}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
+        {hover && motion && <span className="asset-motion" style={{ backgroundImage: `url("${motion}")` }} aria-hidden="true" />}
         {generating && !thumb && <span className="thumb-spinner" aria-label={t('browse.generatingThumb')} />}
       </span>
       <span className="asset-meta">

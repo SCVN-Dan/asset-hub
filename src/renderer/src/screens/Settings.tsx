@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AuthStatus } from '@shared/ipc'
-import { DEFAULT_EXPORT_LAYOUT, EXPORT_LAYOUTS, type Settings as AppSettings, type Language } from '@shared/settings'
+import type { AuthStatus, CacheUsage } from '@shared/ipc'
+import { CACHE_LIMITS_GB, DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXPORT_LAYOUT, EXPORT_LAYOUTS, type Settings as AppSettings, type Language } from '@shared/settings'
+import { formatBytes } from '@core/index'
 import { BUDGET_KEYS, BUDGET_PRESETS, DEFAULT_BUDGET_PRESET, budgetFor, type BudgetPreset, type PlayableBudget } from '@core/checks/playable'
 import { Dropdown } from '../components/Dropdown'
 import { ChevronLeftIcon } from '../components/Icons'
@@ -214,6 +215,49 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
           </button>
         </div>
       </section>
+
+      <CacheSetting settings={settings} onChange={onChange} />
     </div>
+  )
+}
+
+/** How much the cache holds, its size limit, and a way to empty it. */
+function CacheSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
+  const { t } = useTranslation()
+  const [usage, setUsage] = useState<CacheUsage>()
+  const [clearing, setClearing] = useState(false)
+  const measure = () => void window.api.cache.usage().then((r) => r.ok && setUsage(r.data))
+  useEffect(measure, [settings.cacheDir, settings.cacheLimitGB])
+  const limit = settings.cacheLimitGB ?? DEFAULT_CACHE_LIMIT_GB
+  const clear = async () => {
+    setClearing(true)
+    await window.api.cache.clear()
+    setClearing(false)
+    measure()
+  }
+  return (
+    <section className="setting">
+      <h2>
+        <label htmlFor="cache-limit">{t('settings.cacheLimit')}</label>
+      </h2>
+      <span className="muted small">{t('settings.cacheLimitHelp')}</span>
+      <div className="field-row">
+        <Dropdown
+          id="cache-limit"
+          value={String(limit)}
+          options={CACHE_LIMITS_GB.map((gb) => ({ value: String(gb), label: gb ? `${gb} GB` : t('settings.cacheNoLimit') }))}
+          onChange={(v: string) => onChange({ cacheLimitGB: Number(v) })}
+          label={t('settings.cacheLimit')}
+        />
+        <button type="button" className="btn" onClick={() => void clear()} disabled={clearing}>
+          {t('settings.cacheClear')}
+        </button>
+      </div>
+      {usage && (
+        <span className="muted small" role="status">
+          {t('settings.cacheUsage', { downloads: formatBytes(usage.downloads), thumbs: formatBytes(usage.thumbs), other: formatBytes(usage.other) })}
+        </span>
+      )}
+    </section>
   )
 }
