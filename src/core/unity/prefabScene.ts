@@ -53,20 +53,23 @@ export interface PrefabScene {
   /** MonoBehaviour script GUIDs (custom or from packages). */
   scripts: string[]
   particleSystems: number
+  /** Materials of particle renderers (particles, then trails), and meshes they emit. */
+  particleMaterials: string[]
+  particleMeshes: string[]
   /** RectTransforms: a UI prefab. */
   uiElements: number
   /** Every GUID the prefab references, whatever it is. */
   guids: string[]
 }
 
-interface Doc {
+export interface Doc {
   cls: string
   id: string
   stripped: boolean
   body: string
 }
 
-function splitDocs(text: string): Doc[] {
+export function splitDocs(text: string): Doc[] {
   const docs: Doc[] = []
   const re = /^--- !u!(\d+) &(-?\d+)([^\n]*)$/gm
   let m: RegExpExecArray | null
@@ -79,8 +82,8 @@ function splitDocs(text: string): Doc[] {
   return docs
 }
 
-const ref = (body: string, key: string) => new RegExp(`${key}: \\{fileID: (-?\\d+)`).exec(body)?.[1]
-const refGuid = (body: string, key: string) => {
+export const ref = (body: string, key: string) => new RegExp(`${key}: \\{fileID: (-?\\d+)`).exec(body)?.[1]
+export const refGuid = (body: string, key: string) => {
   const m = new RegExp(`${key}: \\{fileID: (-?\\d+), guid: (${GUID})`).exec(body)
   return m ? { fileID: m[1], guid: m[2] } : undefined
 }
@@ -91,7 +94,7 @@ const nums = (body: string, key: string, keys: readonly string[]): number[] | un
   return values.every(Number.isFinite) ? values : undefined
 }
 
-function materialList(body: string): string[] {
+export function materialList(body: string): string[] {
   const start = body.indexOf('m_Materials:')
   if (start === -1) return []
   const out: string[] = []
@@ -183,12 +186,15 @@ export function parsePrefabScene(prefabText: string): PrefabScene {
     ...new Set(docs.filter((d) => d.cls === '114' && !d.stripped).flatMap((d) => (refGuid(d.body, 'm_Script')?.guid ? [refGuid(d.body, 'm_Script')!.guid] : [])))
   ]
   const guids = [...new Set([...text.matchAll(new RegExp(`guid: (${GUID})`, 'g'))].map((m) => m[1]))]
+  const particleRenderers = docs.filter((d) => d.cls === '199' && !d.stripped)
   return {
     nodes,
     meshes,
     instances,
     scripts,
     particleSystems: docs.filter((d) => d.cls === '198' && !d.stripped).length,
+    particleMaterials: [...new Set(particleRenderers.flatMap((d) => materialList(d.body)).filter(Boolean))],
+    particleMeshes: [...new Set(particleRenderers.flatMap((d) => [1, 2, 3, 4].map((i) => refGuid(d.body, i === 1 ? 'm_Mesh' : `m_Mesh${i - 1}`)?.guid ?? '')).filter(Boolean))],
     uiElements: docs.filter((d) => d.cls === '224' && !d.stripped).length,
     guids
   }

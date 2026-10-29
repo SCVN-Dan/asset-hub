@@ -1,5 +1,5 @@
 import { imageSize } from '@core/checks/playable'
-import { baseName, decodePsd, guessTextureRole, isPsd } from '@core/index'
+import { baseName, decodePsd, guessTextureRole, isPsd, type DependencyReport, type MaterialRef } from '@core/index'
 import { unwrap } from '../remoteSource'
 import type { LiveContext } from '../components/ModelViewer'
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
@@ -32,6 +32,23 @@ export async function fetchTextureFile(live: LiveContext, path: string, backgrou
     // A texture that fails to download just renders untextured.
     return undefined
   }
+}
+
+/** A texture a .mat puts in a slot of a material, by repo path (not downloaded yet). */
+export interface SlotPath {
+  material: string
+  prop: string
+  path: string
+}
+
+/** Texture slots of one .mat, applied to the material named `material` (`*` for all). */
+export function materialSlotPaths(m: MaterialRef, material: string): SlotPath[] {
+  return m.textures.filter((tex) => tex.path).map((tex) => ({ material, prop: tex.prop ?? '', path: tex.path! }))
+}
+
+/** Kind A slots go to the FBX material the .mat replaces (its name inside the FBX), not the .mat's own name. */
+export function reportSlotPaths(report: DependencyReport | undefined): SlotPath[] {
+  return report?.kind === 'A' ? report.materials.flatMap((m) => materialSlotPaths(m, m.sourceName ?? m.name)) : []
 }
 
 const ROLE_PROP = { color: '_BaseMap', normal: '_BumpMap', emission: '_EmissionMap' } as const

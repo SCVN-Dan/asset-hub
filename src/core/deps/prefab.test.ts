@@ -171,6 +171,39 @@ describe('resolvePrefabDependencies', () => {
     expect(ctx.asked.map(([k]) => k)).toEqual(expect.arrayContaining(['model', 'prefab', 'script', 'material', 'texture']))
   })
 
+  it('exports particle materials with their textures, and lists the emitters', async () => {
+    const fx = `--- !u!1 &1
+GameObject:
+  m_Name: Sparks
+--- !u!198 &198
+ParticleSystem:
+  m_GameObject: {fileID: 1}
+  lengthInSec: 1
+  looping: 0
+--- !u!199 &199
+ParticleSystemRenderer:
+  m_GameObject: {fileID: 1}
+  m_Enabled: 1
+  m_Materials:
+  - {fileID: 2100000, guid: ${G(40)}, type: 2}
+  m_RenderMode: 0
+`
+    const mat = `Material:
+  m_Name: Spark
+  m_SavedProperties:
+    m_TexEnvs:
+    - _MainTex:
+        m_Texture: {fileID: 2800000, guid: ${G(41)}, type: 3}
+`
+    const report = await resolvePrefabDependencies(
+      'proj/Assets/FX/Sparks.prefab',
+      ctxFor({ 'proj/Assets/FX/Sparks.prefab': fx, 'proj/Assets/FX/Spark.mat': mat }, { [G(40)]: 'proj/Assets/FX/Spark.mat', [G(41)]: 'proj/Assets/FX/spark.png' })
+    )
+    expect(report.materials.map((m) => m.name)).toEqual(['Spark'])
+    expect(report.files).toEqual(expect.arrayContaining(['proj/Assets/FX/Spark.mat', 'proj/Assets/FX/spark.png', 'proj/Assets/FX/spark.png.meta']))
+    expect(report.particles).toEqual([expect.objectContaining({ name: 'Sparks', material: G(40), renderMode: 'billboard' })])
+  })
+
   it('reports models that are not in the repo', async () => {
     const report = await resolvePrefabDependencies('proj/Assets/Chimney.prefab', ctxFor({ 'proj/Assets/Chimney.prefab': chimney }, {}))
     expect(report.parts).toEqual([expect.objectContaining({ kind: 'model', missing: true })])

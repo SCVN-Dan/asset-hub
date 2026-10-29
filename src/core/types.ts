@@ -38,7 +38,7 @@ export interface Asset {
 export type AssetStats = Record<string, number | string | boolean>
 
 /** `three`: a model; `material`: a material drawn on a shape; `prefab`: models put together; `image`: the file as it is. */
-export type PreviewKind = 'three' | 'material' | 'prefab' | 'animation' | 'audio' | 'image' | 'unity-render'
+export type PreviewKind = 'three' | 'material' | 'prefab' | 'animation' | 'audio' | 'font' | 'tmpfont' | 'image' | 'unity-render'
 
 export type PreviewResult =
   | { status: 'ready'; kind: PreviewKind; url: string }
@@ -86,10 +86,20 @@ export interface AssetTypeHandler {
    * Assets of other types this type's tab also lists, judged by what is known
    * about them (an FBX that holds animation clips is listed with animations).
    */
-  alsoShows?(asset: Asset, stats: StatsSummary | undefined): boolean
+  alsoShows?(asset: Asset, stats: StatsSummary | undefined, facts?: AssetFacts): boolean
+  /** The tab needs this scan of the branch to know what it lists (started when the tab is opened). */
+  facts?: FactKind
+  /** No tab and not under All: only listed by other tabs (`alsoShows`), once a scan has found them. */
+  hidden?: boolean
   /** How a user takes it: a `.unitypackage` with its dependencies (default), or the file itself (a texture). */
   delivery?: 'unitypackage' | 'file'
 }
+
+/** Kinds of assets known only by reading them (a scan per repo, kept by SHA). */
+export type FactKind = 'effects' | 'sprites' | 'tmpFonts'
+
+/** What is known about assets beyond their measurements, for tabs that list other types: blob SHAs per kind. */
+export type AssetFacts = Partial<Record<FactKind, ReadonlySet<string>>>
 
 export interface RepoRef {
   /** "owner/name" */

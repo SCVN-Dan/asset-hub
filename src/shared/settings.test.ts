@@ -29,9 +29,18 @@ describe('last opened repo/branch', () => {
   })
 })
 
+describe('export layout', () => {
+  it('keeps known layouts only', () => {
+    expect(sanitizeSettings({ exportLayout: 'byType' }, defaults)).toMatchObject({ exportLayout: 'byType' })
+    expect(sanitizeSettings({ exportLayout: 'flat' }, defaults)).not.toHaveProperty('exportLayout')
+  })
+})
+
 describe('playable budget preset', () => {
   it('keeps a known preset and positive custom limits only', () => {
     expect(sanitizeSettings({ budgetPreset: 'tight' }, defaults)).toMatchObject({ budgetPreset: 'tight' })
+    // Checks can be turned off: not every asset is made for a playable.
+    expect(sanitizeSettings({ budgetPreset: 'off' }, defaults)).toMatchObject({ budgetPreset: 'off' })
     expect(sanitizeSettings({ budgetPreset: 'huge' }, defaults)).not.toHaveProperty('budgetPreset')
     expect(sanitizeSettings({ customBudget: { triangles: 9000, bones: -1, fileBytes: 'x', other: 3 } }, defaults).customBudget).toEqual({ triangles: 9000 })
     expect(sanitizeSettings({ customBudget: { bones: 0 } }, defaults)).not.toHaveProperty('customBudget')

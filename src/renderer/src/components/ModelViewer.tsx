@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next'
 import type { ModelStats } from '@core/checks/playable'
 import { extractFbxTextureNames, type DependencyReport, type MaterialRef } from '@core/index'
 import { unwrap } from '../remoteSource'
+import { Dropdown } from './Dropdown'
 import { FbxViewer, type MaterialSlot, type TextureFile, type ViewPreset } from '../viewer/FbxViewer'
-import { DRAWABLE, fetchTextureFile, guessedSlots } from '../viewer/textures'
+import { DRAWABLE, fetchTextureFile, guessedSlots, materialSlotPaths, reportSlotPaths } from '../viewer/textures'
 
 export interface LiveContext {
   repo: string
@@ -134,9 +135,7 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
   // Once materials are known (kind A .mat files, or one found on a prefab), put their textures on the model.
   useEffect(() => {
     if (status !== 'ready') return
-    const slotsOf = (m: MaterialRef, material: string) => m.textures.filter((tex) => tex.path).map((tex) => ({ material, prop: tex.prop ?? '', path: tex.path! }))
-    // Kind A slots are matched to the FBX material the .mat replaces (its name inside the FBX), not the .mat's own name.
-    const textures = [...(report?.kind === 'A' ? report.materials.flatMap((m) => slotsOf(m, m.sourceName ?? m.name)) : []), ...(prefabMaterial ? slotsOf(prefabMaterial, '*') : [])]
+    const textures = [...reportSlotPaths(report), ...(prefabMaterial ? materialSlotPaths(prefabMaterial, '*') : [])]
     if (!textures.length) return
     let cancelled = false
     void (async () => {
@@ -196,24 +195,19 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
             </button>
           </div>
           {clips.length > 0 && (
-            <label className="viewer-clips">
-              <span className="sr-only">{t('viewer.animation')}</span>
-              <select
-                className="select"
+            <div className="viewer-clips">
+              <Dropdown
+                size="xs"
+                className="viewer-select"
+                label={t('viewer.animation')}
                 value={clip}
-                onChange={(e) => {
-                  setClip(e.target.value)
-                  viewer.current?.playAnimation(e.target.value === '' ? null : Number(e.target.value))
+                options={[{ value: '', label: t('viewer.noAnimation', { count: clips.length }) }, ...clips.map((c, i) => ({ value: String(i), label: `▶ ${c}` }))]}
+                onChange={(value) => {
+                  setClip(value)
+                  viewer.current?.playAnimation(value === '' ? null : Number(value))
                 }}
-              >
-                <option value="">{t('viewer.noAnimation', { count: clips.length })}</option>
-                {clips.map((c, i) => (
-                  <option key={i} value={i}>
-                    ▶ {c}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           )}
           <span className="viewer-hint">{t('viewer.hint')}</span>
         </>

@@ -11,7 +11,11 @@
     "material": "Material",
     "audio": "Audio",
     "prefab": "Prefab",
-    "animation": "Animation"
+    "vfx": "VFX",
+    "animation": "Animation",
+    "font": "Font",
+    "sprite": "Sprite",
+    "tmpFont": "Font TextMeshPro"
   },
   "preview": {
     "notYet": "Preview 3D sẽ có ở phase sau.",
@@ -94,6 +98,7 @@
     "openGitHub": "Mở trên GitHub"
   },
   "settings": {
+    "exportLayoutHelp": "Áp dụng cho mọi nút Xuất. Asset đã có trong project (cùng GUID) Unity giữ nguyên chỗ cũ.",
     "title": "Cài đặt",
     "account": "Tài khoản",
     "signedInAs": "Đăng nhập: {{login}}",
@@ -151,7 +156,7 @@
   "prefabView": {
     "loading": "Đang dựng prefab…",
     "ui": "Prefab UI — không có preview 3D. Sprite được liệt kê bên dưới.",
-    "particles": "Hiệu ứng particle — chưa có preview.",
+    "particles": "Hiệu ứng particle: đang hiện texture của particle; preview chuyển động làm sau.",
     "empty": "Không có gì để hiện 3D (không thấy mesh).",
     "missing_one": "{{count}} mesh không tìm thấy",
     "missing_other": "{{count}} mesh không tìm thấy"
@@ -178,6 +183,7 @@
     "preset": "Ngân sách playable",
     "presetHint": "Dùng để chấm ✓ / ⚠, lọc \"vừa ngân sách\" và xếp \"Hợp playable nhất\".",
     "presets": {
+      "off": "Tắt — không kiểm tra playable",
       "standard": "Network 5 MB (Google, AppLovin, Unity…)",
       "tight": "Network 2 MB (Meta)",
       "custom": "Tuỳ chỉnh"
@@ -189,8 +195,12 @@
       "fileBytes": "File model",
       "bones": "Bone",
       "audioBytes": "Clip audio (khi build)",
-      "audioSeconds": "Độ dài audio"
-    }
+      "audioSeconds": "Độ dài audio",
+      "fontBytes": "File font",
+      "particles": "Particle (một hiệu ứng)"
+    },
+    "fontBytes": "File font {{value}} — vượt {{limit}} cho playable.",
+    "particles": "Khoảng {{value}} particle cùng lúc — vượt {{limit}} cho một hiệu ứng trong playable."
   },
   "deps": {
     "needsRepo": "Dependency cần repo GitHub.",
@@ -219,7 +229,7 @@
       "noMaterials": "FBX này tắt import material.",
       "missingModel": "Một số model hoặc prefab nó dùng không có trong repo.",
       "customScript": "Có script riêng của project: vẫn được xuất kèm, nhưng có thể cần thêm script hoặc package khác mới compile được.",
-      "particles": "Có particle system: preview chưa hiển thị phần này.",
+      "particles": "Có particle system: số liệu và chi phí ở mục Particle; preview chuyển động chưa có.",
       "uiPrefab": "Prefab UI: có liệt kê hình ảnh, nhưng không xem 3D được."
     },
     "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
@@ -229,19 +239,23 @@
     "script": "script riêng"
   },
   "export": {
+    "chest": "Rương",
+    "room": "Còn chứa được {{size}}",
+    "tooHeavy": "Quá nặng {{size}}",
     "title": "Xuất",
     "exportOne": "Xuất .unitypackage",
-    "addToPack": "Thêm vào gói",
-    "inPack": "Đã trong gói ✓",
-    "pack_other": "Gói: {{count}} model",
+    "addToPack": "Thêm vào rương",
+    "inPack": "Đã trong rương ✓",
+    "pack_other": "Rương: {{count}} model",
     "summary": "{{files}} file · ~{{size}}",
     "resolving": "đang tìm dependency…",
     "missing_other": "thiếu {{count}}",
     "byName_other": "{{count}} texture theo tên",
-    "remove": "Bỏ {{name}} khỏi gói",
+    "remove": "Bỏ {{name}} khỏi rương",
     "layout": "Đường dẫn trong Unity",
     "layoutSource": "Giữ như project nguồn",
     "layoutGrouped": "Gom dưới Assets/AssetHub/<repo>/",
+    "layoutByType": "Theo loại: Assets/AssetHub/Prefabs, Models, Textures…",
     "skipByName": "Bỏ texture ghép theo tên",
     "clear": "Xoá gói",
     "export_other": "Xuất {{count}} model thành .unitypackage",
@@ -334,7 +348,9 @@
     "tris": "{{n}} tris",
     "bones": "{{count}} bones",
     "textures_one": "{{count}} texture",
-    "textures_other": "{{count}} texture"
+    "textures_other": "{{count}} texture",
+    "glyphs_other": "{{count}} ký tự",
+    "particles": "{{n}} particle"
   },
   "texture": {
     "title": "Texture",
@@ -496,5 +512,127 @@
     "button": "Tải về",
     "saving": "Đang lưu…",
     "saved": "Đã lưu {{name}} ({{size}})."
+  },
+  "font": {
+    "title": "Font",
+    "sample": "The quick brown fox · Tiếng Việt có dấu · 0123456789",
+    "sampleLabel": "Chữ mẫu",
+    "size": "Cỡ chữ",
+    "glyphs": "Ký tự trong font",
+    "moreGlyphs": "…và {{count}} ký tự nữa",
+    "cannotRead": "Không đọc được font: {{message}}",
+    "missingChar": "Font không có “{{char}}”",
+    "family": "Họ font",
+    "style": "Kiểu",
+    "glyphCount": "Số glyph",
+    "file": "File",
+    "mode": "Ký tự (Unity)",
+    "fallbacks": "Font dự phòng",
+    "modes": {
+      "dynamic": "Dynamic",
+      "unicode": "Unicode",
+      "ascii": "Bộ ASCII mặc định",
+      "asciiUpper": "ASCII chữ hoa",
+      "asciiLower": "ASCII chữ thường",
+      "custom": "Bộ tuỳ chọn"
+    },
+    "scripts": {
+      "latin": "Latin",
+      "vietnamese": "Tiếng Việt",
+      "korean": "Tiếng Hàn",
+      "japanese": "Kana (Nhật)",
+      "chinese": "Hán (CJK)",
+      "cyrillic": "Cyrillic",
+      "thai": "Tiếng Thái"
+    },
+    "collection": "Bộ sưu tập font: đang hiện font đầu tiên trong {{count}} font.",
+    "warn": {
+      "subset": "Nên cắt font chỉ giữ ký tự playable dùng (vd. bằng TextMeshPro hoặc pyftsubset).",
+      "vietnamese": "Thiếu chữ tiếng Việt: {{chars}}",
+      "baked": "Unity nướng sẵn một bộ ký tự cố định vào texture: ký tự ngoài bộ sẽ không hiện."
+    }
+  },
+  "particles": {
+    "title": "Particle",
+    "emitters": "Emitter",
+    "peak": "Particle cùng lúc",
+    "length": "Thời lượng",
+    "loops": "Lặp",
+    "hidden": "không renderer",
+    "estimate": "Ước từ thông số (rate × lifetime + burst), lấy cận trên của khoảng ngẫu nhiên.",
+    "modes": {
+      "billboard": "Billboard",
+      "stretched": "Kéo dài",
+      "horizontal": "Nằm ngang",
+      "vertical": "Đứng",
+      "mesh": "Mesh",
+      "none": "Không renderer"
+    },
+    "modules": {
+      "noise": "Noise",
+      "collision": "Va chạm",
+      "trails": "Trail",
+      "lights": "Đèn",
+      "subEmitters": "Sub emitter",
+      "textureSheet": "Texture sheet",
+      "velocity": "Vận tốc",
+      "force": "Lực",
+      "externalForces": "Lực ngoài"
+    },
+    "warn": {
+      "collision_other": "{{count}} emitter va chạm với thế giới: tốn trên mobile; dùng plane hoặc tắt.",
+      "lights_other": "{{count}} emitter tạo đèn thật: rất tốn trong playable.",
+      "noise_other": "{{count}} emitter dùng Noise: tính cho mọi particle mỗi frame.",
+      "trails_other": "{{count}} emitter vẽ trail: thêm hình học cho mỗi particle.",
+      "meshes_other": "{{count}} emitter vẽ nhiều particle dạng mesh: mỗi particle là một mesh.",
+      "prewarm_other": "{{count}} emitter bật Prewarm: mô phỏng cả một vòng lúc bắt đầu.",
+      "maxDefault_other": "{{count}} emitter để Max Particles 1000 mặc định: nên đặt gần mức cao nhất thật."
+    }
+  },
+  "scan": {
+    "starting": "Đang tìm {{what}} trong branch…",
+    "reading": "Đang tìm {{what}}… {{done}} / {{total}} (chỉ đọc một lần, lần sau tức thì)",
+    "failed": "Không đọc được hết file: chỉ hiện {{what}} đã biết. Mở lại tab để thử lại.",
+    "what": {
+      "effects": "particle system trong prefab",
+      "sprites": "sprite trong cài đặt texture",
+      "tmpFonts": "font TextMeshPro"
+    }
+  },
+  "tmpFont": {
+    "title": "Font TextMeshPro",
+    "atlas": "Atlas của font",
+    "noAtlas": "Texture atlas không nằm trong file này.",
+    "characters": "Ký tự",
+    "atlasSize": "Atlas",
+    "pointSize": "Cỡ chữ gốc",
+    "mode": "Atlas",
+    "dynamic": "Dynamic",
+    "static": "Static",
+    "built": "Trong bản build",
+    "warn": {
+      "dynamic": "Dynamic: glyph được thêm lúc chạy từ font gốc, nên font gốc cũng vào bản build. Chuyển sang Static cho playable."
+    }
+  },
+  "target": {
+    "setting": "Project Unity đích",
+    "settingHelp": "Gói xuất được so với project này (chỉ đọc, không sửa gì): file đã có sẽ bị bỏ khỏi gói, và bạn biết trước Unity sẽ ghi đè hay đổi tên file nào.",
+    "none": "Chưa chọn — gói không được so sánh",
+    "clear": "Bỏ chọn",
+    "notProject": "Thư mục này không phải project Unity (cần có Assets và ProjectSettings).",
+    "reuse": "Dùng file {{project}} đã có",
+    "reuseHint": "File giống hệt nhưng khác GUID sẽ bị bỏ khỏi gói; material và prefab trỏ sang bản có sẵn trong project thay vì thêm bản trùng.",
+    "title": "So với {{project}}:",
+    "clean": "Không có gì trong {{project}} xung đột với gói này.",
+    "same_other": "{{count}} file đã có sẵn (bỏ khỏi gói)",
+    "reused_other": "{{count}} file dùng lại bản có sẵn thay vì thêm bản trùng: {{list}}",
+    "overwrite_other": "⚠ {{count}} file sẽ ghi đè phiên bản khác đang có trong project: {{list}}",
+    "renamed_other": "⚠ {{count}} file rơi vào đường dẫn đã có asset khác (Unity thêm \" 1\"): {{list}}",
+    "urp": "⚠ Nguồn dùng URP {{source}}, project dùng {{target}}: kiểm tra material sau khi import.",
+    "noUrp": "⚠ Nguồn dùng URP {{source}}, project chưa có URP: material có thể bị hồng."
+  },
+  "link": {
+    "copy": "Copy link",
+    "hint": "Link assethub://: đồng đội mở link (hoặc dán vào ô tìm kiếm) sẽ tới đúng asset này."
   }
 }

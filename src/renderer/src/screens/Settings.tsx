@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AuthStatus } from '@shared/ipc'
-import type { Settings as AppSettings, Language } from '@shared/settings'
-import { BUDGET_KEYS, BUDGET_PRESETS, budgetFor, type BudgetPreset, type PlayableBudget } from '@core/checks/playable'
+import { DEFAULT_EXPORT_LAYOUT, EXPORT_LAYOUTS, type Settings as AppSettings, type Language } from '@shared/settings'
+import { BUDGET_KEYS, BUDGET_PRESETS, DEFAULT_BUDGET_PRESET, budgetFor, type BudgetPreset, type PlayableBudget } from '@core/checks/playable'
+import { Dropdown } from '../components/Dropdown'
 import { ChevronLeftIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 
@@ -28,13 +29,48 @@ const UNITS: Record<keyof PlayableBudget, { unit: string; scale: number }> = {
   fileBytes: { unit: 'MB', scale: 1024 * 1024 },
   bones: { unit: '', scale: 1 },
   audioBytes: { unit: 'KB', scale: 1024 },
-  audioSeconds: { unit: 's', scale: 1 }
+  audioSeconds: { unit: 's', scale: 1 },
+  fontBytes: { unit: 'KB', scale: 1024 },
+  particles: { unit: '', scale: 1 }
+}
+
+/** The Unity project packages are compared with before export (read only). */
+function TargetProjectSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
+  const { t } = useTranslation()
+  const [error, setError] = useState(false)
+  const choose = async () => {
+    const folder = await window.api.chooseFolder()
+    if (!folder) return
+    const ok = await window.api.isUnityProject(folder)
+    setError(!ok)
+    if (ok) onChange({ targetProject: folder })
+  }
+  return (
+    <section className="setting">
+      <h2>
+        <label htmlFor="target-project">{t('target.setting')}</label>
+      </h2>
+      <span className="muted small">{t('target.settingHelp')}</span>
+      <div className="field-row">
+        <input id="target-project" className="input mono" value={settings.targetProject ?? ''} placeholder={t('target.none')} readOnly />
+        <button type="button" className="btn" onClick={() => void choose()}>
+          {t('settings.choose')}
+        </button>
+        {settings.targetProject && (
+          <button type="button" className="btn" onClick={() => onChange({ targetProject: '' })}>
+            {t('target.clear')}
+          </button>
+        )}
+      </div>
+      {error && <p className="warn-note">{t('target.notProject')}</p>}
+    </section>
+  )
 }
 
 /** Preset choice, and the limits it stands for (editable for the custom preset). */
 function BudgetSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
   const { t } = useTranslation()
-  const preset = settings.budgetPreset ?? 'standard'
+  const preset = settings.budgetPreset ?? DEFAULT_BUDGET_PRESET
   const budget = budgetFor(preset, settings.customBudget)
   const setLimit = (key: keyof PlayableBudget, text: string) => {
     const value = Number(text) * UNITS[key].scale
@@ -46,13 +82,16 @@ function BudgetSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChang
         <label htmlFor="budget">{t('budget.preset')}</label>
       </h2>
       <span className="muted small">{t('budget.presetHint')}</span>
-      <select id="budget" className="select" value={preset} onChange={(e) => onChange({ budgetPreset: e.target.value as BudgetPreset })}>
-        {BUDGET_PRESETS.map((p) => (
-          <option key={p} value={p}>
-            {t(`budget.presets.${p}`)}
-          </option>
-        ))}
-      </select>
+      <div>
+        <Dropdown
+          id="budget"
+          value={preset}
+          options={BUDGET_PRESETS.map((p) => ({ value: p, label: t(`budget.presets.${p}`) }))}
+          onChange={(budgetPreset: BudgetPreset) => onChange({ budgetPreset })}
+          label={t('budget.preset')}
+        />
+      </div>
+      {preset !== 'off' && (
       <dl className="stat-grid">
         {BUDGET_KEYS.map((key) => (
           <div key={`${preset}:${key}`}>
@@ -76,6 +115,7 @@ function BudgetSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChang
           </div>
         ))}
       </dl>
+      )}
     </section>
   )
 }
@@ -130,6 +170,22 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
 
       <section className="setting">
         <h2>
+          <label htmlFor="export-layout">{t('export.layout')}</label>
+        </h2>
+        <span className="muted small">{t('settings.exportLayoutHelp')}</span>
+        <div>
+          <Dropdown
+            id="export-layout"
+            value={settings.exportLayout ?? DEFAULT_EXPORT_LAYOUT}
+            options={EXPORT_LAYOUTS.map((l) => ({ value: l, label: t(`export.layout${l[0].toUpperCase()}${l.slice(1)}`) }))}
+            onChange={(exportLayout: (typeof EXPORT_LAYOUTS)[number]) => onChange({ exportLayout })}
+            label={t('export.layout')}
+          />
+        </div>
+      </section>
+
+      <section className="setting">
+        <h2>
           <label htmlFor="excluded">{t('settings.excluded')}</label>
         </h2>
         <span className="muted small">{t('settings.excludedHelp')}</span>
@@ -143,6 +199,8 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
           onKeyDown={(e) => e.key === 'Enter' && onChange({ excludedFolders: parseFolders(folders) })}
         />
       </section>
+
+      <TargetProjectSetting settings={settings} onChange={onChange} />
 
       <section className="setting">
         <h2>

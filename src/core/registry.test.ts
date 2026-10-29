@@ -46,6 +46,7 @@ describe('HandlerRegistry', () => {
     // Textures and materials are assets of their own now.
     expect(main.filter((a) => a.type === 'texture').length).toBeGreaterThan(0)
     expect(main.filter((a) => a.type === 'material').length).toBeGreaterThan(0)
-    expect(main.every((a) => ['fbx', 'texture', 'material'].includes(a.type))).toBe(true)
+    // .asset files are a hidden type (TextMeshPro fonts once a scan confirms them): no tab of their own.
+    expect(main.every((a) => ['fbx', 'texture', 'material'].includes(a.type) || registry.get(a.type)?.hidden)).toBe(true)
   })
 })

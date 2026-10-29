@@ -6,6 +6,9 @@ import type { AssetSource } from '../source'
 import type { AssetTypeHandler, RepoRef, TreeEntry } from '../types'
 import { isInExcludedFolder } from '../unity'
 import { folderAffinity, modelMaterials } from '../unity/prefab'
+import { effectShas, prefabEffectFact } from '../unity/particles'
+import { isTmpFontAsset } from '../unity/tmpFont'
+import type { FactKind } from '../types'
 import { metaGuid } from '../unity/yaml'
 import type { BranchHead, GitHubClient } from './client'
 import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
@@ -166,6 +169,20 @@ const SHA_KIND = 'metaguids'
 const SHA_KEY = 'by-sha'
 /** Prefab blob SHA → model GUID → material GUIDs. */
 const PREFAB_KIND = 'prefabmodels'
+/** Prefab blob SHA → particle facts (see `prefabEffectFact`); v3: models with an effect attached are not effects. */
+const EFFECT_KIND = 'prefabfx3'
+/** Texture .meta blob SHA → '1' when imported as a sprite. */
+const SPRITE_KIND = 'spritemeta'
+/** .asset blob SHA → '1' when it is a TextMeshPro font asset. */
+const TMP_KIND = 'tmpfont'
+/** Textures whose .meta can say "sprite". */
+const SPRITE_TEXTURE = /\.(png|jpe?g|tga|psd|gif|bmp|tiff?)$/i
+/**
+ * .asset files worth reading for TextMeshPro fonts: TextMeshPro names them "<Font> SDF" and keeps them
+ * under Fonts folders. Other .asset files can be huge (terrain data), so they are not read.
+ */
+const TMP_CANDIDATE = /(sdf|font)[^/]*\.asset$|\/fonts?[^/]*\/[^/]*\.asset$/i
+
 /** Bytes of prefabs read by a "nearby" search before it stops. */
 const NEAR_BUDGET = 16 * 1024 * 1024
 /** Bytes per bulk read, so progress can move during a big scan. */
@@ -368,6 +385,96 @@ export class GitHubAssetSource implements AssetSource {
   private async saveLearned(repo: string): Promise<void> {
     const bySha = await this.sharedCache(SHA_KIND, repo)
     await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha).catch(() => {})
+  }
+
+  /**
+   * Assets of the branch that tabs list by what is inside them, as blob SHAs:
+   * effect prefabs, textures imported as sprites, TextMeshPro fonts. Each file
+   * is read once per repo — facts are kept by SHA, shared by all branches —
+   * so later calls answer at once. `found` reports them as they are read.
+   */
+  async knownAssets(repo: string, branch: string, kind: FactKind, onProgress?: (p: IndexProgress & { found?: string[] }) => void): Promise<string[]> {
+    const snap = await this.snapshot(repo, branch)
+    const blobs = snap.entries.filter((e) => e.type === 'blob')
+    if (kind === 'effects') return this.effectPrefabs(repo, snap, blobs, onProgress)
+    if (kind === 'tmpFonts') {
+      const candidates = blobs.filter((e) => TMP_CANDIDATE.test(e.path))
+      const facts = await this.scanFacts(repo, snap, TMP_KIND, candidates, (t) => (isTmpFontAsset(t) ? '1' : ''), (list, f) => list.filter((e) => f[e.sha] === '1').map((e) => e.sha), onProgress)
+      return candidates.filter((e) => facts[e.sha] === '1').map((e) => e.sha)
+    }
+    // Sprites: the texture's .meta says so; the texture's own SHA is what the grid knows.
+    const textures = blobs.filter((e) => SPRITE_TEXTURE.test(e.path))
+    const metaOf = new Map(textures.flatMap((e) => (snap.byPath.has(`${e.path}.meta`) ? [[e, snap.byPath.get(`${e.path}.meta`)!] as const] : [])))
+    const texturesOf = new Map<string, string[]>()
+    for (const [tex, meta] of metaOf) texturesOf.set(meta.sha, [...(texturesOf.get(meta.sha) ?? []), tex.sha])
+    const sprites = (list: readonly TreeEntry[], f: Record<string, string>) => list.flatMap((m) => (f[m.sha] === '1' ? (texturesOf.get(m.sha) ?? []) : []))
+    const facts = await this.scanFacts(repo, snap, SPRITE_KIND, [...metaOf.values()], (t) => (/^\s*textureType: 8\b/m.test(t) ? '1' : ''), sprites, onProgress)
+    return [...new Set(sprites([...metaOf.values()], facts))]
+  }
+
+  /**
+   * Reads files not seen before (by SHA, per repo) in chunks and keeps one
+   * fact per file. `found` turns a list of files into the SHAs to report.
+   */
+  private async scanFacts(
+    repo: string,
+    snap: Snapshot,
+    kind: string,
+    entries: readonly TreeEntry[],
+    fact: (text: string) => string,
+    found: (list: readonly TreeEntry[], facts: Record<string, string>) => string[],
+    onProgress?: (p: IndexProgress & { found?: string[] }) => void
+  ): Promise<Record<string, string>> {
+    const facts = (await this.sharedCache(kind, repo)) as Record<string, string>
+    const todo = [...new Map(entries.filter((e) => !(e.sha in facts)).map((e) => [e.sha, e])).values()]
+    const total = todo.reduce((s, e) => s + (e.size ?? 0), 0)
+    let done = 0
+    // What earlier scans found shows at once; the rest as each chunk is read.
+    onProgress?.({ done, total, found: found(entries, facts) })
+    const dec = new TextDecoder()
+    for (let i = 0; i < todo.length; ) {
+      const chunk: TreeEntry[] = []
+      for (let bytes = 0; i < todo.length && (bytes === 0 || bytes < PREFAB_CHUNK); i++) {
+        chunk.push(todo[i])
+        bytes += todo[i].size ?? 0
+      }
+      const texts = await this.readManyTexts(repo, snap, chunk, dec)
+      // Not read: left for the next call, never remembered as "no".
+      for (const e of chunk) if (texts.has(e.sha)) facts[e.sha] = fact(texts.get(e.sha)!)
+      done += chunk.reduce((s, e) => s + (e.size ?? 0), 0)
+      onProgress?.({ done, total, found: found(chunk, facts) })
+      await this.options.cache?.set(kind, repo, SHA_KEY, facts)
+    }
+    return facts
+  }
+
+  /** Effect prefabs: their own particle systems, or variants of one (see `prefabEffectFact`). */
+  private async effectPrefabs(repo: string, snap: Snapshot, blobs: readonly TreeEntry[], onProgress?: (p: IndexProgress & { found?: string[] }) => void): Promise<string[]> {
+    const prefabs = blobs.filter((e) => /\.prefab$/i.test(e.path))
+    // Variants are known to be effects only at the end, once their base is.
+    const own = (list: readonly TreeEntry[], f: Record<string, string>) => [...new Set(list.filter((e) => f[e.sha] === '1').map((e) => e.sha))]
+    const facts = await this.scanFacts(repo, snap, EFFECT_KIND, prefabs, prefabEffectFact, own, onProgress)
+    const dec = new TextDecoder()
+
+    // Variants name their base prefab by GUID: the .meta files say which GUID each prefab has.
+    const nests = prefabs.some((e) => facts[e.sha] && facts[e.sha] !== '1')
+    const guidToSha = new Map<string, string>()
+    if (nests) {
+      const metas = prefabs.flatMap((e) => snap.byPath.get(`${e.path}.meta`) ?? [])
+      const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
+      const unread = metas.filter((m) => !(m.sha in bySha))
+      if (unread.length) {
+        const texts = await this.readManyTexts(repo, snap, unread, dec)
+        for (const m of unread) if (texts.has(m.sha)) bySha[m.sha] = metaGuid(texts.get(m.sha)!) ?? ''
+        await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha)
+      }
+      for (const e of prefabs) {
+        const guid = bySha[snap.byPath.get(`${e.path}.meta`)?.sha ?? '']
+        if (guid) guidToSha.set(guid, e.sha)
+      }
+    }
+    const known = new Map(prefabs.flatMap((e) => (e.sha in facts ? [[e.sha, facts[e.sha]] as const] : [])))
+    return [...effectShas(known, guidToSha)]
   }
 
   /**

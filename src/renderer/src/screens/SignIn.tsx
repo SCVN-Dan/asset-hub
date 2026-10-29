@@ -4,7 +4,8 @@ import type { Language } from '@shared/settings'
 import type { InstallProgress } from '@shared/ipc'
 import { ErrorNote } from '../components/ErrorNote'
 import { RemoteError, unwrap } from '../remoteSource'
-import { CubeIcon, GithubIcon } from '../components/Icons'
+import { GithubIcon } from '../components/Icons'
+import { LogoMark } from '../components/Logo'
 import { LangToggle } from '../components/LangToggle'
 
 interface Props {
@@ -68,9 +69,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
       </div>
       <div className="signin-col">
         <div className="brand">
-          <span style={{ color: 'var(--accent-text)' }}>
-            <CubeIcon size={36} />
-          </span>
+          <LogoMark size={56} />
           <div>
             <div className="brand-name">Asset Hub</div>
             <div className="muted small">{t('signin.tagline')}</div>

@@ -5,38 +5,42 @@ import {
   type CatalogAsset,
   buildFolderTree,
   findUnityProjectRoots,
+  formatBytes,
   isInExcludedFolder,
   isInFolder,
   projectEntries,
   type Asset,
+  type AssetFacts,
   type AssetSource,
   type DependencyReport,
+  type FactKind,
   type HandlerRegistry,
   type RepoRef,
   type TreeEntry
 } from '@core/index'
-import type { Language } from '@shared/settings'
 import { AssetCard, SkeletonCard } from '../components/AssetCard'
 import { AssetDetails } from '../components/AssetDetails'
-import { ExportBar, type ExportOptions, type ExportState, type PackItem } from '../components/ExportBar'
+import { ExportBar, packCapacity, type ExportOptions, type ExportState, type PackItem } from '../components/ExportBar'
 import { unwrap } from '../remoteSource'
 import { useThumbnailQueue, type ThumbKind } from '../useThumbnailQueue'
+import { Dropdown } from '../components/Dropdown'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { CubeIcon, GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
-import { LangToggle } from '../components/LangToggle'
+import { GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
+import { LogoMark } from '../components/Logo'
+import { flyToPack } from '../motion'
 import { SearchBox } from '../components/SearchBox'
 import { DRAWABLE } from '../viewer/textures'
 import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
 import { BUDGET_PRESETS, rankForPlayable, summaryIssues, type BudgetPreset, type SortMode, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
+import { parseAssetLink } from '@shared/deeplink'
 
 interface Props {
   source: AssetSource
   registry: HandlerRegistry
-  language: Language
   excludedFolders: string[]
   /** Signed-in GitHub login, shown in the top bar. */
   login?: string
@@ -44,11 +48,15 @@ interface Props {
   initialRepo?: string
   initialBranch?: string
   onOpenBranch(repo: string, branch: string): void
-  onLanguage(language: Language): void
   onSettings(): void
   /** Playable budget preset: switchable next to the ranking, like in Settings. */
   budgetPreset: BudgetPreset
   onBudgetPreset(preset: BudgetPreset): void
+  /** Kept in settings: it also applies to exports started outside the export bar, and survives restarts. */
+  exportLayout: ExportOptions['layout']
+  onExportLayout(layout: ExportOptions['layout']): void
+  /** Unity project exports are compared with (settings), if any. */
+  targetProject?: string
 }
 
 const ALL = 'all'
@@ -61,6 +69,8 @@ const IMAGE_THUMB_MAX_BYTES = 24 * 1024 * 1024
 /** Clips the browser decodes; their waveform is the thumbnail. */
 const PLAYABLE_AUDIO = /\.(wav|mp3|ogg)$/i
 const AUDIO_THUMB_MAX_BYTES = 24 * 1024 * 1024
+/** CJK fonts run to tens of MB: their cards keep the icon until opened. */
+const FONT_THUMB_MAX_BYTES = 20 * 1024 * 1024
 /** Unity project folder of a repo path (the part before "Assets/"), for textures looked up next to it. */
 const projectRootOf = (path: string) => {
   const i = path.indexOf('Assets/')
@@ -95,16 +105,17 @@ type Load<T> = { status: 'loading' } | { status: 'error'; error: unknown } | { s
 export function Browse({
   source,
   registry,
-  language,
   excludedFolders,
   login,
   initialRepo,
   initialBranch,
   onOpenBranch,
-  onLanguage,
   onSettings,
   budgetPreset,
-  onBudgetPreset
+  onBudgetPreset,
+  exportLayout,
+  onExportLayout,
+  targetProject
 }: Props) {
   const { t } = useTranslation()
   const budget = useBudget()
@@ -137,7 +148,9 @@ export function Browse({
   const [limit, setLimit] = useState(PAGE)
   const sentinel = useRef<HTMLDivElement>(null)
   const [pack, setPack] = useState<PackItem[]>([])
-  const [exportOptions, setExportOptions] = useState<ExportOptions>({ layout: 'source', skipByName: false })
+  const [skipByName, setSkipByName] = useState(false)
+  const [reuseExisting, setReuseExisting] = useState(true)
+  const exportOptions: ExportOptions = { layout: exportLayout, skipByName, targetProject, reuseExisting }
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
   const reports = useRef(new Map<string, DependencyReport>())
   /** Materials found on prefabs, by model path: exported along with the model. */
@@ -240,11 +253,19 @@ export function Browse({
   const clipNames = useMemo(() => new Map(Object.entries(modelStats).flatMap(([sha, s]) => (s.clipNames ? [[sha, s.clipNames] as const] : []))), [clipKey])
   /** Shas of models known to hold clips, for tabs that list them (`alsoShows`). */
   const withClips = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.clips > 0).map(([sha]) => sha).sort().join('|'), [modelStats])
+  /** Shas measured as effects or not (particles read), for the effects tab. */
+  const withParticles = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.particles !== undefined).map(([sha, s]) => `${sha}:${s.emitters ?? 0}`).sort().join('|'), [modelStats])
+  /** Assets known by reading them (effect prefabs, sprites, TextMeshPro fonts), by blob SHA, from every branch scanned so far. */
+  const [known, setKnown] = useState<AssetFacts>({})
+  const [scan, setScan] = useState<{ kind: FactKind; status: 'scanning' | 'error'; done: number; total: number }>()
+  /** Scans started (or done), as "kind:repo@branch". */
+  const scans = useRef(new Set<string>())
   /** In the open tab: its own type, or another type the tab's handler also lists. */
   const inTab = useCallback(
-    (a: Asset, tab: string) => tab === ALL || a.type === tab || !!registry.get(tab)?.alsoShows?.(a, modelStats[a.sha]),
-    // modelStats matters only through which models hold clips.
-    [registry, withClips]
+    (a: Asset, tab: string) =>
+      tab === ALL ? !registry.get(a.type)?.hidden : a.type === tab || !!registry.get(tab)?.alsoShows?.(a, modelStats[a.sha], known),
+    // modelStats matters only through which models hold clips and which prefabs are effects.
+    [registry, withClips, withParticles, known]
   )
   /** Every model of the branch, as repo paths (rigs to play clips on). */
   const modelPaths = useMemo(() => assets.filter((a) => registry.get(a.type)?.preview.kind === 'three').map((a) => root + a.path), [assets, registry, root])
@@ -307,8 +328,8 @@ export function Browse({
   // Ordered and filtered for reuse in playables (measurements come from thumbnails and opened models).
   const rankedShown = useMemo(
     () => rankForPlayable(
-        onlyFits ? shown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : shown,
-        sortMode === 'used' ? 'relevance' : sortMode,
+        onlyFits && budget ? shown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : shown,
+        sortMode === 'used' || (sortMode === 'playable' && !budget) ? 'relevance' : sortMode,
         (a) => modelStats[a.sha],
         undefined,
         (a) => found.scores.get(a.id) ?? 0,
@@ -319,8 +340,8 @@ export function Browse({
   const rankedCatalog = useMemo(
     () =>
       rankForPlayable(
-        onlyFits ? catalogShown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : catalogShown,
-        sortMode,
+        onlyFits && budget ? catalogShown.filter((a) => modelStats[a.sha] && !summaryIssues(modelStats[a.sha], budget).length) : catalogShown,
+        sortMode === 'playable' && !budget ? 'relevance' : sortMode,
         (a) => modelStats[a.sha],
         (a) => a.branchCount,
         (a) => catalogFound.scores.get(a.id) ?? 0,
@@ -371,16 +392,26 @@ export function Browse({
     previewKind(a) === 'material' ||
     previewKind(a) === 'prefab' ||
     previewKind(a) === 'animation' ||
+    (previewKind(a) === 'font' && (a.size ?? 0) <= FONT_THUMB_MAX_BYTES) ||
+    (previewKind(a) === 'tmpfont' && (a.size ?? 0) <= FONT_THUMB_MAX_BYTES) ||
     (previewKind(a) === 'image' && DRAWABLE.test(a.path) && (a.size ?? 0) <= IMAGE_THUMB_MAX_BYTES) ||
     (previewKind(a) === 'audio' && PLAYABLE_AUDIO.test(a.path) && (a.size ?? 0) <= AUDIO_THUMB_MAX_BYTES)
   const kindOf = (a: Asset): ThumbKind => {
     const kind = previewKind(a)
-    return kind === 'image' || kind === 'material' || kind === 'audio' || kind === 'prefab' || kind === 'animation' ? kind : 'three'
+    return kind === 'image' || kind === 'material' || kind === 'audio' || kind === 'prefab' || kind === 'animation' || kind === 'font' || kind === 'tmpfont' ? kind : 'three'
   }
 
   /** Cards whose thumbnail is ready, out of those that can have one (huge or EXR files never do). */
   const renderable = gridItems.filter(canRender)
   const loadedCount = renderable.filter((a) => thumbs[a.sha]).length
+
+  /** Prefab cards drawn without numbers (effects as a plain "FX" before particles were read): tried once per session. */
+  const unmeasuredPrefabs = useRef(new Set<string>())
+  const remeasure = (a: Asset) => {
+    const s = modelStats[a.sha]
+    if (!s) return kindOf(a) === 'prefab' && !!thumbs[a.sha] && !unmeasuredPrefabs.current.has(a.sha)
+    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures)
+  }
 
   /** Queues a card's thumbnail, read from the open branch or (for results elsewhere) its main location. */
   const requestThumb = (a: Asset, order: number) => {
@@ -429,6 +460,26 @@ export function Browse({
     if (toRepo !== repo) setRepo(toRepo)
     else if (toBranch !== branch) setBranch(toBranch)
     else if (tree.status === 'ready') land(tree.data, path)
+  }
+
+  // assethub:// links open the asset they name: the link that launched the app, links clicked
+  // while it runs, and links pasted into the search box.
+  const openLocationRef = useRef(openLocation)
+  openLocationRef.current = openLocation
+  useEffect(() => {
+    const take = async () => {
+      const url = await window.api.takeDeepLink()
+      const link = url ? parseAssetLink(url) : undefined
+      if (link) openLocationRef.current(link.repo, link.branch, link.path)
+    }
+    void take()
+    return window.api.onDeepLink(() => void take())
+  }, [])
+  const onQuery = (q: string) => {
+    const link = parseAssetLink(q)
+    if (!link) return setQuery(q)
+    setQuery('')
+    openLocation(link.repo, link.branch, link.path)
   }
 
   // Back to the first page only when the user asks for a different list, not when
@@ -488,6 +539,39 @@ export function Browse({
     [source, repo, branch, branchRepo, root]
   )
 
+  // Tabs that list assets by what is inside them (VFX, Sprite, TextMeshPro fonts) need the branch's files read once
+  // (kept by SHA, shared by all branches): started the first time such a tab is opened, finished even if the user moves on.
+  useEffect(() => {
+    const kind = registry.get(typeFilter)?.facts
+    if (!kind || !live) return
+    const key = `${kind}:${live.repo}@${live.branch}`
+    if (scans.current.has(key)) return
+    scans.current.add(key)
+    const add = (shas: readonly string[]) => setKnown((prev) => ({ ...prev, [kind]: new Set([...(prev[kind] ?? []), ...shas]) }))
+    setScan({ kind, status: 'scanning', done: 0, total: 0 })
+    const off = window.api.assets.onKnownProgress((k, { found, ...p }) => {
+      if (k !== kind) return
+      setScan((s) => (s?.kind === kind && s.status === 'scanning' ? { ...s, ...p } : s))
+      // Assets appear as they are found, not only when every file has been read.
+      if (found?.length) add(found)
+    })
+    void window.api.assets
+      .knownAssets(live.repo, live.branch, kind)
+      .then(unwrap)
+      .then(
+        (shas) => {
+          add(shas)
+          setScan((s) => (s?.kind === kind ? undefined : s))
+        },
+        () => {
+          // Tried again the next time the tab is opened.
+          scans.current.delete(key)
+          setScan({ kind, status: 'error', done: 0, total: 0 })
+        }
+      )
+      .finally(off)
+  }, [typeFilter, live, registry])
+
   // Thumbnails rendered earlier, keyed by the model's content hash.
   useEffect(() => {
     setThumbsLoaded(false)
@@ -525,8 +609,11 @@ export function Browse({
   }
 
   const packItem = (asset: Asset): PackItem => ({ asset, path: root + asset.path, report: reports.current.get(root + asset.path) })
-  const togglePack = (asset: Asset) =>
+  const togglePack = (asset: Asset) => {
+    const adding = !pack.some((i) => i.asset.id === asset.id)
     setPack((items) => (items.some((i) => i.asset.id === asset.id) ? items.filter((i) => i.asset.id !== asset.id) : [...items, packItem(asset)]))
+    if (adding) flyToPack(asset.id)
+  }
   const rememberReport = (path: string, report: DependencyReport) => {
     reports.current.set(path, report)
     setPack((items) => items.map((i) => (i.path === path ? { ...i, report } : i)))
@@ -556,10 +643,13 @@ export function Browse({
   useEffect(() => {
     if (!thumbsLoaded || viewerLoading || thumbQueue.busy.size || (!inCatalog && !live)) return
     renderable
-      // Models measured before clip names were kept get one more render for them.
-      .filter((a) => (!thumbs[a.sha] || (modelStats[a.sha]?.clips > 0 && !modelStats[a.sha]?.clipNames)) && !thumbQueue.failedRecently(a.sha))
+      // Models measured before clip names, or before .mat textures counted, get one more render for them.
+      .filter((a) => (!thumbs[a.sha] || remeasure(a)) && !thumbQueue.failedRecently(a.sha))
       .slice(0, 4)
-      .forEach((a, i) => requestThumb(a, 1_000_000 + i))
+      .forEach((a, i) => {
+        if (!modelStats[a.sha]) unmeasuredPrefabs.current.add(a.sha)
+        requestThumb(a, 1_000_000 + i)
+      })
   }, [thumbsLoaded, viewerLoading, thumbQueue.busy, thumbs, modelStats, gridItems, inCatalog, live])
 
   /** Counts for the type tabs: of the open branch, or of the cross-branch results. */
@@ -576,9 +666,7 @@ export function Browse({
     <div className="browse">
       <header className="topbar">
         <div className="brand" style={{ marginRight: 8 }}>
-          <span style={{ color: 'var(--accent-text)' }}>
-            <CubeIcon size={24} />
-          </span>
+          <LogoMark size={34} />
           <span className="brand-name">Asset Hub</span>
         </div>
         <Picker
@@ -603,16 +691,10 @@ export function Browse({
           onChange={setBranch}
         />
         {roots.length > 1 && (
-          <label className="picker">
+          <div className="picker">
             <span className="muted small">{t('browse.project')}</span>
-            <select className="select" value={root} onChange={(e) => setRoot(e.target.value)}>
-              {roots.map((r) => (
-                <option key={r} value={r}>
-                  {r || '/'}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Dropdown value={root} options={roots.map((r) => ({ value: r, label: r || '/' }))} onChange={setRoot} label={t('browse.project')} />
+          </div>
         )}
         <button
           type="button"
@@ -624,8 +706,7 @@ export function Browse({
         >
           <RefreshIcon />
         </button>
-        <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={setQuery} />
-        <LangToggle value={language} onChange={onLanguage} />
+        <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={onQuery} />
         <button type="button" className="btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
           <GearIcon />
           {login && <span className="small">{login}</span>}
@@ -645,10 +726,12 @@ export function Browse({
             <span className="label-caps">{t('browse.types')}</span>
             <div className="tabs" role="group" aria-label={t('browse.types')}>
               <button type="button" className="tab" aria-pressed={typeFilter === ALL} onClick={() => setTypeFilter(ALL)}>
-                {t('assetTypes.all')} <span className="muted">{typeSource.length}</span>
+                <span className="type-gem" style={{ background: 'var(--text-2)' }} />
+                {t('assetTypes.all')} <span className="muted">{typeSource.filter((a) => !registry.get(a.type)?.hidden).length}</span>
               </button>
-              {registry.all().map((h) => (
+              {registry.all().filter((h) => !h.hidden).map((h) => (
                 <button key={h.id} type="button" className="tab" aria-pressed={typeFilter === h.id} onClick={() => setTypeFilter(h.id)}>
+                  <span className="type-gem" style={{ background: `var(--type-${h.id})` }} />
                   {t(h.labelKey)} <span className="muted">{typeCounts.get(h.id) ?? 0}</span>
                 </button>
               ))}
@@ -697,25 +780,28 @@ export function Browse({
           </div>
           {(inCatalog ? catalogShown.length : shown.length) > 0 && (
             <div className="ranking-bar">
-              <select className="select" aria-label={t('ranking.sort')} value={sortMode} onChange={(e) => setSortMode(e.target.value as SortMode)}>
-                {(['relevance', 'playable', 'smallest', 'triangles', ...(inCatalog ? (['used'] as const) : [])] as const).map((m) => (
-                  <option key={m} value={m}>
-                    {t(`ranking.sorts.${m}`)}
-                  </option>
-                ))}
-              </select>
-              <label className="check small">
-                <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
-                {t('ranking.onlyFits')}
-              </label>
-              <select className="select select-small" aria-label={t('budget.preset')} title={t('budget.presetHint')} value={budgetPreset} onChange={(e) => onBudgetPreset(e.target.value as BudgetPreset)}>
-                {BUDGET_PRESETS.map((p) => (
-                  <option key={p} value={p}>
-                    {t(`budget.presets.${p}`)}
-                  </option>
-                ))}
-              </select>
-              {(sortMode !== 'relevance' || onlyFits) && (
+              <Dropdown<SortMode>
+                size="sm"
+                value={sortMode}
+                options={(['relevance', ...(budget ? (['playable'] as const) : []), 'smallest', 'triangles', ...(inCatalog ? (['used'] as const) : [])] as const).map((m) => ({ value: m, label: t(`ranking.sorts.${m}`) }))}
+                onChange={setSortMode}
+                label={t('ranking.sort')}
+              />
+              {budget && (
+                <label className="check small">
+                  <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
+                  {t('ranking.onlyFits')}
+                </label>
+              )}
+              <Dropdown
+                size="sm"
+                value={budgetPreset}
+                options={BUDGET_PRESETS.map((p) => ({ value: p, label: t(`budget.presets.${p}`) }))}
+                onChange={onBudgetPreset}
+                label={t('budget.preset')}
+                title={t('budget.presetHint')}
+              />
+              {(sortMode !== 'relevance' || (onlyFits && budget)) && (
                 <>
                   <span className="muted small">{t('ranking.measured', { done: measuredCount, total: inCatalog ? catalogShown.length : shown.length })}</span>
                   {unmeasured.some(canRender) && (
@@ -730,23 +816,29 @@ export function Browse({
           {inCatalog && catalog.assets && (
             <div className="catalog-filters">
               {scope === 'all' && (
-                <select className="select" aria-label={t('catalog.filterRepo')} value={catalogRepo} onChange={(e) => (setCatalogRepo(e.target.value), setCatalogBranch(''))}>
-                  <option value="">{t('catalog.allRepos', { count: catalogFacets.repos.length })}</option>
-                  {catalogFacets.repos.map(([r, n]) => (
-                    <option key={r} value={r}>
-                      {r.split('/').pop()} ({n})
-                    </option>
-                  ))}
-                </select>
+                <Dropdown
+                  size="sm"
+                  className="filter-trigger"
+                  value={catalogRepo}
+                  options={[
+                    { value: '', label: t('catalog.allRepos', { count: catalogFacets.repos.length }) },
+                    ...catalogFacets.repos.map(([r, n]) => ({ value: r, label: r.split('/').pop() ?? r, hint: String(n) }))
+                  ]}
+                  onChange={(r) => (setCatalogRepo(r), setCatalogBranch(''))}
+                  label={t('catalog.filterRepo')}
+                />
               )}
-              <select className="select" aria-label={t('catalog.filterBranch')} value={catalogBranch} onChange={(e) => setCatalogBranch(e.target.value)}>
-                <option value="">{t('catalog.allBranches', { count: catalogFacets.branches.length })}</option>
-                {catalogFacets.branches.map(([b, n]) => (
-                  <option key={b} value={b}>
-                    {b} ({n})
-                  </option>
-                ))}
-              </select>
+              <Dropdown
+                size="sm"
+                className="filter-trigger"
+                value={catalogBranch}
+                options={[
+                  { value: '', label: t('catalog.allBranches', { count: catalogFacets.branches.length }) },
+                  ...catalogFacets.branches.map(([b, n]) => ({ value: b, label: b, hint: String(n) }))
+                ]}
+                onChange={setCatalogBranch}
+                label={t('catalog.filterBranch')}
+              />
             </div>
           )}
           {inCatalog && <CatalogStatusLine status={catalog.status} error={catalog.error} onPause={catalog.pause} onResume={catalog.resume} />}
@@ -812,13 +904,27 @@ export function Browse({
             </>
           )}
           {!inCatalog && tree.status === 'error' && <ErrorNote error={tree.error} />}
+          {scan && registry.get(typeFilter)?.facts === scan.kind && (
+            <p className="muted small" role="status">
+              {scan.status === 'error'
+                ? t('scan.failed', { what: t(`scan.what.${scan.kind}`) })
+                : scan.total
+                  ? t('scan.reading', { what: t(`scan.what.${scan.kind}`), done: formatBytes(scan.done), total: formatBytes(scan.total) })
+                  : t('scan.starting', { what: t(`scan.what.${scan.kind}`) })}
+            </p>
+          )}
           {!inCatalog && tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
           {(pack.length > 0 || exportState.status !== 'idle') && (
             <ExportBar
               items={pack}
+              capacity={packCapacity(budgetPreset)}
               options={exportOptions}
               state={exportState}
-              onOptions={setExportOptions}
+              onOptions={(o) => {
+                setSkipByName(o.skipByName)
+                setReuseExisting(o.reuseExisting)
+                if (o.layout !== exportLayout) onExportLayout(o.layout)
+              }}
               onExport={() => void runExport(pack)}
               onRemove={(path) => setPack((items) => items.filter((i) => i.path !== path))}
               onClear={() => setPack([])}

@@ -24,12 +24,12 @@
 | A | 3 | Preview FBX + dependency + thông số | 1,5–2 tuần | ✅ |
 | **B · Xuất** | 4 | Xuất `.unitypackage` (import làm trong Unity) | ~3–4 ngày | 🔄 xong phần app, chờ test trong Unity |
 | B | 4.5 | Tìm asset trên mọi branch / mọi repo (chỉ mục cục bộ) | ~1 tuần | ✅ (còn SQLite khi dữ liệu lớn) |
-| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ (còn dung lượng gồm dependency) |
-| **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ⏳ ưu tiên thấp |
-| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip — mỗi loại một handler | ~1–2 tuần | ✅ (chờ xem Prefab + Animation trên app; còn Sprite Atlas, tab Sprite) |
+| B | 4.6 | **Playable-aware ranking**: thông số model lưu theo SHA, huy hiệu trên card, sắp xếp / lọc theo ngân sách playable | ~2–3 ngày | ✅ |
+| **C · Kiểm tra (tuỳ chọn)** | 5 | So với project đích (chỉ đọc) + chỉnh shader khi xuất | ~1 tuần | ✅ so sánh + chống trùng + URP (chờ xem trên app); còn Shader Mapping, trùng tên shader |
+| C | 6 | **Thêm loại asset**: Texture, Material, Audio, Sprite/UI, Prefab (tĩnh), Animation clip, Font, Font TextMeshPro — mỗi loại một handler | ~1–2 tuần | ✅ (chờ xem trên app; Sprite Atlas để khi có file) |
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
-| D | 9 | Particle System prefab (làm sau) | 2–3 tuần | ⏳ |
+| D | 9 | Particle System prefab | 2–3 tuần | ✅ chờ xem trên app (còn collision, lights, ribbon) |
 | **E · Phát hành** | 10 | Đóng gói `.dmg` / installer, code signing, tự cập nhật — **làm cuối cùng** (trong lúc phát triển vẫn chạy `npm run dev` để test) | ~2–3 ngày | ⏳ |
 
 ---
@@ -124,6 +124,7 @@ Mục tiêu: app **chỉ xuất `.unitypackage`**; import làm trong Unity (Asse
 |---|---|
 | Writer `.unitypackage` (tar.gz: `<guid>/asset`, `asset.meta`, `pathname`, `preview.png`), không cần Unity | ✅ |
 | `pathname`: mặc định giữ đường dẫn như project nguồn; tuỳ chọn gom dưới `Assets/AssetHub/<repo>/` | ✅ |
+| Kiểu **Theo loại**: `Assets/AssetHub/{Prefabs,Models,Materials,Textures,Animations,Audio,Fonts,Shaders,Other}/`; shader giữ cây thư mục trong `Shaders/` (`#include` tương đối); script và file trong `Editor/`, `Resources/`, `Plugins/`, `StreamingAssets/` giữ chỗ cũ; trùng tên → thư mục con theo thư mục nguồn (giữ tên file). **Mặc định** từ 2026-10-28; chọn trong Cài đặt (áp dụng cho mọi nút Xuất, lưu qua các lần mở app) | ✅ chờ test trong Unity |
 | Xuất 1 asset hoặc nhiều asset (gói) — gộp dependency, mỗi GUID một bản | ✅ |
 | Thumbnail đã render làm `preview.png` (PNG 128×128) | ✅ |
 | Tóm tắt trước khi xuất: số file, dung lượng, thiếu, ghép theo tên | ✅ |
@@ -131,7 +132,7 @@ Mục tiêu: app **chỉ xuất `.unitypackage`**; import làm trong Unity (Asse
 | Chọn nơi lưu, mở thư mục sau khi xuất; báo file bị bỏ (thiếu `.meta` / trùng GUID) | ✅ |
 | Test gói: GUID khớp `.meta`, `pathname` đúng, texture của `.mat` có trong gói (kiểm tra bằng `tar`) | ✅ |
 | Test import trong Unity (Assets › Import Package › Custom Package) | ⏳ chờ user |
-| #10 Deep link `assethub://` + nút Copy link | ⏳ |
+| #10 **Deep link** `assethub://open?repo=…&branch=…&path=…` + nút **Copy link** (panel chi tiết, kết quả Mọi branch); app nhận link khi đang chạy, khi link mở app, hoặc **dán vào ô tìm kiếm**; link được giữ tới khi màn duyệt sẵn sàng (kể cả đang đăng nhập); chặn link có `..`. Bấm link từ Slack / trình duyệt trên macOS chỉ chạy với app đã đóng gói (Phase 10) — lúc `npm run dev` thì dán vào ô tìm kiếm | ✅ chờ user xem trên app |
 | ~~Copy thẳng vào project, màn review import, lịch sử / undo import (#5)~~ — bỏ: import làm trong Unity | — |
 
 ## Phase 4.5 — Tìm asset trên mọi branch / mọi repo (Mốc B)
@@ -157,18 +158,20 @@ Mục tiêu: tìm ra 20 model "boat" thì biết ngay cái nào **đáng dùng l
 | Huy hiệu trên card: ✓ / ⚠ N + số tris; panel có dung lượng, bones; rê chuột xem lý do vượt | ✅ |
 | Sắp xếp: khớp nhất, hợp playable nhất, nhẹ nhất, ít tris nhất, dùng nhiều nhất — luôn giữ mức khớp tìm kiếm trước (tên > nhóm từ > thư mục > sửa chính tả); nút "Đo N kết quả" (75 kết quả fish: 44 s) | ✅ |
 | Lọc "chỉ asset vừa ngân sách playable" | ✅ |
-| Dung lượng gồm cả dependency (texture của .mat) — hiện đo đủ khi mở model; thumbnail chỉ tính texture nêu trong FBX | 🟡 |
+| Dung lượng gồm cả dependency (texture của .mat): thumbnail nền đọc `.mat` (GUID đã biết gần model) → vẽ đúng material + tính MB texture, texture không tải (quá giới hạn / EXR) vẫn tính theo dung lượng file; FBX đo trước đó được đo lại nền một lần | ✅ chờ user xem trên app |
 | Nút "Mở trên GitHub" cho file đang xem | ✅ |
 | Xuất `.unitypackage` ngay từ kết quả Mọi branch / Mọi repo (không phải chuyển branch) | ✅ |
-| Preset ngân sách: Network 5 MB (mặc định) / Network 2 MB (Meta) / Tuỳ chỉnh — chọn trong Cài đặt hoặc ngay cạnh ô sắp xếp; mọi ✓/⚠, lọc, xếp hạng, cảnh báo trong panel đổi theo ngay (thông số đo không phụ thuộc ngân sách) | ✅ |
+| **Tắt kiểm tra playable** (preset "Tắt", **mặc định** từ 2026-10-29 — không phải asset nào cũng dùng cho playable): ẩn ✓/⚠, thanh tải trọng, cảnh báo vượt ngân sách (vd. "texture 2.048 px vượt 1.024 px"), lọc "vừa ngân sách", sắp xếp "hợp playable nhất"; vẫn giữ cảnh báo không phụ thuộc playable (thiếu chữ Việt, texture chưa nén, module particle tốn kém…) | ✅ |
+| Preset ngân sách: Network 5 MB / Network 2 MB (Meta) / Tuỳ chỉnh — chọn trong Cài đặt hoặc ngay cạnh ô sắp xếp; mọi ✓/⚠, lọc, xếp hạng, cảnh báo trong panel đổi theo ngay (thông số đo không phụ thuộc ngân sách) | ✅ |
 
 ## Phase 5 — (Tuỳ chọn, ưu tiên thấp) So với project đích + shader khi xuất (Mốc C)
 Chỉ làm khi cần. Unity tự xử lý import; phần này giúp biết trước những gì Unity sẽ ghi đè hoặc thiếu.
 
 | Việc | State |
 |---|---|
-| Chọn project Unity trên máy (chỉ đọc) → đánh dấu asset đã có cùng GUID (Unity sẽ ghi đè khi import) | ⏳ |
-| Cảnh báo shader: so phiên bản URP (`packages-lock.json`) nguồn ↔ đích; shader custom chưa có trong đích; trùng tên shader | ⏳ |
+| **Project Unity đích** (Cài đặt, chỉ đọc — kiểm có `Assets` + `ProjectSettings`). Khi xuất: quét `.meta` (GUID) + kích thước file của project, chỉ băm (SHA-1) file trùng GUID hoặc trùng kích thước với file trong gói → mỗi file: **đã có** (cùng GUID + nội dung → bỏ khỏi gói), **ghi đè** (cùng GUID, khác nội dung → cảnh báo), **dùng lại** (nội dung giống hệt, GUID khác → bỏ khỏi gói, đổi GUID trong `.mat` / `.prefab` / YAML và `.meta` sang bản của project — chống trùng asset thật; tắt được), **đổi tên** (đường dẫn đã có asset khác → Unity thêm " 1"). Kết quả hiện ngay dưới thanh Export. File dùng lại giữ cài đặt import của bản trong project | ✅ chờ user xem trên app |
+| Cảnh báo URP: so `Packages/packages-lock.json` nguồn ↔ đích (khác major.minor, hoặc đích không có URP) | ✅ |
+| Shader custom trùng **tên** (khác GUID) giữa nguồn và đích | ⏳ |
 | Chỉnh `.mat` khi xuất (Shader Mapping đơn giản): đổi shader GUID + tên property theo bảng mapping — không cần Unity | ⏳ |
 | ~~Unity Companion, import vào thư mục đang chọn (#11), undo ghi đè~~ — tạm hoãn: chỉ cần nếu sau này muốn chạy Render Pipeline Converter tự động | — |
 
@@ -181,9 +184,12 @@ Mỗi loại là một `AssetTypeHandler` mới (PLAN §8d): nhận diện, prev
 | **Material** (.mat) | Quả cầu / hộp / mặt phẳng three.js, gán texture theo slot + màu (`_BaseColor` / `_Color` / `_TintColor`), trong suốt / cutout, emission, độ bóng; material trong suốt (VFX) mặc định hiện trên mặt phẳng; thumbnail lưới = quả cầu | Shader (built-in theo tên / package URP / custom), texture + material cha (variant) theo GUID — dùng lại `describeMaterials`, GUID của chính `.mat` lấy từ `.meta`; panel: shader, bề mặt, màu, số texture + dung lượng, texture lớn nhất khi build, cảnh báo playable; xuất `.unitypackage` (mat + texture + shader custom) | ✅ |
 | **Audio** (wav, mp3, ogg; aif / tracker liệt kê) | Phát trong app trên waveform: bấm để tua, Space phát / dừng, lặp, **Tự phát** khi chọn clip khác (nhớ giữa các lần mở); thumbnail lưới = waveform | Độ dài, kênh, sample rate gốc (đọc header WAV / OGG / MP3 vì Web Audio tự resample), import settings từ `.meta` (Load type, nén + quality, sample rate override, Force To Mono, override theo nền tảng — WebGL ưu tiên) → **dung lượng ước tính khi build**; cảnh báo playable (> 1 MB khi build, > 60 s, PCM, clip dài Decompress on load, âm ngắn stereo); card ghi độ dài + ≈ dung lượng; **Tải về** file như texture | ✅ |
 | **Sprite / UI** (texture kiểu Sprite) | Trong viewer ảnh của Texture: khung từng sprite con (đánh số) + đường 9-slice, bật/tắt; nét vẽ giữ độ dày khi thu nhỏ | Từ `.meta`: chế độ (Single / Multiple / Polygon), số sprite, % sheet đã dùng (cảnh báo khi > 50% trống), Pixels per unit, viền 9-slice, packing tag; danh sách sprite (tên, kích thước, 9-slice) | ✅ chờ user xem trên app |
-| Sprite Atlas (`.spriteatlas`), tab / lọc riêng cho sprite | Atlas: danh sách sprite / thư mục được pack | Tab Sprite cần đọc `.meta` của mọi texture (chỉ mục hiện chỉ có tên) | ⏳ |
+| **Tab Sprite**: texture có `textureType: 8` trong `.meta` — mở tab lần đầu → quét `.meta` của mọi texture (lưu theo SHA, dùng chung mọi branch, hiện dần); xem / tải như texture (khung sprite + 9-slice sẵn có). Thử trên 441 `.meta` trong cache: 71 sprite | ✅ chờ user xem trên app |
+| Sprite Atlas (`.spriteatlas`) | — | 0 file ở các repo đã quét (xp_hero, luna_dino, luna_pizza) → để sau, khi có | ⏳ khi cần |
 | **Prefab tĩnh** (mesh + material, không particle) | Dựng lại bằng three.js: cây transform (đổi hệ trục Unity → three), mesh từ FBX theo tỉ lệ import (UnitScaleFactor × globalScale), material + texture + màu theo GUID, prefab lồng nhau / Prefab Variant / model kéo thả (override vị trí, xoay, scale, material) tới 4 tầng; mesh khớp theo bảng tên trong `.meta` hoặc tên GameObject (chuẩn hoá, mỗi mesh một lần); thumbnail lưới; prefab UI / particle / chỉ script hiện thẻ chữ | Model, prefab lồng nhau, material (+ texture, shader), script custom, asset khác (sprite, audio, animator…) với số lần dùng; GUID của model / prefab / script / asset khác tra theo nhu cầu (gần nhất trước, đủ cả branch ở bước cuối); cảnh báo thiếu model, script custom, particle, prefab UI; xuất `.unitypackage` đủ file | ✅ chờ user xem trên app |
 | **Animation clip** (`.anim`; clip trong FBX đã có từ Phase 3) | Phát trên model có rig khớp: curve vị trí / xoay / Euler / scale lấy mẫu Hermite như Unity, đổi hệ trục, tỉ lệ import; tự thử tối đa 4 model gần nhất (tên clip + thư mục, khớp ≥ 50% bone), hoặc chọn tay trong danh sách 8 model; phát / dừng, lặp, góc nhìn. **Thumbnail lưới**: model tư thế ở 40% clip (rig tự chọn, giữ 4 rig gần nhất trong bộ nhớ), mở clip / chọn rig tay thì cập nhật ảnh; clip không có rig: hình các curve + loại; card ghi độ dài. Clip Humanoid, UI, Sprite, nén: chỉ thông tin | Độ dài, frame, sample rate, loại (Generic / Humanoid / Legacy / UI / Sprite), số object, curve, key, event; cảnh báo key ở mọi frame (nên bật Keyframe Reduction); sprite / object tham chiếu được xuất kèm | ✅ chờ user xem trên app |
+| **Font** (`.ttf`, `.otf`, `.ttc`) — xp_hero: 19 ttf, 6 otf | Câu mẫu bằng chính font, gõ thử, chỉnh cỡ; **ký tự font không có được tô cam** (không để trình duyệt lấy font khác che đi); lưới ký tự (300 đầu); thumbnail lưới = "Aa" (font chỉ tiếng Hàn: 가나) + tên font | Họ font, kiểu, số glyph, TrueType / CFF, dung lượng; độ phủ: Latin, tiếng Việt, Hàn, Kana, Hán, Cyrillic, Thái; từ `.meta`: chế độ ký tự (Dynamic / ASCII / tuỳ chọn), font dự phòng; ngân sách riêng **File font** (1 MB / 300 KB Meta); cảnh báo thiếu chữ tiếng Việt (liệt kê), font Hàn / Hán nặng → subset, bộ ký tự nướng sẵn; xuất `.unitypackage` (giữ GUID cho TMP), xuất theo loại vào `Fonts/`. Kiểm parser trên Arial, Georgia, Tahoma, Apple SD Gothic (.ttc, CFF, 11.172 âm tiết Hàn) | ✅ chờ user xem trên app |
+| **Font TextMeshPro** (`.asset`) — hiện trong tab Font | Atlas (Alpha8 nằm trong file, hex) vẽ glyph trắng trên nền tối; thumbnail = atlas | Họ font, kiểu, cỡ gốc, số ký tự + độ phủ (Latin, Việt, Hàn…), atlas W×H, Static / Dynamic, font dự phòng; ước dung lượng build = atlas; cảnh báo Dynamic (font gốc vào build), atlas vượt ngân sách, thiếu chữ Việt; xuất kèm font dự phòng + font gốc khi Dynamic. Nhận diện **bằng nội dung** (`m_FaceInfo`) — chỉ đọc `.asset` có "SDF"/"Font" trong đường dẫn (`.asset` khác có thể rất nặng); font TMP bị đổi tên hẳn sẽ bị sót. Kiểm trên file thật BakbakOne-Regular SDF (97 ký tự, atlas 512²); `uni_shield_dir_SDF.asset` (Texture3D) bị loại đúng | ✅ chờ user xem trên app |
 | Particle System prefab | → Phase 9 | | ⏳ |
 
 Ghi chú chung:
@@ -205,6 +211,7 @@ Ghi chú chung:
 | Device Flow qua GitHub App cá nhân (test) | ⏳ |
 | Tìm kiếm bước 2: chỉ mục dùng chung cho team — GitHub Action định kỳ quét repo, đẩy chỉ mục + thumbnail vào repo riêng (vd. `supercent-io/asset-index`); app chỉ tải về, tìm tức thì | ⏳ |
 | Tìm bằng hình ảnh / mô tả (embedding thumbnail) — "tìm ngữ nghĩa" bước 2, sau nhóm từ khoá đã có | ⏳ |
+| **Trợ lý AI tìm asset** (ý 2026-10-28): ô chat / "pet" nổi trong app; người dùng tả bằng lời ("cây tuyết low-poly dưới 5k tris, có texture") → AI dịch thành truy vấn trên chỉ mục sẵn có (tên, loại, thông số, tên clip) qua tool-calling, trả về card bấm được; về sau thêm mô tả ảnh thumbnail (vision) để tìm theo hình dạng / màu. Key API lưu trong keychain hệ điều hành, gọi từ main process; chỉ gửi tên / path / thông số, không gửi file asset | ⏳ |
 | "Còn ở đâu" theo GUID (cùng asset nhưng đã sửa nội dung) | ⏳ |
 | Thumbnail prefab / particle do Unity batchmode render sẵn trên CI, lưu theo SHA | ⏳ |
 | #7 Bộ sưu tập / yêu thích / tag | ⏳ |
@@ -222,14 +229,28 @@ Ghi chú chung:
 ## Phase 9 — Particle System prefab (làm sau)
 Chỉ thêm handler mới, không sửa core (PLAN §8d).
 
+**Vì sao đáng làm (đo 2026-10-28):** xp_hero có 6.373 prefab, **~4.358 nằm trong thư mục FX / VFX / Particle** — hiện chỉ là thẻ chữ. Chia 2 bước:
+- **(a) ~2–3 ngày, không cần Unity:** đọc `ParticleSystem` trong YAML prefab → cây emitter, thông số playable (max particles, số emitter, sub-emitter, texture nặng nhất, material/shader), cảnh báo; xuất đủ file.
+- **(b) ~1,5–2 tuần:** preview chuyển động dựng lại bằng three.js (shape, lifetime, speed, size/color over lifetime, texture sheet) — gần đúng, đủ nhận ra hiệu ứng; hoặc Companion / CI render bằng Unity như bên dưới.
+- `.vfx` (VFX Graph, 166 file): playable (Luna) không hỗ trợ → chỉ gắn nhãn, không làm preview.
+
 | Việc | State |
 |---|---|
-| `ParticlePrefabHandler`: nhận diện prefab có `ParticleSystem` | ⏳ |
+| Đọc `ParticleSystem` + `ParticleSystemRenderer` trong YAML prefab (cả prefab lồng nhau): thời lượng, lặp, prewarm, lifetime / speed / size (cận trên của khoảng ngẫu nhiên), max particles, rate, **burst** (× số vòng), shape, chế độ render, material / trail / mesh, module tốn kém (noise, collision, trails, lights, sub emitter, texture sheet…). Kiểm trên 40 prefab FX thật (bước a) — gắn vào handler prefab sẵn có thay vì handler riêng: prefab vừa model vừa FX được cả hai | ✅ chờ user xem trên app |
+| **Sửa lỗi xuất**: material của particle trước chỉ được chép file `.mat` — giờ đi qua bước đọc material như mesh → texture + shader custom vào gói; mesh của particle dạng Mesh tính là model | ✅ (có test) |
+| Ước "particle cùng lúc" = rate × lifetime + burst (giới hạn bởi Max Particles); ngân sách mới **Particle (một hiệu ứng)**: 1.000 / 400 (Meta); card ghi "N particle", xếp hạng / lọc dùng chung | ✅ |
+| Card + viewer prefab FX: texture của các emitter đông nhất cộng sáng (frame đầu của texture sheet) thay cho chữ "FX"; card FX cũ được vẽ lại một lần mỗi phiên | ✅ |
+| Panel Particle: emitter (sắp theo số particle), shape / render / module, cảnh báo: collision, lights, noise, trails, mesh particle nhiều, prewarm, Max Particles để 1000 mặc định | ✅ |
+| **Tab VFX**: prefab là hiệu ứng — **root là ParticleSystem**, hoặc **chỉ gồm particle** (không MeshRenderer, không model / prefab lồng) — hoặc **variant** của một hiệu ứng. Model gắn kèm FX (vd. `CuttingMachine.prefab`: máy + tia lửa cưa) và prefab chỉ *chứa* FX (`Additive GameObjects.prefab`) **không** tính; không đoán theo tên thư mục. Mở tab lần đầu trên một branch → quét nội dung mọi prefab (git hàng loạt, khối 24 MB, có tiến độ), lưu theo SHA dùng chung mọi branch → lần sau tức thì. Trên 393 prefab trong cache: 101 có particle, 10 variant | ✅ chờ user xem trên app |
+| **Preview chuyển động bằng three.js** (bước b, không cần Unity): main module (duration, loop, prewarm, delay, lifetime / speed / size / rotation / color theo MinMaxCurve – MinMaxGradient như Unity), emission (rate + burst nhiều vòng), shape (sphere, hemisphere, cone, cone volume, box, circle, edge, rectangle; mesh/sprite ≈ sphere), gravity, velocity / force / limit velocity, color / size / rotation over lifetime, texture sheet, noise (gần đúng); billboard, stretched, horizontal, vertical (mesh → billboard); blend cộng sáng / alpha / nhân theo material; scale theo cây transform; nút Phát/Dừng, Phát lại, Lặp, 0,25× / 0,5× / 1×; camera căn theo vùng particle bay; thumbnail chụp lúc hiệu ứng đông nhất. Chưa: collision, lights, trail dạng ribbon, shader custom (dùng texture chính + màu) | ✅ chờ user xem trên app |
+| **Sub emitter** (birth / death; collision coi như death vì preview không có va chạm): emitter con chỉ phát tại particle cha — burst khi sinh / chết, rate khi cha còn sống; kế thừa màu, size; tìm đúng emitter con dưới object cha khi prefab lồng nhiều lần | ✅ chờ user xem trên app |
+| **Trail** (chế độ Particles): mỗi particle giữ 10 điểm (cách nhau ≥ minVertexDistance), quad nối các điểm hướng về camera; độ rộng theo widthOverTrail (× size nếu bật), màu colorOverTrail × colorOverLifetime (× màu particle nếu bật), mờ dần về cuối; material trail riêng; tối đa 600 trail / emitter | ✅ chờ user xem trên app |
+| **Particle dạng mesh**: mesh FBX thật (tỉ lệ import như prefab), `InstancedMesh`, texture + blend của material; mờ dần bằng tối màu (không có alpha theo từng hạt) | ✅ chờ user xem trên app |
 | Check script thiếu (MonoBehaviour custom) | ⏳ |
-| Companion `renderPreview`: scene tạm, simulate, xuất GIF/WebM, cache | ⏳ |
-| (Tuỳ chọn) CI batchmode render preview sẵn | ⏳ |
-| Tab Particles trong UI (sinh từ registry) | ⏳ |
-| Xuất particle prefab bằng cùng cơ chế `.unitypackage` (Phase 4) | ⏳ |
+| ~~Companion `renderPreview` (Unity render GIF/WebM)~~ — bỏ: user chọn preview three.js, không qua Unity | — |
+| ~~CI batchmode render preview sẵn~~ — bỏ (như trên) | — |
+| Tab VFX trong UI (sinh từ registry) | ✅ |
+| Xuất particle prefab bằng cùng cơ chế `.unitypackage` (Phase 4), kèm texture + shader của material particle | ✅ |
 | (Sau nữa) VFX Graph | ⏳ |
 
 ---
@@ -250,6 +271,15 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 ## Nhật ký
 | Ngày | Thay đổi |
 |---|---|
+| 2026-10-29 | **Kiểm tra playable thành tuỳ chọn, mặc định tắt** (bỏ cảnh báo kiểu "texture 2.048 px vượt 1.024 px", bỏ lọc / sắp xếp theo ngân sách khi tắt). **Deep link** `assethub://` + Copy link + dán link vào ô tìm kiếm (Phase 4 #10). |
+| 2026-10-28 | **Phase 5 — So với project đích**: chọn project Unity (chỉ đọc); khi xuất bỏ file đã có, **dùng lại file giống hệt khác GUID** (đổi tham chiếu, không thêm bản trùng), báo trước file bị ghi đè / đổi tên, cảnh báo khác URP. 146 test. |
+| 2026-10-28 | **Phase 6 xong**: tab Sprite (quét `.meta` texture), font TextMeshPro trong tab Font (atlas, ký tự, độ phủ, Static/Dynamic). Cơ chế quét theo nội dung dùng chung cho VFX / Sprite / TMP (`knownAssets`, lưu theo SHA, hiện dần); loại asset ẩn (`hidden`) cho file chỉ hiện qua tab khác. 140 test. |
+| 2026-10-28 | **Phase 9 xong phần chính**: sub emitter (birth / death), trail, particle dạng mesh trong preview three.js. 137 test (có test mô phỏng không cần WebGL). |
+| 2026-10-28 | **Phase 9 bước (b) — particle chạy bằng three.js** ngay trong app; **tab VFX** chỉ còn prefab tự có ParticleSystem hoặc variant (sửa lỗi `Additive GameObjects.prefab` chỉ chứa FX bị tính là VFX). 134 test. |
+| 2026-10-28 | **Phase 9 bước (a) — Particle**: đọc particle system trong prefab, ước số particle cùng lúc, ngân sách Particle, card bằng texture emitter, panel emitter + cảnh báo. **Sửa lỗi** xuất prefab FX thiếu texture / shader của material particle. 127 test. |
+| 2026-10-28 | **Phase 6 — Font xong** (chờ xem trên app): handler `.ttf/.otf/.ttc` (tab Font tự sinh), bộ đọc sfnt tự viết (name, maxp, cmap 4/12, .ttc), câu mẫu đánh dấu ký tự thiếu, lưới ký tự, độ phủ 7 hệ chữ, cài đặt import từ `.meta`, ngân sách File font, thumbnail "Aa"; xuất theo loại vào `Fonts/`. Ghi chú Phase 9 Particle (2 bước) + ý **trợ lý AI tìm asset** (Phase 7). |
+| 2026-10-28 | **Xuất theo loại**: kiểu đường dẫn mới `Assets/AssetHub/Prefabs`, `Models`, `Materials`, `Textures`… Lưu ý: tránh trùng **đường dẫn**, còn trùng **GUID** Unity vốn tự cập nhật bản cũ tại chỗ; trùng nội dung khác GUID cần Phase 5. |
+| 2026-10-28 | **Dung lượng gồm dependency ngay trên card**: thumbnail FBX đọc thêm `.mat` (kiểu A) → card có màu/texture thật và MB texture đủ, không cần mở model; FBX đã đo trước đó được đo lại nền một lần. |
 | 2026-10-28 | **Preset ngân sách playable**: 5 MB (Google, AppLovin, Unity…) / 2 MB (Meta) / Tuỳ chỉnh từng giới hạn (tris, cỡ texture, MB texture, MB model, bone, KB audio, giây audio). Đổi ở Cài đặt hoặc cạnh ô sắp xếp; card, lọc, xếp hạng, panel đổi theo ngay. |
 | 2026-10-28 | **Chọn rig cho animation chính xác hơn**: thư mục chứa clip = nhân vật (trọng số cao), tên clip = hành động (gần như không tính) → clip vũ khí của player ra `player.fbx` (87–91% bone) thay vì cây đũa phép; danh sách chỉ còn model liên quan (bỏ model đã thử 0% bone); thêm "Model khác…" tìm trong mọi FBX; lựa chọn tay được nhớ theo thư mục clip (dùng cho cả thumbnail các clip cùng thư mục). |
 | 2026-10-28 | **Animation gắn với FBX**: tab Animation liệt kê cả FBX chứa clip (đã đo) hoặc tên dạng `Model@Clip.fbx` — handler khai báo `alsoShows`, UI không biết riêng FBX; tên clip lưu cùng thông số theo SHA và **tìm kiếm khớp tên clip** ("attack" ra Goblin.fbx có clip Goblin_Attack); card FBX có huy hiệu **▶ N** (rê chuột xem tên clip); mở FBX từ tab Animation thì tự phát clip đầu. FBX đo từ trước được render lại nền một lần để lấy tên clip. |

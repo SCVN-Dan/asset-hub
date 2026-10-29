@@ -1,18 +1,3 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1C2230"/>
-      <stop offset="1" stop-color="#0F1115"/>
-    </linearGradient>
-    <linearGradient id="cube" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7FA8FF"/>
-      <stop offset="1" stop-color="#3D6FE8"/>
-    </linearGradient>
-  </defs>
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-  <rect x="100.5" y="100.5" width="823" height="823" rx="185" fill="none" stroke="#2A3242" stroke-width="3"/>
-  <g transform="translate(512 512) scale(23) translate(-12 -12)" fill="none" stroke="url(#cube)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round">
-    <path d="M12 2.5 21 7.5v9L12 21.5 3 16.5v-9z" fill="#3D6FE8" fill-opacity="0.12"/>
-    <path d="M3 7.5 12 12.5l9-5M12 12.5v9"/>
-  </g>
+  <g transform="translate(100 100) scale(6.4375)"><defs><radialGradient id="ahSky" cx="50%" cy="42%" r="70%"><stop offset="0" stop-color="#5AAEFF"></stop><stop offset="1" stop-color="#1D5FD1"></stop></radialGradient><clipPath id="ahTile"><rect width="128" height="128" rx="28"></rect></clipPath></defs><g clip-path="url(#ahTile)"><rect width="128" height="128" fill="url(#ahSky)"></rect><g fill="#FFFFFF" opacity=".13"><path d="M64 56L40-10H58Z"></path><path d="M64 56L96-10H112Z"></path><path d="M64 56L140 20V36Z"></path><path d="M64 56L-10 18V34Z"></path><path d="M64 56L140 96V112Z"></path><path d="M64 56L-10 100V116Z"></path></g></g><defs><clipPath id="ahChest"><rect x="18" y="62" width="92" height="52" rx="10"></rect></clipPath></defs><g transform="translate(9 9) scale(.86)"><g stroke="#141414" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"><g transform="translate(97 54) rotate(20)"><path d="M-11 0V-40L0-54L11-40V0Z" fill="#9CCBFF"></path><path d="M-4-6V-39L0-45V-6Z" fill="#FFFFFF" stroke="none" opacity=".75"></path><rect x="-16" y="0" width="32" height="9" rx="3" fill="#F5A12E"></rect></g><rect x="18" y="62" width="92" height="52" rx="10" fill="#FFC21A"></rect><g clip-path="url(#ahChest)" stroke="none"><rect x="0" y="98" width="128" height="30" fill="#E8980C"></rect></g><rect x="18" y="62" width="92" height="52" rx="10" fill="none"></rect><path d="M18 64V50C18 34 36 26 64 26S110 34 110 50V64Z" fill="#FFD23F"></path><path d="M30 44C34 36 46 33 58 33" fill="none" stroke="#FFF0A8" stroke-width="5"></path><path d="M34 29V114M94 29V114" stroke-width="14"></path><path d="M34 29V114M94 29V114" stroke="#7A3E2E" stroke-width="7" stroke-linecap="butt"></path><path d="M104 62L120 84L104 88Z" fill="#C92A22"></path><rect x="16" y="56" width="96" height="14" rx="4" fill="#E8352B"></rect><path d="M24 60H104" stroke="#FF6E5A" stroke-width="3"></path><rect x="54" y="54" width="20" height="24" rx="5" fill="#F5A12E"></rect><path d="M64 63V69" stroke-width="4"></path></g></g></g>
 </svg>

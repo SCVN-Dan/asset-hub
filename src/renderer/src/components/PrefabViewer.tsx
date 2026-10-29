@@ -4,6 +4,8 @@ import type { ModelStats } from '@core/checks/playable'
 import type { DependencyReport } from '@core/index'
 import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
 import { buildPrefab, dressPrefab, type PrefabBuild } from '../viewer/prefabBuild'
+import { buildEffect } from '../viewer/effectBuild'
+import type { EffectPlayer } from '../viewer/particlePlayer'
 import type { LiveContext } from './ModelViewer'
 
 interface Props {
@@ -26,12 +28,14 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
   const { t } = useTranslation()
   const host = useRef<HTMLDivElement>(null)
   const viewer = useRef<FbxViewer>()
-  const built = useRef<{ key: string; build: PrefabBuild }>()
+  const built = useRef<{ key: string; build: PrefabBuild; effect?: EffectPlayer; stop?: () => void }>()
   const [status, setStatus] = useState<Status>('waiting')
   const [error, setError] = useState('')
   const [missing, setMissing] = useState(0)
   const [autoRotate, setAutoRotate] = useState(false)
   const [wireframe, setWireframe] = useState(false)
+  /** Particle controls, shown when the prefab has particle systems. */
+  const [fx, setFx] = useState<{ paused: boolean; loop: boolean; speed: number }>()
   const callbacks = useRef({ onStats, onThumb, onLoading })
   callbacks.current = { onStats, onThumb, onLoading }
 
@@ -47,9 +51,12 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
     viewer.current = v
     setStatus('waiting')
     setMissing(0)
+    setFx(undefined)
     setAutoRotate(false)
     setWireframe(false)
     return () => {
+      built.current?.stop?.()
+      built.current?.effect?.dispose()
       v.dispose()
       viewer.current = undefined
       built.current?.build.dispose()
@@ -67,14 +74,35 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
     void (async () => {
       try {
         const build = await buildPrefab(live, path, report)
-        if (cancelled || !owner || owner.isDisposed() || owner !== viewer.current) return build.dispose()
+        const effect = build.anchors.length ? await buildEffect(live, report, build.anchors) : undefined
+        if (cancelled || !owner || owner.isDisposed() || owner !== viewer.current) {
+          effect?.dispose()
+          return build.dispose()
+        }
         const previous = built.current
-        built.current = { key, build }
-        owner.showGroup(build.group)
+        previous?.stop?.()
+        previous?.effect?.dispose()
+        built.current = { key, build, effect, stop: effect && owner.addUpdater((dt) => effect.update(dt)) }
+        // The camera takes in where particles fly, not only the meshes.
+        owner.showGroup(build.group, effect?.extent())
         await dressPrefab(owner, build)
         previous?.build.dispose()
         if (cancelled) return
         setMissing(build.missing)
+        if (effect) {
+          owner.setWireframe(wireframe)
+          // A rebuild (more files found) keeps the controls as the user left them.
+          setFx((f) => {
+            const next = f ?? { paused: false, loop: true, speed: 1 }
+            Object.assign(effect, next)
+            return next
+          })
+          setStatus('ready')
+          callbacks.current.onStats(owner.stats(build.modelBytes, build.textures))
+          // Taken once the effect has had time to fill in.
+          setTimeout(() => !owner.isDisposed() && callbacks.current.onThumb(owner.snapshot()), 900)
+          return
+        }
         // Nothing found yet while models are still being looked up: keep waiting for the next step.
         if (!build.meshes) return setStatus(report.partial ? 'loading' : 'empty')
         owner.setWireframe(wireframe)
@@ -93,6 +121,12 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
   }, [report])
 
   const view = (preset: ViewPreset) => viewer.current?.setView(preset)
+  const setEffect = (patch: Partial<NonNullable<typeof fx>>) => {
+    const next = { paused: false, loop: true, speed: 1, ...fx, ...patch }
+    const effect = built.current?.effect
+    if (effect) Object.assign(effect, next)
+    setFx(next)
+  }
   const overlay =
     status === 'waiting' || status === 'loading'
       ? t('prefabView.loading')
@@ -141,6 +175,24 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
               {t('viewer.wireframe')}
             </button>
           </div>
+          {fx && (
+            <div className="viewer-tools viewer-tools-bottom" role="toolbar" aria-label={t('particles.title')}>
+              <button type="button" className="viewer-btn" aria-pressed={!fx.paused} onClick={() => setEffect({ paused: !fx.paused })}>
+                {fx.paused ? t('particles.play') : t('particles.pause')}
+              </button>
+              <button type="button" className="viewer-btn" onClick={() => built.current?.effect?.restart()}>
+                {t('particles.restart')}
+              </button>
+              <button type="button" className="viewer-btn" aria-pressed={fx.loop} title={t('particles.loopHint')} onClick={() => setEffect({ loop: !fx.loop })}>
+                {t('particles.loop')}
+              </button>
+              {[0.25, 0.5, 1].map((s) => (
+                <button key={s} type="button" className="viewer-btn" aria-pressed={fx.speed === s} onClick={() => setEffect({ speed: s })}>
+                  {s}×
+                </button>
+              ))}
+            </div>
+          )}
           <span className="viewer-hint">{missing > 0 ? t('prefabView.missing', { count: missing }) : t('viewer.hint')}</span>
         </>
       )}

@@ -1,12 +1,13 @@
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net, shell } from 'electron'
-import { createDefaultRegistry, SourceError, type RepoRef } from '@core/index'
+import { createDefaultRegistry, SourceError, type FactKind, type RepoRef } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
 import { IPC, type AuthMethod, type CatalogStatus, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
 import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { exportUnityPackage } from './exporter'
+import { isUnityProject } from './targetProject'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
 import { FileBlobCache, FileCommitCache, StatsStore, ThumbnailStore } from './caches'
@@ -217,6 +218,14 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       )
     )
   )
+  ipcMain.handle(IPC.knownAssets, (event, repo: string, branch: string, kind: unknown) => {
+    const k: FactKind = kind === 'sprites' || kind === 'tmpFonts' ? kind : 'effects'
+    return wrap(() =>
+      requireSession().knownAssets(String(repo), String(branch), k, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.knownProgress, k, progress)
+      })
+    )
+  })
   ipcMain.handle(IPC.findPrefabMaterials, (event, repo: string, branch: string, path: string, root: string, scope: unknown, excluded: unknown) =>
     wrapForeground(() =>
       requireSession().findPrefabMaterials(
@@ -254,14 +263,17 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
         branch: String(raw.branch),
         root: String(raw.root),
         paths: Array.isArray(raw.paths) ? raw.paths.map(String) : [],
-        layout: raw.layout === 'grouped' ? 'grouped' : 'source',
+        layout: raw.layout === 'grouped' || raw.layout === 'byType' ? raw.layout : 'source',
         skipByName: raw.skipByName === true,
         extraFiles: Array.isArray(raw.extraFiles) ? raw.extraFiles.map(String) : [],
         previews: Object.fromEntries(
           Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
         ),
-        suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_')
+        suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_'),
+        reuseExisting: raw.reuseExisting !== false
       }
+      // Compared only with a folder that is really a Unity project (read, never written).
+      if (typeof raw.targetProject === 'string' && raw.targetProject && (await isUnityProject(raw.targetProject))) req.targetProject = raw.targetProject
       if (!req.paths.length) return { canceled: true }
       const win = BrowserWindow.fromWebContents(event.sender)
       const options = {

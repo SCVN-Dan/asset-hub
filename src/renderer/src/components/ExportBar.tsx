@@ -1,7 +1,11 @@
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type DependencyReport } from '@core/index'
-import type { ExportProgress, ExportResult } from '@shared/ipc'
+import type { ExportProgress, ExportResult, TargetReport } from '@shared/ipc'
+import type { BudgetPreset } from '@core/checks/playable'
+import { Dropdown } from './Dropdown'
 import { ErrorNote } from './ErrorNote'
+import { LogoMark } from './Logo'
+import { leaveSlot } from '../motion'
 
 export interface PackItem {
   asset: Asset
@@ -11,8 +15,12 @@ export interface PackItem {
 }
 
 export interface ExportOptions {
-  layout: 'source' | 'grouped'
+  layout: 'source' | 'grouped' | 'byType'
   skipByName: boolean
+  /** Compared with this Unity project (from settings): what it already has is left out. */
+  targetProject?: string
+  /** Leave out files the project has under another GUID, pointing references at its copy. */
+  reuseExisting: boolean
 }
 
 export type ExportState =
@@ -21,8 +29,15 @@ export type ExportState =
   | { status: 'done'; result: ExportResult }
   | { status: 'error'; error: unknown }
 
+const MB = 1024 * 1024
+
+/** What the whole playable may weigh on the networks a preset stands for: the chest's capacity. */
+export const packCapacity = (preset: BudgetPreset) => (preset === 'tight' ? 2 * MB : 5 * MB)
+
 interface Props {
   items: PackItem[]
+  /** Bytes the chest holds before it counts as too heavy. */
+  capacity: number
   options: ExportOptions
   state: ExportState
   onOptions(options: ExportOptions): void
@@ -61,18 +76,53 @@ function summarize(items: readonly PackItem[], skipByName: boolean) {
   return { files: files.size, bytes, missing, byName, pending: items.some((i) => !i.report) }
 }
 
-export function ExportBar({ items, options, state, onOptions, onExport, onRemove, onClear, onDismiss }: Props) {
+const fileName = (p: string) => p.split('/').pop()
+
+/** What the package does to the target project, before it is imported. */
+function TargetSummary({ report }: { report: TargetReport }) {
+  const { t } = useTranslation()
+  const project = report.project.split(/[\\/]/).pop()
+  const list = (items: Array<{ path: string; existing: string }>) => items.slice(0, 6).map((i) => `${fileName(i.path)} → ${i.existing}`).join(', ') + (items.length > 6 ? ' …' : '')
+  const nothing = !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.urp
+  return (
+    <div className="target-summary small">
+      <span className="muted">{nothing ? t('target.clean', { project }) : t('target.title', { project })}</span>
+      {report.same > 0 && <span>{t('target.same', { count: report.same })}</span>}
+      {report.reused.length > 0 && <span title={list(report.reused)}>{t('target.reused', { count: report.reused.length, list: list(report.reused) })}</span>}
+      {report.overwrite.length > 0 && (
+        <span className="warn-text" title={list(report.overwrite)}>
+          {t('target.overwrite', { count: report.overwrite.length, list: list(report.overwrite) })}
+        </span>
+      )}
+      {report.renamed.length > 0 && (
+        <span className="warn-text" title={list(report.renamed)}>
+          {t('target.renamed', { count: report.renamed.length, list: list(report.renamed) })}
+        </span>
+      )}
+      {report.urp && <span className="warn-text">{report.urp.target ? t('target.urp', { source: report.urp.source, target: report.urp.target }) : t('target.noUrp', { source: report.urp.source })}</span>}
+    </div>
+  )
+}
+
+export function ExportBar({ items, capacity, options, state, onOptions, onExport, onRemove, onClear, onDismiss }: Props) {
   const { t } = useTranslation()
   const sum = summarize(items, options.skipByName)
   const running = state.status === 'running'
   const progress = state.status === 'running' ? state.progress : undefined
+  const over = sum.bytes > capacity
 
   return (
     <section className="export-bar" aria-label={t('export.title')}>
       {items.length > 0 && (
         <>
           <div className="export-head">
-            <strong>{t('export.pack', { count: items.length })}</strong>
+            <span className="pack-chest">
+              <LogoMark size={28} />
+            </span>
+            <strong className="pack-title">{t('export.chest')}</strong>
+            <span className="pack-room" data-over={over}>
+              {over ? t('export.tooHeavy', { size: formatBytes(sum.bytes - capacity) }) : t('export.room', { size: formatBytes(capacity - sum.bytes) })}
+            </span>
             <span className="muted small">
               {t('export.summary', { files: sum.files, size: formatBytes(sum.bytes) })}
               {sum.pending && ` · ${t('export.resolving')}`}
@@ -80,33 +130,50 @@ export function ExportBar({ items, options, state, onOptions, onExport, onRemove
             {sum.missing > 0 && <span className="badge badge-warn">{t('export.missing', { count: sum.missing })}</span>}
             {sum.byName > 0 && <span className="badge">{t('export.byName', { count: sum.byName })}</span>}
           </div>
+          <div className="pack-meter" data-over={over} title={`${formatBytes(sum.bytes)} / ${formatBytes(capacity)}`}>
+            <span className="pack-meter-fill" style={{ width: `${Math.min(sum.bytes / capacity, 1) * 100}%` }} />
+          </div>
           <ul className="export-items">
             {items.map((i) => (
-              <li key={i.path}>
+              <li key={i.path} data-pack-id={i.asset.id}>
                 <span className="dep-name">{i.asset.name}</span>
-                <button type="button" className="link-btn" aria-label={t('export.remove', { name: i.asset.name })} onClick={() => onRemove(i.path)} disabled={running}>
+                <button
+                  type="button"
+                  className="link-btn"
+                  aria-label={t('export.remove', { name: i.asset.name })}
+                  onClick={(e) => leaveSlot(e.currentTarget.closest('li'), () => onRemove(i.path))}
+                  disabled={running}
+                >
                   ×
                 </button>
               </li>
             ))}
           </ul>
           <div className="export-actions">
-            <label className="picker">
+            <div className="picker">
               <span className="muted small">{t('export.layout')}</span>
-              <select
-                className="select"
+              <Dropdown
                 value={options.layout}
+                options={[
+                  { value: 'source', label: t('export.layoutSource') },
+                  { value: 'grouped', label: t('export.layoutGrouped') },
+                  { value: 'byType', label: t('export.layoutByType') }
+                ]}
                 disabled={running}
-                onChange={(e) => onOptions({ ...options, layout: e.target.value as ExportOptions['layout'] })}
-              >
-                <option value="source">{t('export.layoutSource')}</option>
-                <option value="grouped">{t('export.layoutGrouped')}</option>
-              </select>
-            </label>
+                onChange={(layout: ExportOptions['layout']) => onOptions({ ...options, layout })}
+                label={t('export.layout')}
+              />
+            </div>
             <label className="check">
               <input type="checkbox" checked={options.skipByName} disabled={running} onChange={(e) => onOptions({ ...options, skipByName: e.target.checked })} />
               {t('export.skipByName')}
             </label>
+            {options.targetProject && (
+              <label className="check" title={t('target.reuseHint')}>
+                <input type="checkbox" checked={options.reuseExisting} disabled={running} onChange={(e) => onOptions({ ...options, reuseExisting: e.target.checked })} />
+                {t('target.reuse', { project: options.targetProject.split(/[\\/]/).pop() })}
+              </label>
+            )}
             <span style={{ flex: 1 }} />
             <button type="button" className="btn" onClick={onClear} disabled={running}>
               {t('export.clear')}
@@ -130,6 +197,7 @@ export function ExportBar({ items, options, state, onOptions, onExport, onRemove
             {t('export.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes) })}{' '}
             <span className="mono">{state.result.path.split(/[\\/]/).pop()}</span>
           </span>
+          {state.result.target && <TargetSummary report={state.result.target} />}
           {state.result.skipped && state.result.skipped.length > 0 && (
             <span className="small muted">{t('export.skipped', { count: state.result.skipped.length, list: state.result.skipped.map((s) => s.path.split('/').pop()).join(', ') })}</span>
           )}

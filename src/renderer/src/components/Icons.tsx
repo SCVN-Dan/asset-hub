@@ -85,6 +85,12 @@ export const AudioIcon = ({ size = 24 }: IconProps) => (
   </svg>
 )
 
+export const FontIcon = ({ size = 24 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 20 9.5 5h1L16 20M6.2 14h7.6M15 20h5M17.5 9v11" />
+  </svg>
+)
+
 export const AnimIcon = ({ size = 24 }: IconProps) => (
   <svg {...base(size)}>
     <path d="M3 17c3 0 4-10 7-10s3 10 7 10 3-6 4-6" />

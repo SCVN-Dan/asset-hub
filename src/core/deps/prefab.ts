@@ -1,6 +1,7 @@
 import { baseName } from '../registry'
 import type { TreeEntry } from '../types'
 import { parsePrefabScene, type PrefabScene } from '../unity/prefabScene'
+import { parseParticleSystems } from '../unity/particles'
 import { BUILTIN_SHADER_GUIDS, parseFbxMeta } from '../unity/yaml'
 import { describeMaterials, type DepContext } from './fbx'
 import type { DependencyReport, DependencyWarning, PartRef } from './types'
@@ -28,6 +29,7 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
   if (!ctx.byPath.has(`${prefabPath}.meta`)) warnings.add('noMeta')
 
   const scenes = new Map<string, PrefabScene>()
+  const particles: NonNullable<DependencyReport['particles']> = []
   const uses = new Map<string, number>()
   const kinds = new Map<string, 'model' | 'instance' | 'script'>()
   const count = (guid: string, kind: 'model' | 'instance' | 'script') => {
@@ -42,15 +44,18 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
     const texts = await ctx.readTexts(frontier)
     const level: PrefabScene[] = []
     for (const p of frontier) {
-      const scene = parsePrefabScene(texts.get(p) ?? '')
+      const text = texts.get(p) ?? ''
+      const scene = parsePrefabScene(text)
       scenes.set(p, scene)
       level.push(scene)
+      if (scene.particleSystems) particles.push(...parseParticleSystems(text).map((e) => (p === prefabPath ? e : { ...e, prefab: p })))
       scene.meshes.forEach((m) => count(m.mesh.guid, 'model'))
+      scene.particleMeshes.forEach((g) => count(g, 'model'))
       scene.instances.forEach((i) => count(i.source, 'instance'))
       scene.scripts.forEach((g) => count(g, 'script'))
     }
     await Promise.all([
-      ctx.prepare?.(level.flatMap((s) => s.meshes.map((m) => m.mesh.guid)), 'model'),
+      ctx.prepare?.(level.flatMap((s) => [...s.meshes.map((m) => m.mesh.guid), ...s.particleMeshes]), 'model'),
       ctx.prepare?.(level.flatMap((s) => s.instances.map((i) => i.source)), 'prefab'),
       ctx.prepare?.(level.flatMap((s) => s.scripts), 'script')
     ])
@@ -70,7 +75,8 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
   const all = [...scenes.values()]
   const materialGuids = [
     ...new Set([
-      ...all.flatMap((s) => [...s.meshes.flatMap((m) => m.materials), ...s.instances.flatMap((i) => i.materials)]),
+      // Particle materials too, so their textures and shaders are exported with them.
+      ...all.flatMap((s) => [...s.meshes.flatMap((m) => m.materials), ...s.instances.flatMap((i) => i.materials), ...s.particleMaterials]),
       ...modelPaths.flatMap((p) => parseFbxMeta(modelMetas.get(`${p}.meta`) ?? '').externalMaterials.map((m) => m.guid))
     ])
   ].filter((g) => g && !isBuiltin(g))
@@ -123,6 +129,7 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
     warnings: [...warnings],
     files: [...files],
     parts,
-    guidPaths
+    guidPaths,
+    ...(particles.length ? { particles } : {})
   }
 }

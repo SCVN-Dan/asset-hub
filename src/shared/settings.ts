@@ -1,6 +1,7 @@
 import { BUDGET_KEYS, BUDGET_PRESETS, type BudgetPreset, type PlayableBudget } from '../core/checks/playable'
+import type { PackageLayout } from '../core/export/unitypackage'
 
-export const LANGUAGES = ['en', 'vi'] as const
+export const LANGUAGES = ['en', 'vi', 'ko'] as const
 export type Language = (typeof LANGUAGES)[number]
 
 export interface Settings {
@@ -16,7 +17,14 @@ export interface Settings {
   budgetPreset?: BudgetPreset
   /** Limits of the `custom` preset; unset ones come from the default. */
   customBudget?: Partial<PlayableBudget>
+  /** Where exported packages put files in Unity (absent: `DEFAULT_EXPORT_LAYOUT`). */
+  exportLayout?: PackageLayout
+  /** Unity project packages are meant for (read only): exports leave out what it already has. */
+  targetProject?: string
 }
+
+export const EXPORT_LAYOUTS: readonly PackageLayout[] = ['byType', 'grouped', 'source']
+export const DEFAULT_EXPORT_LAYOUT: PackageLayout = 'byType'
 
 export const DEFAULT_EXCLUDED_FOLDERS = ['_ThirdParty']
 
@@ -37,7 +45,9 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
     ...(typeof input.lastRepo === 'string' && input.lastRepo ? { lastRepo: input.lastRepo } : {}),
     ...(typeof input.lastBranch === 'string' && input.lastBranch ? { lastBranch: input.lastBranch } : {}),
     ...((BUDGET_PRESETS as readonly unknown[]).includes(input.budgetPreset) ? { budgetPreset: input.budgetPreset as BudgetPreset } : {}),
-    ...sanitizeBudget(input.customBudget)
+    ...sanitizeBudget(input.customBudget),
+    ...((EXPORT_LAYOUTS as readonly unknown[]).includes(input.exportLayout) ? { exportLayout: input.exportLayout as PackageLayout } : {}),
+    ...(typeof input.targetProject === 'string' && input.targetProject.trim() ? { targetProject: input.targetProject } : {})
   }
 }
 

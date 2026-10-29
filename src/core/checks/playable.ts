@@ -11,7 +11,7 @@ export interface ModelStats {
 }
 
 export interface BudgetIssue {
-  key: 'triangles' | 'textureSize' | 'textureBytes' | 'fileBytes' | 'bones' | 'audioBytes' | 'audioLength'
+  key: 'triangles' | 'textureSize' | 'textureBytes' | 'fileBytes' | 'bones' | 'audioBytes' | 'audioLength' | 'fontBytes' | 'particles'
   value: number
   limit: number
 }
@@ -28,9 +28,13 @@ export interface PlayableBudget {
   /** One audio clip as built: playables carry a few short sounds and one music loop. */
   audioBytes: number
   audioSeconds: number
+  /** One font file: a whole font (Korean, CJK) easily outweighs the rest of a playable. */
+  fontBytes: number
+  /** Particles alive at once in one effect (all its emitters): each is drawn and simulated every frame. */
+  particles: number
 }
 
-export const BUDGET_KEYS = ['triangles', 'textureSize', 'textureBytes', 'fileBytes', 'bones', 'audioBytes', 'audioSeconds'] as const satisfies ReadonlyArray<keyof PlayableBudget>
+export const BUDGET_KEYS = ['triangles', 'textureSize', 'textureBytes', 'fileBytes', 'bones', 'audioBytes', 'audioSeconds', 'fontBytes', 'particles'] as const satisfies ReadonlyArray<keyof PlayableBudget>
 
 const MB = 1024 * 1024
 
@@ -42,7 +46,9 @@ export const PLAYABLE_BUDGET: PlayableBudget = {
   fileBytes: 5 * MB,
   bones: 60,
   audioBytes: MB,
-  audioSeconds: 60
+  audioSeconds: 60,
+  fontBytes: MB,
+  particles: 1000
 }
 
 /** For networks capping the whole playable at 2 MB (Meta): every asset has to be lighter. */
@@ -53,11 +59,16 @@ export const TIGHT_BUDGET: PlayableBudget = {
   fileBytes: 1.5 * MB,
   bones: 40,
   audioBytes: 256 * 1024,
-  audioSeconds: 30
+  audioSeconds: 30,
+  fontBytes: 300 * 1024,
+  particles: 400
 }
 
-export const BUDGET_PRESETS = ['standard', 'tight', 'custom'] as const
+/** `off`: assets are not judged for playables at all (not everything is made for one). */
+export const BUDGET_PRESETS = ['off', 'standard', 'tight', 'custom'] as const
 export type BudgetPreset = (typeof BUDGET_PRESETS)[number]
+/** Until someone picks a preset, nothing is judged against a playable budget. */
+export const DEFAULT_BUDGET_PRESET: BudgetPreset = 'off'
 
 /** The budget a preset stands for; `custom` fills what it does not set from the default. */
 export function budgetFor(preset: BudgetPreset | undefined, custom?: Partial<PlayableBudget>): PlayableBudget {
@@ -95,8 +106,15 @@ export interface StatsSummary {
   clipLength?: number
   /** For a material: how many textures it uses (no triangles). */
   textureCount?: number
-  /** `viewer` counts every texture the model uses; `thumb` only the ones named inside the FBX. */
+  /** For a font: how many glyphs it has; `fileBytes` is then the font file. */
+  glyphs?: number
+  /** For an effect (a prefab with particle systems): most particles alive at once, and how many emitters. */
+  particles?: number
+  emitters?: number
+  /** `viewer` counts every texture the model uses; `thumb` the ones named inside the FBX, plus those of its .mat files when `matTextures`. */
   source: 'thumb' | 'viewer'
+  /** A model thumbnail that also counted the textures of its .mat files (older ones did not, and are measured again once). */
+  matTextures?: true
 }
 
 const MAX_CLIP_NAMES = 30
@@ -121,8 +139,11 @@ export function summaryIssues(s: StatsSummary, budget = PLAYABLE_BUDGET): Budget
   if (s.triangles > budget.triangles) issues.push({ key: 'triangles', value: s.triangles, limit: budget.triangles })
   if (s.maxTextureSize > budget.textureSize) issues.push({ key: 'textureSize', value: s.maxTextureSize, limit: budget.textureSize })
   if (s.textureBytes > budget.textureBytes) issues.push({ key: 'textureBytes', value: s.textureBytes, limit: budget.textureBytes })
-  // An audio clip is judged by its own, smaller budget below.
-  if (s.duration === undefined && s.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: s.fileBytes, limit: budget.fileBytes })
+  // Audio clips and fonts are judged by their own budgets below.
+  if (s.glyphs !== undefined) {
+    if (s.fileBytes > budget.fontBytes) issues.push({ key: 'fontBytes', value: s.fileBytes, limit: budget.fontBytes })
+  } else if (s.duration === undefined && s.fileBytes > budget.fileBytes) issues.push({ key: 'fileBytes', value: s.fileBytes, limit: budget.fileBytes })
+  if (s.particles !== undefined && s.particles > budget.particles) issues.push({ key: 'particles', value: s.particles, limit: budget.particles })
   if (s.bones > budget.bones) issues.push({ key: 'bones', value: s.bones, limit: budget.bones })
   if (s.duration !== undefined) {
     if (s.fileBytes > budget.audioBytes) issues.push({ key: 'audioBytes', value: s.fileBytes, limit: budget.audioBytes })

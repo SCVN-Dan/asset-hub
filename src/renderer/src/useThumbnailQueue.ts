@@ -7,10 +7,12 @@ import { renderMaterialThumbnail } from './viewer/materialThumb'
 import { renderAudioThumbnail } from './viewer/audio'
 import { renderPrefabThumbnail } from './viewer/prefabThumb'
 import { renderAnimThumbnail } from './viewer/animThumb'
+import { renderFontThumbnail } from './viewer/font'
+import { renderTmpFontThumbnail } from './viewer/tmpFont'
 
-export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab' | 'animation'
+export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab' | 'animation' | 'font' | 'tmpfont'
 
-const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail, animation: renderAnimThumbnail }
+const RENDER = { three: renderThumbnail, material: renderMaterialThumbnail, image: renderImageThumbnail, audio: renderAudioThumbnail, prefab: renderPrefabThumbnail, animation: renderAnimThumbnail, font: renderFontThumbnail, tmpfont: renderTmpFontThumbnail }
 
 const CONCURRENCY = 2
 /** A model whose thumbnail failed is retried after this long (the network may be back). */

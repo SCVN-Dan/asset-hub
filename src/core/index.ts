@@ -4,6 +4,10 @@ import { materialHandler } from './handlers/material'
 import { audioHandler } from './handlers/audio'
 import { prefabHandler } from './handlers/prefab'
 import { animationHandler } from './handlers/animation'
+import { fontHandler } from './handlers/font'
+import { vfxHandler } from './handlers/vfx'
+import { spriteHandler } from './handlers/sprite'
+import { tmpFontHandler } from './handlers/tmpFont'
 import { HandlerRegistry } from './registry'
 
 export * from './types'
@@ -18,17 +22,22 @@ export * from './deps/types'
 export * from './deps/fbx'
 export * from './deps/material'
 export * from './deps/self'
+export * from './deps/tmpFont'
 export * from './deps/prefab'
 export * from './unity/prefabScene'
 export * from './unity/animClip'
+export * from './unity/particles'
+export * from './unity/particleSim'
+export * from './unity/tmpFont'
 export * from './deps/anim'
 export * from './image/psd'
 export * from './audio/header'
+export * from './font/sfnt'
 export * from './search/search'
 
 /** Registry with every built-in asset type. Add new handlers here. */
 export function createDefaultRegistry(): HandlerRegistry {
-  return new HandlerRegistry().register(fbxHandler).register(textureHandler).register(materialHandler).register(audioHandler).register(prefabHandler).register(animationHandler)
+  return new HandlerRegistry().register(fbxHandler).register(textureHandler).register(spriteHandler).register(materialHandler).register(audioHandler).register(prefabHandler).register(vfxHandler).register(animationHandler).register(fontHandler).register(tmpFontHandler)
 }
 export * from './catalog/catalog'
 export * from './checks/playable'

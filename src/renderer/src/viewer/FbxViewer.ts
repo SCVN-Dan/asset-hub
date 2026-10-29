@@ -51,13 +51,15 @@ export class FbxViewer {
   private home = { position: new THREE.Vector3(), target: new THREE.Vector3(), radius: 1 }
   private frame = 0
   private disposed = false
+  /** Called every frame with the seconds since the last one (particle effects). */
+  private readonly updaters = new Set<(dt: number) => void>()
 
   constructor(private readonly host: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     host.appendChild(this.renderer.domElement)
-    this.scene.background = new THREE.Color(0x1e222b)
+    this.scene.background = new THREE.Color(0x121821)
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3f4b, 2.2))
     const sun = new THREE.DirectionalLight(0xffffff, 2.2)
     sun.position.set(3, 5, 4)
@@ -117,21 +119,27 @@ export class FbxViewer {
     if (shape === 'plane') this.setView('front')
   }
 
-  /** Shows a group put together elsewhere (a prefab) like a loaded model. */
-  showGroup(group: THREE.Group): void {
+  /** Shows a group put together elsewhere (a prefab) like a loaded model; `extent` adds space its meshes do not show (where particles fly). */
+  showGroup(group: THREE.Group, extent?: THREE.Box3): void {
     if (this.model) this.scene.remove(this.model)
     this.mixer?.stopAllAction()
     this.mixer = undefined
     this.model = group
     this.scene.add(group)
-    this.frameModel()
+    this.frameModel(extent)
+  }
+
+  /** Runs `fn` every frame until the returned function is called. */
+  addUpdater(fn: (dt: number) => void): () => void {
+    this.updaters.add(fn)
+    return () => this.updaters.delete(fn)
   }
 
   /** Colour, transparency, cutout, emission and gloss from a Unity material, on top of its textures; `only` limits it to one material by name. */
   setLook(look: MaterialLook, only?: string): void {
     this.model?.traverse((obj) => {
       const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
+      if (!mesh.isMesh || mesh.userData.particles) return
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         if (only !== undefined && mat.name !== only) continue
         const m = mat as THREE.MeshPhongMaterial
@@ -178,7 +186,7 @@ export class FbxViewer {
     const jobs: Promise<void>[] = []
     this.model.traverse((obj) => {
       const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
+      if (!mesh.isMesh || mesh.userData.particles) return
       for (const mat of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         const m = mat as THREE.MeshPhongMaterial
         // `exact`: only materials named in the slots (a prefab's materials are named by GUID).
@@ -223,7 +231,7 @@ export class FbxViewer {
     let found = false
     this.model?.traverse((obj) => {
       const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
+      if (!mesh.isMesh || mesh.userData.particles) return
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if ((m as THREE.MeshPhongMaterial).map) found = true
     })
     return found
@@ -237,7 +245,7 @@ export class FbxViewer {
     const bones = new Set<string>()
     this.model?.traverse((obj) => {
       const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
+      if (!mesh.isMesh || mesh.userData.particles) return
       meshes++
       const geo = mesh.geometry
       const pos = geo.getAttribute('position')
@@ -282,7 +290,7 @@ export class FbxViewer {
   setWireframe(on: boolean): void {
     this.model?.traverse((obj) => {
       const mesh = obj as THREE.Mesh
-      if (!mesh.isMesh) return
+      if (!mesh.isMesh || mesh.userData.particles) return
       for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) (m as THREE.MeshPhongMaterial).wireframe = on
     })
   }
@@ -352,9 +360,10 @@ export class FbxViewer {
     this.renderer.domElement.remove()
   }
 
-  private frameModel(): void {
+  private frameModel(extent?: THREE.Box3): void {
     if (!this.model) return
     const box = new THREE.Box3().setFromObject(this.model)
+    if (extent) box.union(extent)
     if (box.isEmpty()) return
     const size = box.getSize(new THREE.Vector3())
     const center = box.getCenter(new THREE.Vector3())
@@ -387,7 +396,10 @@ export class FbxViewer {
   private loop = (): void => {
     if (this.disposed) return
     this.frame = requestAnimationFrame(this.loop)
-    this.mixer?.update(this.clock.getDelta())
+    // A frame after the window was hidden can be seconds long: particles would jump.
+    const dt = Math.min(this.clock.getDelta(), 0.1)
+    this.mixer?.update(dt)
+    this.updaters.forEach((fn) => fn(dt))
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }

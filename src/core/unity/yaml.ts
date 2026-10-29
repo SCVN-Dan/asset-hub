@@ -105,6 +105,8 @@ export interface MaterialLook {
   /** 0–1 (_Smoothness in URP, _Glossiness in built-in). */
   smoothness?: number
   metallic?: number
+  /** How a transparent surface mixes with what is behind it, when the material says (particles mostly). */
+  blend?: 'alpha' | 'premultiply' | 'additive' | 'multiply'
 }
 
 /** `- _Prop: value` entries of one m_SavedProperties list (also the Unity 5 `- first: name:` layout). */
@@ -125,6 +127,17 @@ function parseRgba(v: string): Rgba | undefined {
   const n = (k: string) => Number(new RegExp(`\\b${k}: (-?[\\d.eE+-]+)`).exec(v)?.[1])
   const c = { r: n('r'), g: n('g'), b: n('b'), a: n('a') }
   return Object.values(c).every(Number.isFinite) ? c : undefined
+}
+
+const BLEND_MODES = ['alpha', 'premultiply', 'additive', 'multiply'] as const
+
+/** URP's _Blend (0 alpha, 1 premultiply, 2 additive, 3 multiply), else the raw blend factors (_DstBlend One = additive). */
+function blendOf(floats: Record<string, number>): MaterialLook['blend'] {
+  if (floats._Blend !== undefined && (floats._Surface === 1 || floats._DstBlend !== undefined)) return BLEND_MODES[floats._Blend]
+  if (floats._DstBlend === 1) return 'additive'
+  if (floats._SrcBlend === 2 && floats._DstBlend === 0) return 'multiply'
+  if (floats._DstBlend === 10) return floats._SrcBlend === 1 ? 'premultiply' : 'alpha'
+  return undefined
 }
 
 export function parseMaterialLook(matText: string): MaterialLook {
@@ -150,7 +163,8 @@ export function parseMaterialLook(matText: string): MaterialLook {
     surface,
     cutoff: surface === 'cutout' ? floats._Cutoff : undefined,
     smoothness: floats._Smoothness ?? floats._Glossiness,
-    metallic: floats._Metallic
+    metallic: floats._Metallic,
+    ...(blendOf(floats) ? { blend: blendOf(floats) } : {})
   }
 }
 

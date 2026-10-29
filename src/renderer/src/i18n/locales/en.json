@@ -11,7 +11,11 @@
     "material": "Material",
     "audio": "Audio",
     "prefab": "Prefab",
-    "animation": "Animation"
+    "vfx": "VFX",
+    "animation": "Animation",
+    "font": "Font",
+    "sprite": "Sprite",
+    "tmpFont": "TextMeshPro font"
   },
   "preview": {
     "notYet": "3D preview arrives in a later phase.",
@@ -98,6 +102,7 @@
     "openGitHub": "Open on GitHub"
   },
   "settings": {
+    "exportLayoutHelp": "Used by every Export button. Unity keeps an asset it already has (same GUID) where it is.",
     "title": "Settings",
     "account": "Account",
     "signedInAs": "Signed in as {{login}}",
@@ -156,7 +161,7 @@
   "prefabView": {
     "loading": "Putting the prefab together…",
     "ui": "UI prefab — no 3D preview. Its sprites are listed below.",
-    "particles": "Particle effect — not previewed yet.",
+    "particles": "Particle effect: its particle textures are shown; moving particles come later.",
     "empty": "Nothing to show in 3D (no meshes found).",
     "missing_one": "{{count}} mesh not found",
     "missing_other": "{{count}} meshes not found"
@@ -183,6 +188,7 @@
     "preset": "Playable budget",
     "presetHint": "What ✓ / ⚠, the budget filter and \"Best for playables\" judge assets by.",
     "presets": {
+      "off": "Off — not for playables",
       "standard": "5 MB networks (Google, AppLovin, Unity…)",
       "tight": "2 MB networks (Meta)",
       "custom": "Custom"
@@ -194,8 +200,12 @@
       "fileBytes": "Model file",
       "bones": "Bones",
       "audioBytes": "Audio clip (built)",
-      "audioSeconds": "Audio length"
-    }
+      "audioSeconds": "Audio length",
+      "fontBytes": "Font file",
+      "particles": "Particles (one effect)"
+    },
+    "fontBytes": "Font file is {{value}} — above {{limit}} for a playable.",
+    "particles": "About {{value}} particles at once — above {{limit}} for one effect in a playable."
   },
   "deps": {
     "needsRepo": "Dependencies need a GitHub repository.",
@@ -225,7 +235,7 @@
       "noMaterials": "Material import is turned off for this FBX.",
       "missingModel": "Some models or prefabs it uses are not in the repository.",
       "customScript": "Uses custom scripts: they are exported too, but may need other scripts or packages to compile.",
-      "particles": "Has particle systems: not shown in the preview yet.",
+      "particles": "Has particle systems: numbers and costs are under Particles; moving particles are not previewed yet.",
       "uiPrefab": "A UI prefab: its images are listed, but it cannot be previewed in 3D."
     },
     "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
@@ -235,22 +245,26 @@
     "script": "custom script"
   },
   "export": {
+    "chest": "Chest",
+    "room": "Room for {{size}} more",
+    "tooHeavy": "Too heavy by {{size}}",
     "title": "Export",
     "exportOne": "Export .unitypackage",
-    "addToPack": "Add to pack",
-    "inPack": "In pack ✓",
-    "pack_one": "Pack: {{count}} model",
-    "pack_other": "Pack: {{count}} models",
+    "addToPack": "Add to chest",
+    "inPack": "In chest ✓",
+    "pack_one": "Chest: {{count}} model",
+    "pack_other": "Chest: {{count}} models",
     "summary": "{{files}} files · ~{{size}}",
     "resolving": "resolving…",
     "missing_one": "{{count}} missing",
     "missing_other": "{{count}} missing",
     "byName_one": "{{count}} texture by name",
     "byName_other": "{{count}} textures by name",
-    "remove": "Remove {{name}} from the pack",
+    "remove": "Remove {{name}} from the chest",
     "layout": "Paths in Unity",
     "layoutSource": "Same as source project",
     "layoutGrouped": "Under Assets/AssetHub/<repo>/",
+    "layoutByType": "By type: Assets/AssetHub/Prefabs, Models, Textures…",
     "skipByName": "Leave out textures matched by name",
     "clear": "Clear",
     "export_one": "Export .unitypackage",
@@ -349,7 +363,10 @@
     "tris": "{{n}} tris",
     "bones": "{{count}} bones",
     "textures_one": "{{count}} texture",
-    "textures_other": "{{count}} textures"
+    "textures_other": "{{count}} textures",
+    "glyphs_one": "{{count}} glyph",
+    "glyphs_other": "{{count}} glyphs",
+    "particles": "{{n}} particles"
   },
   "texture": {
     "title": "Texture",
@@ -511,5 +528,138 @@
     "button": "Download",
     "saving": "Saving…",
     "saved": "Saved {{name}} ({{size}})."
+  },
+  "font": {
+    "title": "Font",
+    "sample": "The quick brown fox · Tiếng Việt có dấu · 0123456789",
+    "sampleLabel": "Sample text",
+    "size": "Size",
+    "glyphs": "Characters in the font",
+    "moreGlyphs": "…and {{count}} more characters",
+    "cannotRead": "Cannot read this font: {{message}}",
+    "missingChar": "“{{char}}” is not in this font",
+    "family": "Family",
+    "style": "Style",
+    "glyphCount": "Glyphs",
+    "file": "File",
+    "mode": "Characters (Unity)",
+    "fallbacks": "Fallback fonts",
+    "modes": {
+      "dynamic": "Dynamic",
+      "unicode": "Unicode",
+      "ascii": "ASCII default set",
+      "asciiUpper": "ASCII upper case",
+      "asciiLower": "ASCII lower case",
+      "custom": "Custom set"
+    },
+    "scripts": {
+      "latin": "Latin",
+      "vietnamese": "Vietnamese",
+      "korean": "Korean",
+      "japanese": "Japanese kana",
+      "chinese": "Chinese (CJK)",
+      "cyrillic": "Cyrillic",
+      "thai": "Thai"
+    },
+    "collection": "Font collection: the first of {{count}} fonts is shown.",
+    "warn": {
+      "subset": "Make a subset with only the characters the playable shows (e.g. with TextMeshPro or pyftsubset).",
+      "vietnamese": "Missing Vietnamese letters: {{chars}}",
+      "baked": "Unity bakes a fixed character set into a texture: characters outside it will not show."
+    }
+  },
+  "particles": {
+    "title": "Particles",
+    "emitters": "Emitters",
+    "peak": "Particles at once",
+    "length": "Length",
+    "loops": "Loops",
+    "hidden": "no renderer",
+    "estimate": "Estimated from the settings (rate × lifetime + bursts), at the upper ends of random ranges.",
+    "modes": {
+      "billboard": "Billboard",
+      "stretched": "Stretched",
+      "horizontal": "Horizontal",
+      "vertical": "Vertical",
+      "mesh": "Mesh",
+      "none": "No renderer"
+    },
+    "modules": {
+      "noise": "Noise",
+      "collision": "Collision",
+      "trails": "Trails",
+      "lights": "Lights",
+      "subEmitters": "Sub emitters",
+      "textureSheet": "Texture sheet",
+      "velocity": "Velocity",
+      "force": "Force",
+      "externalForces": "External forces"
+    },
+    "warn": {
+      "collision_one": "{{count}} emitter collides with the world: costly on mobile; use planes or turn it off.",
+      "collision_other": "{{count}} emitters collide with the world: costly on mobile; use planes or turn it off.",
+      "lights_one": "{{count}} emitter adds real lights: very costly in a playable.",
+      "lights_other": "{{count}} emitters add real lights: very costly in a playable.",
+      "noise_one": "{{count}} emitter uses Noise: computed for every particle each frame.",
+      "noise_other": "{{count}} emitters use Noise: computed for every particle each frame.",
+      "trails_one": "{{count}} emitter draws trails: extra geometry per particle.",
+      "trails_other": "{{count}} emitters draw trails: extra geometry per particle.",
+      "meshes_one": "{{count}} emitter draws many mesh particles: each one is a mesh.",
+      "meshes_other": "{{count}} emitters draw many mesh particles: each one is a mesh.",
+      "prewarm_one": "{{count}} emitter is prewarmed: a whole cycle is simulated when it starts.",
+      "prewarm_other": "{{count}} emitters are prewarmed: a whole cycle is simulated when they start.",
+      "maxDefault_one": "{{count}} emitter keeps Max Particles at 1000: set it near its real peak.",
+      "maxDefault_other": "{{count}} emitters keep Max Particles at 1000: set them near their real peak."
+    }
+  },
+  "scan": {
+    "starting": "Looking for {{what}} in this branch…",
+    "reading": "Looking for {{what}}… {{done}} / {{total}} (read once, then instant)",
+    "failed": "Could not read every file: only {{what}} already known are listed. Open the tab again to retry.",
+    "what": {
+      "effects": "particle systems in prefabs",
+      "sprites": "sprites in texture settings",
+      "tmpFonts": "TextMeshPro font assets"
+    }
+  },
+  "tmpFont": {
+    "title": "TextMeshPro font",
+    "atlas": "Font atlas",
+    "noAtlas": "The atlas texture is not stored in this asset.",
+    "characters": "Characters",
+    "atlasSize": "Atlas",
+    "pointSize": "Point size",
+    "mode": "Atlas",
+    "dynamic": "Dynamic",
+    "static": "Static",
+    "built": "In a build",
+    "warn": {
+      "dynamic": "Dynamic: glyphs are added at run time from the source font, which ships in the build too. Make it static for a playable."
+    }
+  },
+  "target": {
+    "setting": "Target Unity project",
+    "settingHelp": "Exports are compared with this project (only read, never changed): files it already has are left out, and you see what Unity would overwrite or rename.",
+    "none": "None — packages are not compared",
+    "clear": "Clear",
+    "notProject": "That folder is not a Unity project (it needs Assets and ProjectSettings).",
+    "reuse": "Use files {{project}} already has",
+    "reuseHint": "An identical file under another GUID is left out; materials and prefabs point at the project’s copy instead of adding a duplicate.",
+    "title": "Compared with {{project}}:",
+    "clean": "Nothing in {{project}} conflicts with this package.",
+    "same_one": "{{count}} file already there (left out)",
+    "same_other": "{{count}} files already there (left out)",
+    "reused_one": "{{count}} file reused from the project instead of a duplicate: {{list}}",
+    "reused_other": "{{count}} files reused from the project instead of duplicates: {{list}}",
+    "overwrite_one": "⚠ {{count}} file will replace a different version in the project: {{list}}",
+    "overwrite_other": "⚠ {{count}} files will replace different versions in the project: {{list}}",
+    "renamed_one": "⚠ {{count}} file lands on a path taken by another asset (Unity adds \" 1\"): {{list}}",
+    "renamed_other": "⚠ {{count}} files land on paths taken by other assets (Unity adds \" 1\"): {{list}}",
+    "urp": "⚠ URP {{source}} in the source, {{target}} in the project: check materials after import.",
+    "noUrp": "⚠ The source uses URP {{source}}; the project has no URP: materials may show pink."
+  },
+  "link": {
+    "copy": "Copy link",
+    "hint": "An assethub:// link: a teammate who opens it (or pastes it in the search box) lands on this asset."
   }
 }

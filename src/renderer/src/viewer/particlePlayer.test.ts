@@ -1,0 +1,80 @@
+import { describe, expect, it } from 'vitest'
+import * as THREE from 'three'
+import type { ParticleEmitter, ParticleSim } from '@core/index'
+import { EffectPlayer, EmitterPlayer } from './particlePlayer'
+
+const k = (scalar: number) => ({ mode: 0 as const, scalar, min: scalar })
+const white = { mode: 0 as const, max: [1, 1, 1, 1] as [number, number, number, number], min: [1, 1, 1, 1] as [number, number, number, number] }
+
+function sim(over: Partial<ParticleSim>): ParticleSim {
+  return {
+    duration: 1,
+    looping: false,
+    prewarm: false,
+    worldSpace: false,
+    simulationSpeed: 1,
+    startDelay: k(0),
+    startLifetime: k(0.1),
+    startSpeed: k(2),
+    startSize: k(1),
+    startRotation: k(0),
+    startColor: white,
+    gravity: k(0),
+    maxParticles: 100,
+    rate: k(0),
+    bursts: [],
+    lengthScale: 2,
+    velocityScale: 0,
+    maxScreenSize: 0.5,
+    ...over
+  }
+}
+
+const emitter = (id: string, s: ParticleSim): ParticleEmitter => ({
+  id,
+  name: id,
+  duration: s.duration,
+  looping: s.looping,
+  prewarm: false,
+  lifetime: 0.1,
+  speed: 2,
+  size: 1,
+  maxParticles: 100,
+  rate: 0,
+  bursts: 5,
+  peak: 5,
+  renderMode: 'billboard',
+  modules: [],
+  subEmitters: 0,
+  sim: s
+})
+
+describe('particle player', () => {
+  it('emits bursts, starts death sub emitters where particles die, and draws trails', () => {
+    const root = new THREE.Group()
+    const parent = new EmitterPlayer(
+      emitter('1', sim({ bursts: [{ time: 0, count: k(5), cycles: 1, interval: 0.01, probability: 1 }], subEmitters: [{ id: '2', type: 'death', inherit: 1, probability: 1 }], trail: { ratio: 1, lifetime: k(1), minVertexDistance: 0, sizeAffectsWidth: false, inheritParticleColor: false, width: k(0.1), colorOverLifetime: white, colorOverTrail: white } })),
+      { blend: 'additive', tint: [1, 1, 1, 1] }
+    )
+    const child = new EmitterPlayer(emitter('2', sim({ startLifetime: k(1), bursts: [{ time: 0, count: k(3), cycles: 1, interval: 0.01, probability: 1 }] })), { blend: 'alpha', tint: [1, 1, 1, 1] })
+    root.add(parent.mesh, child.mesh)
+    child.isSub = true
+    child.restart()
+    parent.subs.push({ player: child, type: 'death', inherit: 1, probability: 1 })
+    const effect = new EffectPlayer([parent, child])
+
+    effect.update(1 / 30)
+    expect(parent.alive).toBe(5)
+    // A sub emitter waits for its parent: it emits nothing on its own.
+    expect(child.alive).toBe(0)
+    // Particles live 0.1 s (3 frames): the trail is checked while they are still alive.
+    effect.update(1 / 30)
+    const trail = parent.mesh.children[1] as THREE.Mesh
+    expect((trail.geometry as THREE.InstancedBufferGeometry).instanceCount).toBeGreaterThan(0)
+    for (let i = 0; i < 4; i++) effect.update(1 / 30)
+    // 5 particles died: 3 particles each from the sub emitter.
+    expect(parent.alive).toBe(0)
+    expect(child.alive).toBe(15)
+    expect(effect.emitters.every((e) => e.finished)).toBe(false)
+  })
+})

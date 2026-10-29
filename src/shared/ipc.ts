@@ -1,4 +1,4 @@
-import type { CatalogAsset, CatalogLocation, DependencyReport, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { CatalogAsset, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
 
@@ -6,6 +6,9 @@ export const IPC = {
   getSettings: 'settings:get',
   setSettings: 'settings:set',
   chooseFolder: 'dialog:choose-folder',
+  isUnityProject: 'fs:is-unity-project',
+  deepLink: 'app:deep-link',
+  takeDeepLink: 'app:take-deep-link',
   authStatus: 'auth:status',
   signInWithToken: 'auth:sign-in-token',
   signInWithGh: 'auth:sign-in-gh',
@@ -25,6 +28,8 @@ export const IPC = {
   indexProgress: 'assets:index-progress',
   findPrefabMaterials: 'assets:find-prefab-materials',
   prefabProgress: 'assets:prefab-progress',
+  knownAssets: 'assets:known-assets',
+  knownProgress: 'assets:known-progress',
   getThumbs: 'thumbs:get',
   saveThumb: 'thumbs:save',
   getStats: 'stats:get',
@@ -53,7 +58,7 @@ export interface ExportRequest {
   root: string
   /** Repo paths of the models to export; their dependencies are added automatically. */
   paths: string[]
-  layout: 'source' | 'grouped'
+  layout: 'source' | 'grouped' | 'byType'
   /** Leave out textures that were only matched by file name. */
   skipByName: boolean
   /** More repo paths to include, e.g. materials found on prefabs (with .meta). */
@@ -62,6 +67,25 @@ export interface ExportRequest {
   previews: Record<string, Uint8Array>
   /** Default file name in the save dialog. */
   suggestedName: string
+  /** Unity project the package is meant for (read only): files it already has are left out or reported. */
+  targetProject?: string
+  /** Leave out files the project has under another GUID, pointing references at its copy. */
+  reuseExisting?: boolean
+}
+
+/** What the package does to the target project. Paths of the project are "Assets/…". */
+export interface TargetReport {
+  project: string
+  /** Already there with the same GUID and content: left out. */
+  same: number
+  /** Same content under another GUID: left out, references point at the project's file. */
+  reused: Array<{ path: string; existing: string }>
+  /** Same GUID, other content: Unity will replace the project's file. */
+  overwrite: Array<{ path: string; existing: string }>
+  /** Path taken by another asset: Unity will import it as "Name 1". */
+  renamed: Array<{ path: string; existing: string }>
+  /** URP versions of the source and target projects, when they differ. */
+  urp?: { source: string; target?: string }
 }
 
 export interface ExportResult {
@@ -70,6 +94,7 @@ export interface ExportResult {
   assets?: number
   bytes?: number
   skipped?: Array<{ path: string; reason: 'noMeta' | 'noGuid' | 'duplicateGuid' }>
+  target?: TargetReport
 }
 
 export type ExportProgress = { stage: 'resolve' | 'download' | 'write'; done: number; total: number }
@@ -111,6 +136,12 @@ export interface AssetHubApi {
   setSettings(patch: Partial<Settings>): Promise<Settings>
   /** Opens a folder picker; resolves to null when cancelled. */
   chooseFolder(): Promise<string | null>
+  /** The folder has Assets and ProjectSettings (read only). */
+  isUnityProject(path: string): Promise<boolean>
+  /** An assethub:// link that opened the app, if any (asked once the UI can open it). */
+  takeDeepLink(): Promise<string | null>
+  /** A link arrived while the app runs: take it with takeDeepLink. */
+  onDeepLink(listener: () => void): () => void
   /** Opens an https URL in the system browser. */
   openExternal(url: string): Promise<void>
   auth: {
@@ -152,6 +183,10 @@ export interface AssetHubApi {
     saveFile(repo: string, branch: string, path: string): Promise<IpcResult<{ canceled: boolean; path?: string; bytes?: number }>>
     /** Bytes read so far by findPrefabMaterials. */
     onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
+    /** Blob SHAs of the branch's assets of a kind known by reading them (effects, sprites, TextMeshPro fonts); reads files not seen before. */
+    knownAssets(repo: string, branch: string, kind: FactKind): Promise<IpcResult<string[]>>
+    /** Bytes read so far by knownAssets, with what was just found. */
+    onKnownProgress(listener: (kind: FactKind, progress: { done: number; total: number; found?: string[] }) => void): () => void
   }
   catalog: {
     /** Indexes every branch of `repo`, or of every repo when it is omitted; returns at once and runs in the background. */

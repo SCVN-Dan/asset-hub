@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type AssetTypeHandler } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import { StatsLine } from './CatalogPanel'
-import { AnimIcon, AudioIcon, CubeIcon, ImageIcon, SphereIcon } from './Icons'
+import { AnimIcon, FontIcon, AudioIcon, CubeIcon, ImageIcon, SphereIcon } from './Icons'
+import { WeightBar } from './WeightBar'
 
 interface Props {
   asset: Asset
@@ -50,8 +51,12 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       title={asset.path}
     >
       <span className="asset-thumb">
-        {thumb ? <img className="asset-img" src={thumb} alt="" loading="lazy" /> : handler?.preview.kind === 'image' ? <ImageIcon size={52} /> : handler?.preview.kind === 'material' ? <SphereIcon size={52} /> : handler?.preview.kind === 'audio' ? <AudioIcon size={52} /> : handler?.preview.kind === 'animation' ? <AnimIcon size={52} /> : <CubeIcon size={56} />}
-        {handler && <span className="type-badge">{handler.badge}</span>}
+        {thumb ? <img className="asset-img" src={thumb} alt="" loading="lazy" /> : handler?.preview.kind === 'image' ? <ImageIcon size={52} /> : handler?.preview.kind === 'material' ? <SphereIcon size={52} /> : handler?.preview.kind === 'audio' ? <AudioIcon size={52} /> : handler?.preview.kind === 'animation' ? <AnimIcon size={52} /> : handler?.preview.kind === 'font' || handler?.preview.kind === 'tmpfont' ? <FontIcon size={52} /> : <CubeIcon size={56} />}
+        {handler && (
+          <span className="type-badge" style={{ '--type': `var(--type-${handler.id})` } as CSSProperties}>
+            {handler.badge}
+          </span>
+        )}
         {/* A model holding animation clips. */}
         {handler?.preview.kind === 'three' && stats && stats.clips > 0 ? (
           <span className="clips-badge" title={stats.clipNames?.join(', ')}>
@@ -63,6 +68,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       </span>
       <span className="asset-meta">
         <span className="asset-name">{asset.name}</span>
+        {stats && <WeightBar stats={stats} />}
         <span className="asset-sub">
           <span>{formatBytes(asset.size)}</span>
           {asset.lfs && <span className="badge">LFS</span>}

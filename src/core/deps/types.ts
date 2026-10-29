@@ -1,3 +1,4 @@
+import type { ParticleEmitter } from '../unity/particles'
 export type ShaderKind = 'builtin' | 'package' | 'project'
 
 export interface ShaderRef {
@@ -107,4 +108,6 @@ export interface DependencyReport {
   rigs?: string[]
   /** Prefabs: GUID → repo path of everything found, so a preview can put the prefab together. */
   guidPaths?: Record<string, string>
+  /** Prefabs: their particle systems, nested prefabs' included (`prefab` names the nested one). */
+  particles?: Array<ParticleEmitter & { prefab?: string }>
 }

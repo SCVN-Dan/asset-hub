@@ -1,10 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IPC, type AssetHubApi } from '@shared/ipc'
+import type { FactKind } from '@core/index'
 
 const api: AssetHubApi = {
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   chooseFolder: () => ipcRenderer.invoke(IPC.chooseFolder),
+  isUnityProject: (path) => ipcRenderer.invoke(IPC.isUnityProject, path),
+  takeDeepLink: () => ipcRenderer.invoke(IPC.takeDeepLink),
+  onDeepLink: (listener) => {
+    const handler = () => listener()
+    ipcRenderer.on(IPC.deepLink, handler)
+    return () => ipcRenderer.removeListener(IPC.deepLink, handler)
+  },
   openExternal: (url) => ipcRenderer.invoke(IPC.openExternal, url),
   auth: {
     status: () => ipcRenderer.invoke(IPC.authStatus),
@@ -48,6 +56,12 @@ const api: AssetHubApi = {
       const handler = (_event: Electron.IpcRendererEvent, progress: { done: number; total: number }) => listener(progress)
       ipcRenderer.on(IPC.prefabProgress, handler)
       return () => ipcRenderer.removeListener(IPC.prefabProgress, handler)
+    },
+    knownAssets: (repo, branch, kind) => ipcRenderer.invoke(IPC.knownAssets, repo, branch, kind),
+    onKnownProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, kind: FactKind, progress: { done: number; total: number; found?: string[] }) => listener(kind, progress)
+      ipcRenderer.on(IPC.knownProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.knownProgress, handler)
     }
   },
   catalog: {

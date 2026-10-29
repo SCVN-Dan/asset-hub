@@ -1,0 +1,629 @@
+{
+  "common": {
+    "language": "언어",
+    "back": "뒤로",
+    "settings": "설정"
+  },
+  "assetTypes": {
+    "all": "전체",
+    "fbx": "FBX",
+    "texture": "텍스처",
+    "material": "머티리얼",
+    "audio": "오디오",
+    "prefab": "프리팹",
+    "vfx": "VFX",
+    "animation": "애니메이션",
+    "font": "폰트",
+    "sprite": "스프라이트",
+    "tmpFont": "TextMeshPro 폰트"
+  },
+  "preview": {
+    "notYet": "3D 미리보기는 이후 단계에서 제공됩니다.",
+    "renderer": "앱에서 렌더링됨."
+  },
+  "signin": {
+    "tagline": "GitHub 브랜치에서 FBX와 의존 파일 가져오기",
+    "title": "GitHub에 로그인",
+    "desc": "앱은 저장소 콘텐츠 읽기 권한만 필요합니다. 토큰은 시스템 키체인으로 암호화됩니다.",
+    "ghCliSub": "GitHub CLI(gh)를 사용합니다. gh가 로그아웃 상태라면 일회용 코드로 브라우저에서 승인합니다.",
+    "checking": "확인 중…",
+    "or": "또는",
+    "patLabel": "Fine-grained Personal Access Token",
+    "patScope": "필요한 권한: Contents · Read-only",
+    "use": "사용",
+    "github": "GitHub로 로그인",
+    "sso": "조직이 SAML SSO를 사용하나요? GitHub가 요청하면 해당 조직에 대해 토큰을 승인하세요.",
+    "demo": "샘플 데이터로 계속",
+    "ghCodeHint": "gh 로그인을 위해 GitHub에 이 코드를 입력하세요:",
+    "ghCopied": "코드가 클립보드에 복사되었습니다 — GitHub에 붙여넣으세요.",
+    "ghWaiting": "브라우저에서 승인을 기다리는 중…",
+    "cancel": "취소",
+    "ghOpen": "GitHub 열기",
+    "step1": "“GitHub 열기”를 클릭하세요. 가능하면 이미 GitHub에 로그인된 브라우저를 사용하세요.",
+    "step2": "코드를 붙여넣고(⌘V / Ctrl+V) Continue를 클릭한 다음 Authorize를 클릭하세요.",
+    "step3": "GitHub에서 인증 코드 이메일이 오면 메일을 열어 GitHub에 코드를 입력하세요. 브라우저당 한 번만 필요합니다.",
+    "step4": "여기로 돌아오세요 — 앱이 자동으로 계속 진행합니다. 터미널이나 SSH 키는 필요 없습니다.",
+    "ghMissingTitle": "이 컴퓨터에 GitHub CLI가 설치되어 있지 않습니다",
+    "ghMissingBody": "Asset Hub가 공식 GitHub CLI(약 15 MB)를 자체 폴더에 다운로드할 수 있습니다. 관리자 권한이나 터미널이 필요 없습니다.",
+    "installGh": "자동 설치",
+    "installing": "GitHub CLI 설치 중…",
+    "installStage": {
+      "start": "GitHub에 연결 중…",
+      "download": "다운로드 중…",
+      "verify": "다운로드 확인 중…",
+      "extract": "압축 해제 중…"
+    }
+  },
+  "browse": {
+    "demoBanner": "샘플 데이터 — GitHub에 연결되지 않음.",
+    "repo": "저장소",
+    "branch": "브랜치",
+    "project": "프로젝트",
+    "refresh": "브랜치 새로고침",
+    "loadingRepos": "저장소 불러오는 중…",
+    "search": "에셋 검색",
+    "searchPlaceholder": "이름 또는 키워드 검색 (fish, tree…)",
+    "folders": "폴더",
+    "allFolders": "모든 폴더",
+    "assetCount_other": "에셋 {{count}}개",
+    "hidden_other": "제외된 폴더({{folders}})에 숨겨진 에셋 {{count}}개.",
+    "loading": "브랜치 불러오는 중…",
+    "noRepos": "이 계정으로 볼 수 있는 저장소가 없습니다.",
+    "noResults": "이 폴더와 검색어에 맞는 에셋이 없습니다.",
+    "types": "에셋 유형",
+    "branchNoPrefix": "브랜치",
+    "defaultBranch": "기본",
+    "loadingBranches": "브랜치 불러오는 중…",
+    "mergeCopies": "동일한 파일 합치기",
+    "merged_other": "동일한 사본 {{count}}개 합침",
+    "copiesTitle": "이 프로젝트에 동일한 사본 {{count}}개",
+    "generatingThumb": "썸네일 렌더링 중…",
+    "loaded": "{{done}}/{{total}} 로드됨",
+    "loadedHint": "썸네일 준비 완료. 화면에 보이는 카드부터 먼저 로드하고, 나머지는 백그라운드에서 로드합니다."
+  },
+  "details": {
+    "label": "에셋 세부 정보",
+    "empty": "에셋을 선택하면 세부 정보가 표시됩니다.",
+    "path": "경로",
+    "size": "크기",
+    "storage": "저장 방식",
+    "lfs": "Git LFS",
+    "git": "Git",
+    "sha": "Blob SHA",
+    "type": "유형",
+    "deps": "의존성",
+    "copyPath": "경로 복사",
+    "copied": "복사됨",
+    "copies_other": "동일한 파일이 {{count}}곳에 있음",
+    "openGitHub": "GitHub에서 열기"
+  },
+  "settings": {
+    "exportLayoutHelp": "모든 내보내기 버튼에 적용됩니다. 프로젝트에 이미 있는 에셋(같은 GUID)은 Unity가 원래 위치에 둡니다.",
+    "title": "설정",
+    "account": "계정",
+    "signedInAs": "{{login}}(으)로 로그인됨",
+    "method": {
+      "gh": "gh CLI 사용",
+      "pat": "액세스 토큰 사용"
+    },
+    "notPersisted": "시스템 키체인을 사용할 수 없어 다음에 다시 로그인해야 합니다.",
+    "demoMode": "샘플 데이터 사용 중.",
+    "signOut": "로그아웃",
+    "signIn": "로그인",
+    "languageHelp": "앱 전체에 적용됩니다.",
+    "excluded": "제외 폴더",
+    "excludedHelp": "모든 깊이에서 숨길 폴더 이름을 쉼표로 구분해 입력하세요 (예: 서드파티 팩).",
+    "cacheDir": "캐시 폴더",
+    "cacheDirHelp": "브랜치 목록, 다운로드한 파일, 썸네일이 여기에 저장됩니다.",
+    "choose": "선택…"
+  },
+  "errors": {
+    "unauthorized": "GitHub가 토큰을 거부했습니다. 토큰이 유효하고 만료되지 않았는지 확인하세요.",
+    "sso": "이 조직은 SAML SSO를 사용합니다. 토큰을 승인한 후 다시 시도하세요.",
+    "forbidden": "토큰에 이 작업 권한이 없습니다. Contents: Read-only 권한이 필요합니다.",
+    "notFound": "찾을 수 없거나 이 계정에 접근 권한이 없습니다.",
+    "rateLimited": "GitHub 요청 한도에 도달했습니다. {{time}} 이후에 다시 시도하세요.",
+    "network": "GitHub에 연결할 수 없습니다. 네트워크 또는 VPN을 확인하세요.",
+    "truncated": "저장소가 너무 커서 API로 목록을 가져올 수 없습니다.",
+    "ghNotFound": "GitHub CLI(gh)가 설치되어 있지 않습니다.",
+    "ghNotLoggedIn": "gh에 로그인되어 있지 않습니다. 먼저 gh auth login을 실행하세요.",
+    "emptyToken": "먼저 토큰을 입력하세요.",
+    "unknown": "문제가 발생했습니다.",
+    "openSso": "SSO 승인 열기",
+    "ghInstallFailed": "GitHub CLI를 자동으로 설치하지 못했습니다. 네트워크를 확인하거나 아래에서 토큰으로 로그인하세요."
+  },
+  "picker": {
+    "search": "{{label}} 검색…",
+    "noMatch": "일치하는 항목이 없습니다."
+  },
+  "viewer": {
+    "loading": "모델 불러오는 중…",
+    "error": "이 모델을 표시할 수 없습니다: {{message}}",
+    "tools": "보기 컨트롤",
+    "view": {
+      "front": "정면",
+      "side": "측면",
+      "top": "위",
+      "reset": "초기화"
+    },
+    "autoRotate": "자동 회전",
+    "wireframe": "와이어프레임",
+    "animation": "애니메이션",
+    "noAnimation_other": "애니메이션 클립 {{count}}개 — 선택해서 재생",
+    "hint": "드래그로 회전 · 스크롤로 확대/축소 · 우클릭 드래그로 이동",
+    "needsRepo": "미리보기는 GitHub 저장소가 필요합니다 (샘플 데이터 불가)."
+  },
+  "prefabView": {
+    "loading": "프리팹 구성 중…",
+    "ui": "UI 프리팹 — 3D 미리보기 없음. 스프라이트는 아래에 나열됩니다.",
+    "particles": "파티클 이펙트: 파티클 텍스처를 표시합니다. 움직이는 미리보기는 추후 지원됩니다.",
+    "empty": "3D로 표시할 것이 없습니다 (메시 없음).",
+    "missing_other": "메시 {{count}}개를 찾을 수 없음"
+  },
+  "stats": {
+    "title": "통계",
+    "triangles": "삼각형",
+    "vertices": "버텍스",
+    "meshes": "메시",
+    "materials": "머티리얼",
+    "bones": "본",
+    "clips": "애니메이션",
+    "file": "FBX 크기",
+    "textures": "텍스처"
+  },
+  "budget": {
+    "triangles": "삼각형 {{value}}개 — 플레이어블 예산 {{limit}}개 초과.",
+    "textureSize": "텍스처가 {{value}} px — 플레이어블 기준 {{limit}} px 초과.",
+    "textureBytes": "텍스처 합계 {{value}} — {{limit}} 초과.",
+    "fileBytes": "FBX가 {{value}} — {{limit}} 초과.",
+    "bones": "본 {{value}}개 — {{limit}}개 초과.",
+    "audioBytes": "빌드 시 약 {{value}} — 플레이어블 클립 하나 기준 {{limit}} 초과.",
+    "audioLength": "길이 {{value}}초 — 플레이어블 기준 {{limit}}초 초과.",
+    "preset": "플레이어블 예산",
+    "presetHint": "✓ / ⚠, 예산 필터, \"플레이어블에 최적\" 정렬의 판단 기준입니다.",
+    "presets": {
+      "off": "끄기 — 플레이어블 검사 안 함",
+      "standard": "5 MB 네트워크 (Google, AppLovin, Unity…)",
+      "tight": "2 MB 네트워크 (Meta)",
+      "custom": "사용자 지정"
+    },
+    "limits": {
+      "triangles": "삼각형",
+      "textureSize": "텍스처 크기",
+      "textureBytes": "텍스처 (에셋 하나)",
+      "fileBytes": "모델 파일",
+      "bones": "본",
+      "audioBytes": "오디오 클립 (빌드)",
+      "audioSeconds": "오디오 길이",
+      "fontBytes": "폰트 파일",
+      "particles": "파티클 (이펙트 하나)"
+    },
+    "fontBytes": "폰트 파일 {{value}} — 플레이어블 기준 {{limit}} 초과.",
+    "particles": "동시에 약 {{value}}개 — 플레이어블 이펙트 하나 기준 {{limit}}개 초과."
+  },
+  "deps": {
+    "needsRepo": "의존성 확인에는 GitHub 저장소가 필요합니다.",
+    "resolving": "머티리얼과 텍스처 확인 중…",
+    "indexing": "프로젝트 GUID 인덱싱 중 (이 커밋은 처음): {{done}} / {{total}}",
+    "missing": "저장소에 없음",
+    "byName": "이름으로 매칭",
+    "embedded": "FBX 내부에 지정된 텍스처",
+    "files_other": "가져오기 시 파일 {{count}}개가 복사됩니다 (.meta 포함).",
+    "kind": {
+      "A": "별도 머티리얼",
+      "B": "내장 머티리얼",
+      "none": "머티리얼 없음"
+    },
+    "shader": {
+      "builtin": "내장",
+      "package": "패키지",
+      "project": "커스텀"
+    },
+    "warning": {
+      "missingMaterial": "이 FBX가 참조하는 일부 머티리얼이 저장소에 없습니다.",
+      "missingTexture": "일부 텍스처를 찾을 수 없습니다.",
+      "textureByName": "텍스처가 파일 이름으로 매칭되었습니다 — 올바른지 확인하세요.",
+      "customShader": "프로젝트의 커스텀 셰이더를 사용합니다. 대상 프로젝트에 없을 수 있습니다.",
+      "noMeta": "이 파일에 .meta 파일이 없어 임포트 설정과 GUID를 알 수 없습니다.",
+      "noMaterials": "이 FBX는 머티리얼 임포트가 꺼져 있습니다.",
+      "missingModel": "사용하는 일부 모델 또는 프리팹이 저장소에 없습니다.",
+      "customScript": "커스텀 스크립트를 사용합니다. 함께 내보내지지만 컴파일하려면 다른 스크립트나 패키지가 필요할 수 있습니다.",
+      "particles": "파티클 시스템 포함: 수치와 비용은 파티클 항목에 있습니다. 움직이는 미리보기는 아직 없습니다.",
+      "uiPrefab": "UI 프리팹: 이미지는 나열되지만 3D로 미리볼 수 없습니다."
+    },
+    "suggestedHint": "이 FBX에 연결된 머티리얼이 없습니다. 옆에 있는 .mat 파일들입니다 — 추정이므로 하나를 선택해 미리보고 내보내기에 포함하세요.",
+    "suggestedUse": "사용",
+    "suggestedOn": "사용 중 ✓",
+    "checking": "확인 중…",
+    "script": "커스텀 스크립트"
+  },
+  "export": {
+    "chest": "상자",
+    "room": "{{size}} 더 담을 수 있음",
+    "tooHeavy": "{{size}} 초과",
+    "title": "내보내기",
+    "exportOne": ".unitypackage 내보내기",
+    "addToPack": "상자에 추가",
+    "inPack": "상자에 있음 ✓",
+    "pack_other": "상자: 모델 {{count}}개",
+    "summary": "파일 {{files}}개 · ~{{size}}",
+    "resolving": "확인 중…",
+    "missing_other": "{{count}}개 누락",
+    "byName_other": "이름으로 매칭된 텍스처 {{count}}개",
+    "remove": "상자에서 {{name}} 빼기",
+    "layout": "Unity 내 경로",
+    "layoutSource": "원본 프로젝트와 동일",
+    "layoutGrouped": "Assets/AssetHub/<repo>/ 아래",
+    "layoutByType": "유형별: Assets/AssetHub/Prefabs, Models, Textures…",
+    "skipByName": "이름으로 매칭된 텍스처 제외",
+    "clear": "비우기",
+    "export_other": "모델 {{count}}개를 .unitypackage로 내보내기",
+    "exporting": "내보내는 중…",
+    "choosing": "저장 위치 선택…",
+    "stage": {
+      "resolve": "의존성 확인 중 {{done}} / {{total}}…",
+      "download": "파일 다운로드 중 {{done}} / {{total}}…",
+      "write": "패키지 작성 중…"
+    },
+    "done_other": "에셋 {{count}}개 내보냄 ({{size}}):",
+    "skipped_other": "파일 {{count}}개 제외됨 (.meta 없음 또는 GUID 중복): {{list}}",
+    "showInFolder": "Finder에서 보기",
+    "dismiss": "닫기"
+  },
+  "prefab": {
+    "title": "프리팹의 머티리얼",
+    "hint": "이 FBX는 프리팹에서 머티리얼을 받을 수 있습니다. 이 FBX를 사용하는 프리팹을 찾아보세요.",
+    "search": "프리팹에서 머티리얼 찾기",
+    "scanning": "관련 프리팹 읽는 중…",
+    "scanningAll": "모든 프리팹 읽는 중…",
+    "none_other": "확인한 프리팹 {{count}}개 중 이 FBX를 사용하는 프리팹이 없습니다.",
+    "found_other": "프리팹 {{count}}개에서 사용됨 — 첫 번째 프리팹의 머티리얼이 미리보기에 표시되고, 모두 내보내기에 추가됩니다.",
+    "applied": "미리보기에 {{name}} 사용 중.",
+    "scanAll_other": "프리팹 {{count}}개 더 검사 ({{size}})",
+    "known_other": "이전에 확인한 프리팹 {{count}}개에서 사용됨 ({{names}}).",
+    "load": "머티리얼 불러오기",
+    "loading": "머티리얼 불러오는 중…"
+  },
+  "search": {
+    "related": "관련 이름도 표시: {{names}}",
+    "typos": "비슷한 철자: {{names}}",
+    "includes": "{{names}}…"
+  },
+  "catalog": {
+    "scope": "검색 범위",
+    "scopes": {
+      "branch": "이 브랜치",
+      "repo": "모든 브랜치",
+      "all": "모든 저장소"
+    },
+    "title": {
+      "repo": "{{repo}}의 모든 브랜치",
+      "all": "모든 저장소"
+    },
+    "indexing": "브랜치 인덱싱 중 {{done}}/{{total}}",
+    "paused": "인덱싱 일시정지됨 {{done}}/{{total}}",
+    "pause": "일시정지",
+    "resume": "재개",
+    "retry": "다시 시도",
+    "rateLimited": "GitHub 요청 한도에 도달했습니다 — {{time}}에 인덱싱을 재개합니다.",
+    "failed": "인덱싱 중단됨: {{message}}",
+    "emptyYet": "아직 결과가 없습니다 — 브랜치를 인덱싱하는 중입니다.",
+    "branchCount_other": "브랜치 {{count}}개",
+    "repoCount_other": "저장소 {{count}}개",
+    "openIn": "{{branch}}에서 열기",
+    "more": "+{{count}}개 더",
+    "less": "간단히 보기",
+    "pick": "결과를 선택하면 위치가 표시됩니다.",
+    "open": "{{branch}}에서 열기",
+    "openHint": "해당 브랜치를 열어 모델을 미리보고 내보냅니다.",
+    "locations": "위치",
+    "alsoIn_other": "다른 브랜치 {{count}}개에도 있음",
+    "foldersBranchOnly": "폴더는 한 브랜치에만 적용됩니다.",
+    "filterRepo": "저장소로 필터",
+    "filterBranch": "브랜치로 필터",
+    "allRepos": "모든 저장소 ({{count}})",
+    "allBranches": "모든 브랜치 ({{count}})",
+    "foundIn_other": "브랜치 {{count}}개에 있음"
+  },
+  "ranking": {
+    "sort": "정렬",
+    "sorts": {
+      "relevance": "관련도순",
+      "playable": "플레이어블에 최적",
+      "smallest": "작은 크기순",
+      "triangles": "삼각형 적은순",
+      "used": "많이 사용된 순"
+    },
+    "onlyFits": "플레이어블 예산 이내만",
+    "measured": "{{total}}개 중 {{done}}개 측정됨",
+    "measure_other": "결과 {{count}}개 측정",
+    "fits": "플레이어블 예산 이내",
+    "tris": "{{n}} tris",
+    "bones": "본 {{count}}개",
+    "textures_other": "텍스처 {{count}}개",
+    "glyphs_other": "글리프 {{count}}개",
+    "particles": "파티클 {{n}}"
+  },
+  "texture": {
+    "title": "텍스처",
+    "size": "크기",
+    "file": "파일",
+    "alpha": "알파",
+    "type": "유형",
+    "built": "빌드 크기",
+    "compression": "압축",
+    "mipmaps": "밉맵",
+    "srgb": "sRGB",
+    "yes": "예",
+    "no": "아니요",
+    "fit": "맞춤",
+    "actual": "1:1",
+    "backdrop": {
+      "checker": "체커",
+      "dark": "어둡게",
+      "light": "밝게"
+    },
+    "cannotShow": "이 이미지를 표시할 수 없습니다: {{message}}",
+    "overrides": "플랫폼 오버라이드: {{list}}",
+    "noMeta": ".meta 파일 없음: Unity가 기본 임포트 설정을 사용합니다.",
+    "warn": {
+      "size": "{{size}} px로 임포트됨 — 플레이어블 기준 {{limit}} px 초과.",
+      "uncompressed": "압축되지 않음: 빌드 크기가 큽니다.",
+      "spriteMips": "스프라이트에 밉맵이 켜져 있습니다 — 보통 메모리 낭비입니다.",
+      "bytes": "파일이 {{size}} — 플레이어블 텍스처 기준 {{limit}} 초과."
+    },
+    "types": {
+      "default": "기본",
+      "normal": "노멀 맵",
+      "gui": "에디터 GUI",
+      "cookie": "쿠키",
+      "lightmap": "라이트맵",
+      "cursor": "커서",
+      "sprite": "스프라이트",
+      "single": "단일 채널"
+    },
+    "compressions": {
+      "none": "없음",
+      "normal": "보통",
+      "high": "고품질",
+      "low": "저품질"
+    }
+  },
+  "sprite": {
+    "title": "스프라이트",
+    "mode": "모드",
+    "modes": {
+      "single": "단일",
+      "multiple": "다중 (시트)",
+      "polygon": "폴리곤"
+    },
+    "count": "스프라이트",
+    "used": "시트 사용률",
+    "ppu": "Pixels per unit",
+    "border": "9-slice 테두리",
+    "packingTag": "패킹 태그",
+    "outlines": "스프라이트",
+    "slices": "9-slice",
+    "list_other": "스프라이트 {{count}}개",
+    "sliced": "9-slice",
+    "warn": {
+      "empty": "시트의 {{percent}}%가 비어 있습니다 — 더 촘촘한 시트로 메모리를 절약할 수 있습니다."
+    }
+  },
+  "material": {
+    "title": "머티리얼",
+    "shader": "셰이더",
+    "surface": "서피스",
+    "color": "색상",
+    "textures": "텍스처",
+    "noTextures": "없음",
+    "largest": "가장 큰 텍스처",
+    "surfaces": {
+      "opaque": "불투명",
+      "cutout": "컷아웃",
+      "transparent": "투명"
+    },
+    "shape": {
+      "sphere": "구",
+      "cube": "큐브",
+      "plane": "평면"
+    }
+  },
+  "audio": {
+    "title": "오디오",
+    "length": "길이",
+    "channels": "채널",
+    "mono": "모노",
+    "stereo": "스테레오",
+    "rate": "샘플 레이트",
+    "file": "파일",
+    "loadType": "로드 타입",
+    "compression": "압축",
+    "built": "빌드 크기",
+    "loadTypes": {
+      "decompress": "Decompress on load",
+      "compressed": "Compressed in memory",
+      "streaming": "Streaming"
+    },
+    "overrides": "플랫폼 오버라이드: {{list}}",
+    "noMeta": ".meta 파일 없음: Unity가 기본 임포트 설정(Vorbis 100%)을 사용합니다.",
+    "play": "▶ 재생",
+    "pause": "❚❚ 일시정지",
+    "loop": "반복",
+    "seek": "파형 — 클릭해서 이동",
+    "cannotPlay": "이 클립을 재생할 수 없습니다: {{message}}",
+    "warn": {
+      "pcm": "압축되지 않음(PCM): 빌드 크기가 큽니다 — Vorbis 또는 ADPCM을 사용하세요.",
+      "decompress": "긴 클립을 로드 시 압축 해제: 메모리를 많이 사용합니다 — Compressed in memory 또는 Streaming을 사용하세요.",
+      "mono": "짧은 스테레오 사운드: Force To Mono로 크기를 절반으로 줄일 수 있습니다."
+    },
+    "unsupported": "이 형식은 여기서 재생할 수 없습니다.",
+    "autoPlay": "자동 재생",
+    "autoPlayHint": "선택하는 즉시 클립 재생"
+  },
+  "anim": {
+    "title": "애니메이션",
+    "length": "길이",
+    "frames": "프레임",
+    "rate": "샘플 레이트",
+    "type": "유형",
+    "loop": "반복",
+    "objects": "애니메이션된 오브젝트",
+    "curves": "커브",
+    "keys": "키",
+    "events": "이벤트",
+    "kinds": {
+      "generic": "Generic",
+      "humanoid": "Humanoid",
+      "legacy": "Legacy",
+      "ui": "UI",
+      "sprite": "스프라이트",
+      "property": "프로퍼티"
+    },
+    "findingRig": "일치하는 리그를 가진 모델 찾는 중…",
+    "noRig": "근처 모델 중 이 클립의 본을 가진 모델이 없습니다 — 목록에서 선택하세요.",
+    "pickRig": "모델 선택…",
+    "rig": "재생할 모델",
+    "on": "{{name}}에서 재생 · 본 {{percent}}% 일치",
+    "compressed": "압축된 클립: 커브가 키로 저장되지 않아 미리볼 수 없습니다.",
+    "unsupported": {
+      "humanoid": "Humanoid 클립: 재생하려면 리그로 리타게팅이 필요합니다 — 아직 미리보기를 지원하지 않습니다.",
+      "ui": "UI 애니메이션 (RectTransform, 색상…): 3D 미리보기 없음.",
+      "sprite": "스프라이트 애니메이션: 아직 미리보기 없음. 스프라이트는 아래에 나열됩니다.",
+      "property": "컴포넌트 프로퍼티만 애니메이션: 3D로 표시할 것이 없습니다."
+    },
+    "warn": {
+      "baked": "거의 모든 프레임에 키가 있습니다 (베이크됨): 임포트 설정의 Keyframe Reduction으로 크게 줄일 수 있습니다.",
+      "legacy": "Legacy 클립 (Animator가 아닌 Animation 컴포넌트)."
+    },
+    "otherModel": "다른 모델…",
+    "searchModel": "입력해서 모델 찾기"
+  },
+  "download": {
+    "button": "다운로드",
+    "saving": "저장 중…",
+    "saved": "{{name}} 저장됨 ({{size}})."
+  },
+  "font": {
+    "title": "폰트",
+    "sample": "The quick brown fox · 다람쥐 헌 쳇바퀴에 타고파 · 0123456789",
+    "sampleLabel": "샘플 텍스트",
+    "size": "크기",
+    "glyphs": "폰트에 있는 문자",
+    "moreGlyphs": "…외 {{count}}자",
+    "cannotRead": "폰트를 읽을 수 없습니다: {{message}}",
+    "missingChar": "이 폰트에 “{{char}}” 문자가 없습니다",
+    "family": "패밀리",
+    "style": "스타일",
+    "glyphCount": "글리프",
+    "file": "파일",
+    "mode": "문자 (Unity)",
+    "fallbacks": "대체 폰트",
+    "modes": {
+      "dynamic": "Dynamic",
+      "unicode": "Unicode",
+      "ascii": "ASCII 기본",
+      "asciiUpper": "ASCII 대문자",
+      "asciiLower": "ASCII 소문자",
+      "custom": "사용자 지정"
+    },
+    "scripts": {
+      "latin": "라틴",
+      "vietnamese": "베트남어",
+      "korean": "한국어",
+      "japanese": "일본어 가나",
+      "chinese": "한자 (CJK)",
+      "cyrillic": "키릴",
+      "thai": "태국어"
+    },
+    "collection": "폰트 컬렉션: {{count}}개 중 첫 번째 폰트를 표시합니다.",
+    "warn": {
+      "subset": "플레이어블에 쓰는 문자만 남긴 서브셋을 만드세요 (예: TextMeshPro, pyftsubset).",
+      "vietnamese": "빠진 베트남어 문자: {{chars}}",
+      "baked": "Unity가 고정 문자 세트를 텍스처로 굽습니다: 세트 밖의 문자는 표시되지 않습니다."
+    }
+  },
+  "particles": {
+    "title": "파티클",
+    "emitters": "이미터",
+    "peak": "동시 파티클",
+    "length": "길이",
+    "loops": "반복",
+    "hidden": "렌더러 없음",
+    "estimate": "설정값으로 추정 (rate × lifetime + burst), 랜덤 범위의 최댓값 기준.",
+    "modes": {
+      "billboard": "빌보드",
+      "stretched": "늘림",
+      "horizontal": "수평",
+      "vertical": "수직",
+      "mesh": "메시",
+      "none": "렌더러 없음"
+    },
+    "modules": {
+      "noise": "노이즈",
+      "collision": "충돌",
+      "trails": "트레일",
+      "lights": "라이트",
+      "subEmitters": "서브 이미터",
+      "textureSheet": "텍스처 시트",
+      "velocity": "속도",
+      "force": "힘",
+      "externalForces": "외부 힘"
+    },
+    "warn": {
+      "collision_other": "이미터 {{count}}개가 월드와 충돌합니다: 모바일에서 비용이 큽니다. 플레인을 쓰거나 끄세요.",
+      "lights_other": "이미터 {{count}}개가 실제 라이트를 추가합니다: 플레이어블에서 매우 비쌉니다.",
+      "noise_other": "이미터 {{count}}개가 노이즈를 사용합니다: 매 프레임 모든 파티클에 계산됩니다.",
+      "trails_other": "이미터 {{count}}개가 트레일을 그립니다: 파티클마다 지오메트리가 추가됩니다.",
+      "meshes_other": "이미터 {{count}}개가 메시 파티클을 많이 그립니다: 파티클 하나가 메시 하나입니다.",
+      "prewarm_other": "이미터 {{count}}개에 Prewarm이 켜져 있습니다: 시작할 때 한 사이클 전체를 시뮬레이션합니다.",
+      "maxDefault_other": "이미터 {{count}}개의 Max Particles가 기본값 1000입니다: 실제 최대치 근처로 줄이세요."
+    }
+  },
+  "scan": {
+    "starting": "이 브랜치에서 {{what}} 찾는 중…",
+    "reading": "{{what}} 찾는 중… {{done}} / {{total}} (한 번만 읽고 이후 즉시)",
+    "failed": "모든 파일을 읽지 못했습니다: 이미 알려진 {{what}}만 표시합니다. 탭을 다시 열면 재시도합니다.",
+    "what": {
+      "effects": "프리팹의 파티클 시스템",
+      "sprites": "텍스처 설정의 스프라이트",
+      "tmpFonts": "TextMeshPro 폰트 에셋"
+    }
+  },
+  "tmpFont": {
+    "title": "TextMeshPro 폰트",
+    "atlas": "폰트 아틀라스",
+    "noAtlas": "아틀라스 텍스처가 이 에셋 안에 없습니다.",
+    "characters": "문자",
+    "atlasSize": "아틀라스",
+    "pointSize": "포인트 크기",
+    "mode": "아틀라스",
+    "dynamic": "Dynamic",
+    "static": "Static",
+    "built": "빌드 크기",
+    "warn": {
+      "dynamic": "Dynamic: 실행 중 원본 폰트에서 글리프를 추가하므로 원본 폰트도 빌드에 포함됩니다. 플레이어블에는 Static을 쓰세요."
+    }
+  },
+  "target": {
+    "setting": "대상 Unity 프로젝트",
+    "settingHelp": "내보낼 패키지를 이 프로젝트와 비교합니다 (읽기만, 변경 없음): 이미 있는 파일은 빠지고, Unity가 덮어쓰거나 이름을 바꿀 파일을 미리 알려줍니다.",
+    "none": "없음 — 비교하지 않음",
+    "clear": "지우기",
+    "notProject": "Unity 프로젝트 폴더가 아닙니다 (Assets와 ProjectSettings가 필요합니다).",
+    "reuse": "{{project}}에 있는 파일 사용",
+    "reuseHint": "GUID만 다른 동일한 파일은 패키지에서 빠지고, 머티리얼과 프리팹이 프로젝트의 파일을 가리킵니다.",
+    "title": "{{project}}와 비교:",
+    "clean": "{{project}}와 충돌하는 것이 없습니다.",
+    "same_other": "이미 있는 파일 {{count}}개 (제외)",
+    "reused_other": "중복 대신 프로젝트 파일 재사용 {{count}}개: {{list}}",
+    "overwrite_other": "⚠ 프로젝트의 다른 버전을 덮어쓸 파일 {{count}}개: {{list}}",
+    "renamed_other": "⚠ 다른 에셋이 있는 경로의 파일 {{count}}개 (Unity가 \" 1\"을 붙임): {{list}}",
+    "urp": "⚠ 원본 URP {{source}}, 프로젝트 {{target}}: 임포트 후 머티리얼을 확인하세요.",
+    "noUrp": "⚠ 원본은 URP {{source}}, 프로젝트에 URP 없음: 머티리얼이 분홍색일 수 있습니다."
+  },
+  "link": {
+    "copy": "링크 복사",
+    "hint": "assethub:// 링크: 팀원이 열거나 검색창에 붙여넣으면 이 에셋으로 이동합니다."
+  }
+}

@@ -9,6 +9,7 @@ import {
   parsePrefabScene,
   type DependencyReport,
   type MaterialLook,
+  type ParticleEmitter,
   type PrefabScene,
   type Quat,
   type SceneInstance,
@@ -39,6 +40,8 @@ export interface PrefabBuild {
   /** Meshes whose model could not be found or loaded. */
   missing: number
   meshes: number
+  /** Each particle system with the object of its GameObject, once per placement (a nested effect placed twice plays twice). */
+  anchors: Array<{ emitter: ParticleEmitter & { prefab?: string }; object: THREE.Object3D }>
   dispose(): void
 }
 
@@ -215,7 +218,10 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
 
   let missing = 0
   let meshCount = 0
-  const place = (scene: PrefabScene, parent: THREE.Object3D, depth: number, override?: SceneInstance) => {
+  const particlesBy = new Map<string, PrefabBuild['anchors'][number]['emitter'][]>()
+  for (const e of report.particles ?? []) particlesBy.set(e.prefab ?? path, [...(particlesBy.get(e.prefab ?? path) ?? []), e])
+  const anchors: PrefabBuild['anchors'] = []
+  const place = (scene: PrefabScene, scenePath: string, parent: THREE.Object3D, depth: number, override?: SceneInstance) => {
     const objects = new Map<string, THREE.Object3D>()
     for (const node of scene.nodes.values()) {
       if (node.instance) continue
@@ -241,7 +247,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
       const source = guidPaths[inst.source]
       if (source && /\.prefab$/i.test(source)) {
         const nested = scenes.get(source)
-        if (nested && depth < MAX_DEPTH) place(nested, container, depth + 1, inst)
+        if (nested && depth < MAX_DEPTH) place(nested, source, container, depth + 1, inst)
       } else {
         const tpl = source ? templates.get(source) : undefined
         if (!tpl) {
@@ -266,6 +272,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
       const obj = objects.get(node.id)
       if (obj && !node.instance && node.parent && !obj.parent) objects.get(node.parent)?.add(obj)
     }
+    for (const e of particlesBy.get(scenePath) ?? []) anchors.push({ emitter: e, object: (e.node && objects.get(e.node)) || parent })
     for (const m of scene.meshes) {
       const obj = objects.get(m.node)
       const modelPath = guidPaths[m.mesh.guid] ?? ''
@@ -292,7 +299,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
   }
 
   const group = new THREE.Group()
-  place(scenes.get(path) ?? parsePrefabScene(''), group, 0)
+  place(scenes.get(path) ?? parsePrefabScene(''), path, group, 0)
 
   // Textures and looks of the materials used, most used first.
   const used = [...materials.keys()]
@@ -323,6 +330,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
     modelBytes,
     missing,
     meshes: meshCount,
+    anchors,
     dispose: () => {
       files.forEach((f) => URL.revokeObjectURL(f.url))
       for (const tpl of templates.values()) for (const m of tpl.meshes) m.geometry.dispose()

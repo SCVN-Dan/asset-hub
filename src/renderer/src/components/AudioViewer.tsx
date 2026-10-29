@@ -68,7 +68,7 @@ export function AudioViewer({ live, path, onInfo, onStats, onLoading }: Props) {
       el.width = w
       el.height = h
     }
-    drawWaveform(el, peaks.current, { wave: '#3a4150', played: '#7fb2ff' }, progress)
+    drawWaveform(el, peaks.current, { wave: '#46546a', played: '#ffae1f' }, progress)
   }
 
   useEffect(() => {

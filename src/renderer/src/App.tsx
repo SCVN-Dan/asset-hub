@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createDefaultRegistry, type AssetSource } from '@core/index'
 import { MockAssetSource } from '@core/mock/mockSource'
 import type { AuthStatus } from '@shared/ipc'
-import type { Settings as AppSettings } from '@shared/settings'
-import { budgetFor } from '@core/checks/playable'
+import { DEFAULT_EXPORT_LAYOUT, type Settings as AppSettings } from '@shared/settings'
+import { budgetFor, DEFAULT_BUDGET_PRESET } from '@core/checks/playable'
 import { BudgetContext } from './budget'
 import i18n from './i18n'
 import { RemoteAssetSource, RemoteError, unwrap } from './remoteSource'
@@ -81,11 +81,10 @@ export function App() {
       return <Settings settings={settings} auth={auth} onChange={update} onSignOut={() => void signOut()} onBack={() => setScreen('browse')} />
     case 'browse':
       return source ? (
-        <BudgetContext.Provider value={budgetFor(settings.budgetPreset, settings.customBudget)}>
+        <BudgetContext.Provider value={(settings.budgetPreset ?? DEFAULT_BUDGET_PRESET) === 'off' ? undefined : budgetFor(settings.budgetPreset, settings.customBudget)}>
         <Browse
           source={source}
           registry={registry}
-          language={settings.language}
           excludedFolders={settings.excludedFolders}
           login={auth?.login}
           initialRepo={source.isDemo ? undefined : settings.lastRepo}
@@ -93,10 +92,12 @@ export function App() {
           onOpenBranch={(lastRepo, lastBranch) => {
             if (!source.isDemo && (lastRepo !== settings.lastRepo || lastBranch !== settings.lastBranch)) update({ lastRepo, lastBranch })
           }}
-          onLanguage={setLanguage}
           onSettings={() => setScreen('settings')}
-          budgetPreset={settings.budgetPreset ?? 'standard'}
+          budgetPreset={settings.budgetPreset ?? DEFAULT_BUDGET_PRESET}
           onBudgetPreset={(budgetPreset) => update({ budgetPreset })}
+          exportLayout={settings.exportLayout ?? DEFAULT_EXPORT_LAYOUT}
+          onExportLayout={(exportLayout) => update({ exportLayout })}
+          targetProject={settings.targetProject}
         />
         </BudgetContext.Provider>
       ) : null

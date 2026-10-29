@@ -52,6 +52,41 @@ describe('unitypackage', () => {
     expect(packagePathname('proj/Assets/Art/Hero.fbx', 'proj/', 'grouped', 'org/game')).toBe('Assets/AssetHub/org_game/Art/Hero.fbx')
   })
 
+  it('sorts files by type under Assets/AssetHub/', () => {
+    const path = (p: string) => packagePathname(`proj/${p}`, 'proj/', 'byType', 'org/game')
+    expect(path('Assets/Art/Hero/Hero.prefab')).toBe('Assets/AssetHub/Prefabs/Hero.prefab')
+    expect(path('Assets/Art/Hero/Hero.FBX')).toBe('Assets/AssetHub/Models/Hero.FBX')
+    expect(path('Assets/Art/Hero/Mat/Hero.mat')).toBe('Assets/AssetHub/Materials/Hero.mat')
+    expect(path('Assets/Art/Hero/Tex/Hero_D.psd')).toBe('Assets/AssetHub/Textures/Hero_D.psd')
+    expect(path('Assets/Art/Hero/Anim/Run.anim')).toBe('Assets/AssetHub/Animations/Run.anim')
+    expect(path('Assets/Sfx/Hit.wav')).toBe('Assets/AssetHub/Audio/Hit.wav')
+    expect(path('Assets/UI/Fonts/Jua.ttf')).toBe('Assets/AssetHub/Fonts/Jua.ttf')
+    expect(path('Assets/Art/Atlas.spriteatlas')).toBe('Assets/AssetHub/Other/Atlas.spriteatlas')
+    // Shaders keep their folders so relative #includes still resolve.
+    expect(path('Assets/Shaders/Toon/Toon.shader')).toBe('Assets/AssetHub/Shaders/Shaders/Toon/Toon.shader')
+    expect(path('Assets/Shaders/Common.hlsl')).toBe('Assets/AssetHub/Shaders/Shaders/Common.hlsl')
+    // Code and folders Unity treats by name stay where they were.
+    expect(path('Assets/Scripts/Spin.cs')).toBe('Assets/Scripts/Spin.cs')
+    expect(path('Assets/Art/Resources/Icon.png')).toBe('Assets/Art/Resources/Icon.png')
+    expect(path('Packages/com.x/Tex.png')).toBe('Packages/com.x/Tex.png')
+  })
+
+  it('puts files that would share a path into folders named after their source folder', () => {
+    const H = (c: string) => c.repeat(32)
+    const plan = planPackage(
+      [file('p/Assets/Goblin/Body.png', H('a')), file('p/Assets/Orc/body.png', H('b')), file('p/Assets/A/Orc/Body.png', H('c')), file('p/Assets/Orc/Orc.fbx', H('d'))],
+      'p/',
+      'byType',
+      'o/r'
+    )
+    expect(plan.entries.map((e) => e.pathname)).toEqual([
+      'Assets/AssetHub/Textures/Goblin/Body.png',
+      'Assets/AssetHub/Textures/Orc_bbbbbbbb/body.png',
+      'Assets/AssetHub/Textures/Orc_cccccccc/Body.png',
+      'Assets/AssetHub/Models/Orc.fbx'
+    ])
+  })
+
   it('keeps one entry per GUID and reports files without a GUID', () => {
     const plan = planPackage([file('p/Assets/A.fbx', G(1)), file('p/Assets/T.png', G(2)), file('p/Assets/T2.png', G(2)), file('p/Assets/N.mat', null)], 'p/', 'source', 'o/r')
     expect(plan.entries.map((e) => [e.guid, e.pathname])).toEqual([

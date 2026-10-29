@@ -9,6 +9,7 @@ import { useBudget } from '../budget'
 import { DownloadButton } from './DownloadButton'
 import { ErrorNote } from './ErrorNote'
 import { CubeIcon } from './Icons'
+import { CopyLinkButton } from './CopyLinkButton'
 
 /** Branch chips shown before "+N more". */
 const BRANCHES_SHOWN = 6
@@ -190,6 +191,7 @@ export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpe
           <button type="button" className="btn" onClick={() => void window.api.openExternal(githubUrl(first.repo, first.branches[0], first.path))}>
             {t('details.openGitHub')}
           </button>
+          <CopyLinkButton link={{ repo: first.repo, branch: first.branches[0], path: first.path }} />
         </div>
         {delivery === 'file' && <DownloadButton repo={first.repo} branch={first.branches[0]} path={first.path} />}
         {stats && <StatsLine stats={stats} />}
@@ -210,20 +212,25 @@ const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n >= 
 /** One line of measurements with a playable-budget verdict, for cards and panels. */
 export function StatsLine({ stats, short = false }: { stats: StatsSummary; short?: boolean }) {
   const { t } = useTranslation()
-  const issues = summaryIssues(stats, useBudget())
+  const budget = useBudget()
+  const issues = budget ? summaryIssues(stats, budget) : []
   return (
-    <span className="stats-line" title={issues.map((i) => t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(), limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString() })).join('\n') || t('ranking.fits')}>
-      <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>
+    <span className="stats-line" title={!budget ? undefined : issues.map((i) => t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value.toLocaleString(), limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit.toLocaleString() })).join('\n') || t('ranking.fits')}>
+      {budget && <span className={issues.length ? 'fit fit-no' : 'fit fit-ok'}>{issues.length ? `⚠ ${issues.length}` : '✓'}</span>}
       {stats.width ? (
         <span>{`${stats.width}×${stats.height}`}</span>
       ) : stats.duration !== undefined || stats.clipLength !== undefined ? (
         <span>{formatDuration(stats.duration ?? stats.clipLength ?? 0)}</span>
+      ) : stats.particles !== undefined && stats.triangles === 0 ? (
+        <span>{t('ranking.particles', { n: compact(stats.particles) })}</span>
+      ) : stats.glyphs !== undefined ? (
+        <span>{t('ranking.glyphs', { count: stats.glyphs })}</span>
       ) : stats.textureCount !== undefined ? (
         <span>{t('ranking.textures', { count: stats.textureCount })}</span>
       ) : (
         <span>{t('ranking.tris', { n: compact(stats.triangles) })}</span>
       )}
-      {(!short || stats.width || stats.textureCount !== undefined || stats.duration !== undefined) && <span>{stats.duration !== undefined && '≈ '}{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
+      {(!short || stats.width || stats.textureCount !== undefined || stats.glyphs !== undefined || stats.duration !== undefined) && <span>{stats.duration !== undefined && '≈ '}{formatBytes(stats.fileBytes + stats.textureBytes)}</span>}
       {!short && stats.bones > 0 && <span>{t('ranking.bones', { count: stats.bones })}</span>}
     </span>
   )

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { checkPlayableBudget, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
-import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
+import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, fontCoverage, missingChars, particleTotals, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
@@ -14,6 +14,12 @@ import { PrefabViewer } from './PrefabViewer'
 import { AnimViewer } from './AnimViewer'
 import { AudioViewer } from './AudioViewer'
 import { audioStats, formatDuration, type DecodedAudio } from '../viewer/audio'
+import { FontViewer } from './FontViewer'
+import { CopyLinkButton } from './CopyLinkButton'
+import { TmpFontViewer } from './TmpFontViewer'
+import { tmpFontStats, type LoadedTmpFont } from '../viewer/tmpFont'
+import { particleStats } from '../viewer/particleThumb'
+import { fontStats, type LoadedFont } from '../viewer/font'
 import { DownloadButton } from './DownloadButton'
 
 interface Props {
@@ -68,10 +74,10 @@ function TextureSection({ info }: { info: ImageInfo }) {
   const imp = info.import
   const built = imp ? importedTextureSize(info.width, info.height, imp) : Math.max(info.width, info.height)
   const warnings: string[] = []
-  if (built > budget.textureSize) warnings.push(t('texture.warn.size', { size: built, limit: budget.textureSize }))
+  if (budget && built > budget.textureSize) warnings.push(t('texture.warn.size', { size: built, limit: budget.textureSize }))
   if (imp?.compression === 0) warnings.push(t('texture.warn.uncompressed'))
   if (imp?.textureType === 8 && imp.mipmaps) warnings.push(t('texture.warn.spriteMips'))
-  if (info.bytes > budget.textureBytes) warnings.push(t('texture.warn.bytes', { size: formatBytes(info.bytes), limit: formatBytes(budget.textureBytes) }))
+  if (budget && info.bytes > budget.textureBytes) warnings.push(t('texture.warn.bytes', { size: formatBytes(info.bytes), limit: formatBytes(budget.textureBytes) }))
   const cells: Array<[string, string]> = [
     [t('texture.size'), `${info.width} × ${info.height}`],
     [t('texture.file'), `${formatBytes(info.bytes)} · ${info.format}`],
@@ -127,7 +133,7 @@ function AudioSection({ info }: { info: DecodedAudio }) {
   const mono = imp?.forceToMono && info.channels > 1
   const rate = s?.sampleRateSetting === 2 && s.sampleRateOverride && s.sampleRateOverride < info.sampleRate ? s.sampleRateOverride : undefined
   const format = s?.compressionFormat ?? 1
-  const warnings = summaryIssues(stats, budget).map((i) =>
+  const warnings = (budget ? summaryIssues(stats, budget) : []).map((i) =>
     t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value, limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit })
   )
   if (format === 0 && info.duration > 5) warnings.push(t('audio.warn.pcm'))
@@ -174,6 +180,178 @@ function AudioSection({ info }: { info: DecodedAudio }) {
   )
 }
 
+/** Family, glyphs and scripts of a font, with what matters for playables. */
+function FontSection({ font }: { font: LoadedFont }) {
+  const { t } = useTranslation()
+  const budget = useBudget()
+  const { info } = font
+  const imp = font.import
+  const coverage = fontCoverage(info.codepoints)
+  const vi = coverage.find((c) => c.script === 'vietnamese')
+  const warnings = (budget ? summaryIssues(fontStats(font), budget) : []).map((i) => t(`budget.${i.key}`, { value: formatBytes(i.value), limit: formatBytes(i.limit) }))
+  if (warnings.length && coverage.some((c) => (c.script === 'korean' || c.script === 'chinese') && c.have > 1000)) warnings.push(t('font.warn.subset'))
+  if (vi && !vi.full) warnings.push(t('font.warn.vietnamese', { chars: missingChars(info.codepoints, 'vietnamese') }))
+  if (imp && imp.mode !== 'dynamic') warnings.push(t('font.warn.baked'))
+  const cells: Array<[string, string]> = [
+    [t('font.family'), info.family || '—'],
+    [t('font.style'), info.style || '—'],
+    [t('font.glyphCount'), info.glyphs.toLocaleString()],
+    [t('font.file'), `${formatBytes(font.bytes)} · ${info.outlines === 'cff' ? 'OpenType (CFF)' : 'TrueType'}`],
+    ...(imp ? ([[t('font.mode'), t(`font.modes.${imp.mode}`)]] as Array<[string, string]>) : []),
+    ...(imp?.fallbacks.length ? ([[t('font.fallbacks'), imp.fallbacks.join(', ')]] as Array<[string, string]>) : [])
+  ]
+  return (
+    <section className="section">
+      <span className="label-caps">{t('font.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k} className={statClass(v)}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="chip-row">
+        {coverage.map((c) => (
+          <span key={c.script} className={`badge${c.full ? '' : ' badge-warn'}`} title={`${c.have.toLocaleString()} / ${c.total.toLocaleString()}`}>
+            {c.full ? '✓' : '◐'} {t(`font.scripts.${c.script}`)}
+          </span>
+        ))}
+      </div>
+      {info.collection && info.collection > 1 && <p className="muted small" style={{ margin: 0 }}>{t('font.collection', { count: info.collection })}</p>}
+      {warnings.length > 0 && (
+        <ul className="warn-note warn-list">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** What a TextMeshPro font asset holds, and what it costs a playable. */
+function TmpFontSection({ font }: { font: LoadedTmpFont }) {
+  const { t } = useTranslation()
+  const budget = useBudget()
+  const { info } = font
+  const set = new Set(info.characters)
+  const coverage = fontCoverage(set)
+  const vi = coverage.find((c) => c.script === 'vietnamese')
+  const warnings = (budget ? summaryIssues(tmpFontStats(font), budget) : []).map((i) =>
+    t(`budget.${i.key}`, { value: i.key.endsWith('Bytes') ? formatBytes(i.value) : i.value, limit: i.key.endsWith('Bytes') ? formatBytes(i.limit) : i.limit })
+  )
+  if (info.dynamic) warnings.push(t('tmpFont.warn.dynamic'))
+  if (vi && !vi.full) warnings.push(t('font.warn.vietnamese', { chars: missingChars(set, 'vietnamese') }))
+  const cells: Array<[string, string]> = [
+    [t('font.family'), info.family || '—'],
+    [t('font.style'), info.style || '—'],
+    [t('tmpFont.characters'), info.characters.length.toLocaleString()],
+    [t('tmpFont.atlasSize'), `${info.atlasWidth}×${info.atlasHeight}`],
+    [t('tmpFont.pointSize'), info.pointSize ? `${info.pointSize}` : '—'],
+    [t('tmpFont.mode'), t(info.dynamic ? 'tmpFont.dynamic' : 'tmpFont.static')],
+    [t('tmpFont.built'), `≈ ${formatBytes(info.atlasWidth * info.atlasHeight)}`],
+    ...(info.fallbacks.length ? ([[t('font.fallbacks'), String(info.fallbacks.length)]] as Array<[string, string]>) : [])
+  ]
+  return (
+    <section className="section">
+      <span className="label-caps">{t('tmpFont.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k} className={statClass(v)}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="chip-row">
+        {coverage.map((c) => (
+          <span key={c.script} className={`badge${c.full ? '' : ' badge-warn'}`} title={`${c.have.toLocaleString()} / ${c.total.toLocaleString()}`}>
+            {c.full ? '✓' : '◐'} {t(`font.scripts.${c.script}`)}
+          </span>
+        ))}
+      </div>
+      {warnings.length > 0 && (
+        <ul className="warn-note warn-list">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
+/** Unity's default Max Particles: left as is, it reserves far more than most effects use. */
+const DEFAULT_MAX_PARTICLES = 1000
+
+/** An effect's emitters, what they add up to, and what costs most in a playable. */
+function ParticleSection({ report }: { report: DependencyReport }) {
+  const { t } = useTranslation()
+  const budget = useBudget()
+  const emitters = report.particles ?? []
+  const totals = particleTotals(emitters)
+  const count = (pred: (e: (typeof emitters)[number]) => boolean) => emitters.filter(pred).length
+  const warnings: string[] = []
+  if (budget && totals.peak > budget.particles) warnings.push(t('budget.particles', { value: totals.peak.toLocaleString(), limit: budget.particles.toLocaleString() }))
+  const notes: Array<[number, string]> = [
+    [count((e) => e.modules.includes('collision')), 'particles.warn.collision'],
+    [count((e) => e.modules.includes('lights')), 'particles.warn.lights'],
+    [count((e) => e.modules.includes('noise')), 'particles.warn.noise'],
+    [count((e) => e.modules.includes('trails')), 'particles.warn.trails'],
+    [count((e) => e.renderMode === 'mesh' && e.peak > 50), 'particles.warn.meshes'],
+    [count((e) => e.prewarm), 'particles.warn.prewarm'],
+    [count((e) => e.maxParticles === DEFAULT_MAX_PARTICLES && e.peak < 200), 'particles.warn.maxDefault']
+  ]
+  for (const [n, key] of notes) if (n) warnings.push(t(key, { count: n }))
+  const cells: Array<[string, string]> = [
+    [t('particles.emitters'), totals.emitters.toLocaleString()],
+    [t('particles.peak'), `≈ ${totals.peak.toLocaleString()}`],
+    [t('particles.length'), totals.looping ? t('particles.loops') : formatDuration(totals.duration)]
+  ]
+  const flags = (e: (typeof emitters)[number]) =>
+    [e.shape, e.renderMode !== 'billboard' ? t(`particles.modes.${e.renderMode}`) : undefined, e.sheet && e.sheet[0] * e.sheet[1] > 1 ? `${e.sheet[0]}×${e.sheet[1]}` : undefined, ...e.modules.filter((m) => m !== 'textureSheet').map((m) => t(`particles.modules.${m}`))]
+      .filter(Boolean)
+      .join(' · ')
+  return (
+    <section className="section">
+      <span className="label-caps">{t('particles.title')}</span>
+      <dl className="stat-grid">
+        {cells.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+      <ul className="emitter-list">
+        {[...emitters]
+          .sort((a, b) => b.peak - a.peak)
+          .map((e) => (
+            <li key={`${e.prefab ?? ''}:${e.id}`} className={e.renderMode === 'none' ? 'muted' : undefined}>
+              <span className="dep-name" title={e.prefab}>
+                {e.name || '—'}
+                {e.prefab && <span className="muted small"> · {e.prefab.slice(e.prefab.lastIndexOf('/') + 1)}</span>}
+              </span>
+              <span className="muted small">{flags(e)}</span>
+              <span className="mono small">{e.renderMode === 'none' ? t('particles.hidden') : `≈ ${e.peak}`}</span>
+            </li>
+          ))}
+      </ul>
+      <p className="muted small" style={{ margin: 0 }}>
+        {t('particles.estimate')}
+      </p>
+      {warnings.length > 0 && (
+        <ul className="warn-note warn-list">
+          {warnings.map((w) => (
+            <li key={w}>{w}</li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 /** Long values (shader name, load type) take a whole row so they stay on one line. */
 const statClass = (v: ReactNode) => (typeof v === 'string' && v.length > 18 ? 'stat-wide' : undefined)
 
@@ -200,7 +378,7 @@ function MaterialSection({ material, look, stats }: { material?: MaterialRef; lo
         ] as Array<[string, ReactNode]>)
       : [])
   ]
-  const issues = stats ? summaryIssues(stats, budget).filter((i) => i.key === 'textureSize' || i.key === 'textureBytes') : []
+  const issues = stats && budget ? summaryIssues(stats, budget).filter((i) => i.key === 'textureSize' || i.key === 'textureBytes') : []
   if (!cells.length) return null
   return (
     <section className="section">
@@ -414,6 +592,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
   const [animInfo, setAnimInfo] = useState<AnimClipInfo>()
   /** For an audio clip: what the player decoded. */
   const [audioInfo, setAudioInfo] = useState<DecodedAudio>()
+  const [fontInfo, setFontInfo] = useState<LoadedFont>()
+  const [tmpInfo, setTmpInfo] = useState<LoadedTmpFont>()
   const [materialStats, setMaterialStats] = useState<StatsSummary>()
   const [progress, setProgress] = useState<{ done: number; total: number }>()
   const [copied, setCopied] = useState(false)
@@ -453,6 +633,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
     setImageInfo(undefined)
     setLook(undefined)
     setAudioInfo(undefined)
+    setFontInfo(undefined)
+    setTmpInfo(undefined)
     setAnimInfo(undefined)
     setMaterialStats(undefined)
     setCopied(false)
@@ -531,7 +713,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       if (token === searchToken.current) setPrefab({ status: 'error', error })
     }
   }
-  const issues = stats ? checkPlayableBudget(stats, budget) : []
+  const issues = stats && budget ? checkPlayableBudget(stats, budget) : []
   const copyPath = async () => {
     try {
       await navigator.clipboard.writeText(asset.path)
@@ -566,7 +748,8 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
           report={report}
           onStats={(s) => {
             setStats(s)
-            onModelStats?.(asset.sha, summarizeStats(s, report?.partial ? 'thumb' : 'viewer'))
+            const summary = summarizeStats(s, report?.partial ? 'thumb' : 'viewer')
+            onModelStats?.(asset.sha, report?.particles ? particleStats(report, summary) : summary)
           }}
           onThumb={(url) => onThumb(asset.sha, url)}
           onLoading={onViewerLoading}
@@ -589,6 +772,10 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         />
       ) : live && repoPath && handler?.preview.kind === 'audio' ? (
         <AudioViewer key={repoPath} live={live} path={repoPath} onInfo={setAudioInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
+      ) : live && repoPath && handler?.preview.kind === 'tmpfont' ? (
+        <TmpFontViewer key={repoPath} live={live} path={repoPath} onInfo={setTmpInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
+      ) : live && repoPath && handler?.preview.kind === 'font' ? (
+        <FontViewer key={repoPath} live={live} path={repoPath} onInfo={setFontInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : live && repoPath && handler?.preview.kind === 'image' ? (
         <ImageViewer key={repoPath} live={live} path={repoPath} onInfo={setImageInfo} onStats={(s) => onModelStats?.(asset.sha, s)} onLoading={onViewerLoading} />
       ) : (
@@ -642,6 +829,9 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       {imageInfo && <TextureSection info={imageInfo} />}
       {imageInfo?.sprite && <SpriteSection info={imageInfo} />}
       {audioInfo && <AudioSection info={audioInfo} />}
+      {fontInfo && <FontSection font={fontInfo} />}
+      {tmpInfo && <TmpFontSection font={tmpInfo} />}
+      {report?.particles && <ParticleSection report={report} />}
       {animInfo && <AnimSection info={animInfo} />}
       {handler?.preview.kind === 'material' && <MaterialSection material={report?.materials[0]} look={look} stats={materialStats} />}
 
@@ -849,6 +1039,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
             {t('details.openGitHub')}
           </button>
         )}
+        {live && <CopyLinkButton className="btn btn-small" link={{ repo: live.repo, branch: live.branch, path: live.root + asset.path }} />}
       </div>
     </aside>
   )

@@ -4,6 +4,7 @@ import { parseAnimClip, type AnimClipInfo, type DependencyReport } from '@core/i
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
 import { GOOD_ENOUGH, loadRig, pickRig, rememberRig, rigCoverage, rigOrder, THUMB_POSE, toThreeClip, type Rig } from '../viewer/animPlayer'
+import { Dropdown } from './Dropdown'
 import type { LiveContext } from './ModelViewer'
 
 interface Props {
@@ -215,22 +216,19 @@ export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, o
               }}
             />
           ) : (
-            <select
-              className="select viewer-select"
-              aria-label={t('anim.rig')}
+            <Dropdown
+              size="xs"
+              className="viewer-select"
+              label={t('anim.rig')}
               value={rig ?? ''}
-              onChange={(e) => (e.target.value === OTHER ? setSearching(true) : void chooseRig(e.target.value))}
-            >
-              {!rig && <option value="">{t('anim.pickRig')}</option>}
-              {rig && !rigs.includes(rig) && <option value={rig}>{rig.split('/').pop()}</option>}
-              {rigs.map((p) => (
-                <option key={p} value={p}>
-                  {p.split('/').pop()}
-                  {coverage[p] !== undefined ? ` · ${Math.round(coverage[p] * 100)}%` : ''}
-                </option>
-              ))}
-              {models.length > 0 && <option value={OTHER}>{t('anim.otherModel')}</option>}
-            </select>
+              options={[
+                ...(rig ? [] : [{ value: '', label: t('anim.pickRig') }]),
+                ...(rig && !rigs.includes(rig) ? [{ value: rig, label: rig.split('/').pop() ?? rig }] : []),
+                ...rigs.map((p) => ({ value: p, label: p.split('/').pop() ?? p, hint: coverage[p] !== undefined ? `${Math.round(coverage[p] * 100)}%` : undefined })),
+                ...(models.length > 0 ? [{ value: OTHER, label: t('anim.otherModel') }] : [])
+              ]}
+              onChange={(value) => (value === OTHER ? setSearching(true) : void chooseRig(value))}
+            />
           )}
           <datalist id="anim-models">
             {searching && models.map((m) => <option key={m} value={m} />)}
