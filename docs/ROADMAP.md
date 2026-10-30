@@ -30,7 +30,7 @@
 | **D · Mở rộng** | 7 | Polish & mở rộng (chỉ mục dùng chung cho team, tìm bằng hình, tag, audio/sprite…) | tuỳ nhu cầu | ⏳ |
 | D | 8 | Lên chính thức (GitHub App org) | phụ thuộc admin | ⏳ (làm song song được) |
 | D | 9 | Particle System prefab | 2–3 tuần | ✅ chờ xem trên app (còn collision, lights, ribbon) |
-| **E · Phát hành** | 10 | Đóng gói `.dmg` / installer, code signing, tự cập nhật — **làm cuối cùng** (trong lúc phát triển vẫn chạy `npm run dev` để test) | ~2–3 ngày | ⏳ |
+| **E · Phát hành** | 10 | Đóng gói `.dmg` / installer, code signing, tự cập nhật — **làm cuối cùng** (trong lúc phát triển vẫn chạy `npm run dev` để test) | ~2–3 ngày | ✅ `.dmg` + ký ad hoc + hướng dẫn cài; còn ký thật / notarize (cần Apple Developer ID), tự cập nhật |
 
 ---
 
@@ -265,9 +265,9 @@ Trong lúc còn phát triển và test, chạy bằng `npm run dev`. Icon app đ
 
 | Việc | State |
 |---|---|
-| `electron-builder`: `.dmg` cho Apple Silicon + Intel, ad-hoc sign | ⏳ |
-| Giảm dung lượng gói: chỉ giữ locale Electron en / vi / ko (`electronLanguages`), font chỉ `.woff2` | ⏳ |
-| Hướng dẫn mở app chưa ký lần đầu (Gatekeeper) cho người không rành kỹ thuật | ⏳ |
+| `electron-builder` (`npm run dist`, `electron-builder.yml`): `release/Asset-Hub-<version>-arm64.dmg` (~90 MB) và `-x64.dmg` (~96 MB); ký **ad hoc** trong hook `scripts/adhoc-sign.cjs` (electron-builder 25 không có sẵn; Apple Silicon không chạy code chưa ký); giao thức `assethub://` đăng ký trong Info.plist; tên ổ dmg theo kiến trúc (hai dmg tạo song song, trùng tên thì `hdiutil` lỗi). Đã chạy thử bản đóng gói: sảnh 3D → tự mở rương → hub | ✅ |
+| Giảm dung lượng gói: không kèm `node_modules` (main chỉ dùng module có sẵn của Node / Electron, thư viện đã bundle vào renderer → chuyển hết sang devDependencies); locale Electron chỉ en / vi / ko — `electronLanguages` không lọc bản trong Electron Framework nên hook tự xoá trước khi ký (app 236 → 198 MB); bỏ font `.woff` khỏi bản build (Chromium dùng `.woff2`) | ✅ |
+| Hướng dẫn cài cho người không rành kỹ thuật: `docs/CAI-DAT.md` — chọn đúng file theo chip, mở lần đầu (macOS 15+: Cài đặt › Quyền riêng tư & Bảo mật › Vẫn mở; macOS 14−: chuột phải › Mở; hoặc lệnh `xattr`), đăng nhập, gỡ | ✅ |
 | Code signing + notarize (cần Apple Developer ID của công ty) | ⏳ |
 | Windows installer (nếu team cần) | ⏳ |
 | Tự cập nhật (GitHub Releases) | ⏳ |

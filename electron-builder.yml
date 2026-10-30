@@ -1,0 +1,32 @@
+# Packaging (Phase 10): a .dmg per Mac architecture. `npm run dist` builds the app first.
+appId: vn.supercent.assethub
+productName: Asset Hub
+copyright: Supercent
+directories:
+  output: release
+  buildResources: build
+# Everything the app runs is bundled into out/ (main needs only Node and Electron), so no node_modules.
+files:
+  - out/**/*
+  - package.json
+# Electron's own UI strings: only the app's languages.
+electronLanguages: [en, vi, ko]
+protocols:
+  - name: Asset Hub link
+    schemes: [assethub]
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.developer-tools
+  icon: build/icon.icns
+  # No Apple Developer ID yet: electron-builder's signing is off and scripts/adhoc-sign.cjs signs ad hoc,
+  # which Apple Silicon needs to run the app at all (opened the first time via right-click > Open).
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+afterPack: scripts/adhoc-sign.cjs
+dmg:
+  # One volume name per architecture: both images are made at once, and a shared name makes hdiutil fail.
+  title: Asset Hub ${version} ${arch}
+  artifactName: Asset-Hub-${version}-${arch}.${ext}
