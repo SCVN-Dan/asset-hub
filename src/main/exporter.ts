@@ -5,6 +5,8 @@ import type { GitHubAssetSource } from '@core/github/source'
 import { planPackage, unityPackageTar, type PackageFile, type PackagePlan } from '@core/export/unitypackage'
 import { isYamlAsset, planAgainstTarget, remapGuids, shaderKind, shaderName, urpMismatch, urpVersion, type ProjectShader, type TargetIndex } from '@core/export/target'
 import type { ExportProgress, ExportRequest, ExportResult, TargetReport } from '@shared/ipc'
+import { stripScripts } from '@core/export/stripScripts'
+import { metaGuid } from '@core/unity/yaml'
 import { parseShaderMapping, shaderMapper, SHADER_MAPPING_FILE } from '@core/export/shaderMapping'
 import { contentHash, hasPackageCache, hashProjectFile, packageFiles, readProjectText, scanProject } from './targetProject'
 
@@ -34,13 +36,18 @@ export async function exportUnityPackage(
 
   const packed: PackageFile[] = []
   const missingMeta: string[] = []
+  // Scripts left out (stripScripts): only their GUID is needed, to find their components.
+  const scripts = new Set<string>()
   let done = 0
   let next = 0
   const worker = async () => {
     while (next < assets.length) {
       const path = assets[next++]
       if (!files.has(`${path}.meta`)) missingMeta.push(path)
-      else {
+      else if (req.stripScripts && SCRIPT.test(path)) {
+        const guid = metaGuid(dec.decode(await source.readFile(req.repo, req.branch, `${path}.meta`)))
+        if (guid) scripts.add(guid)
+      } else {
         const [asset, meta] = await Promise.all([source.readFile(req.repo, req.branch, path), source.readFile(req.repo, req.branch, `${path}.meta`)])
         packed.push({ path, asset, meta, preview: req.previews[path] })
       }
@@ -48,6 +55,16 @@ export async function exportUnityPackage(
     }
   }
   await Promise.all(Array.from({ length: DOWNLOAD_CONCURRENCY }, worker))
+
+  let scriptsRemoved = 0
+  if (scripts.size)
+    for (const f of packed) {
+      if (!/\.prefab$/i.test(f.path)) continue
+      const stripped = stripScripts(dec.decode(f.asset), scripts)
+      if (!stripped.removed) continue
+      f.asset = enc.encode(stripped.text)
+      scriptsRemoved += stripped.removed
+    }
 
   // Stable order: the requested models first, then the rest by path.
   const first = new Set(req.paths)
@@ -66,9 +83,13 @@ export async function exportUnityPackage(
     assets: plan.entries.length,
     bytes: bytes.byteLength,
     skipped: [...missingMeta.map((path) => ({ path, reason: 'noMeta' as const })), ...plan.skipped],
-    ...(onTarget ? { target: onTarget } : {})
+    ...(onTarget ? { target: onTarget } : {}),
+    ...(req.stripScripts ? { scriptsRemoved } : {})
   }
 }
+
+/** The project's own code, as Unity references it from components. */
+const SCRIPT = /\.(cs|dll)$/i
 
 const enc = new TextEncoder()
 const dec = new TextDecoder()

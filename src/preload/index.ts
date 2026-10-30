@@ -107,6 +107,15 @@ const api: AssetHubApi = {
       return () => ipcRenderer.removeListener(IPC.exportProgress, handler)
     },
     showInFolder: (path) => ipcRenderer.invoke(IPC.showItemInFolder, path)
+  },
+  update: {
+    check: () => ipcRenderer.invoke(IPC.updateCheck),
+    install: (version) => ipcRenderer.invoke(IPC.updateInstall, version),
+    onProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
+      ipcRenderer.on(IPC.updateProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.updateProgress, handler)
+    }
   }
 }
 

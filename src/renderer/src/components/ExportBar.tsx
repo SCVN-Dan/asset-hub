@@ -21,6 +21,8 @@ export interface ExportOptions {
   targetProject?: string
   /** Leave out files the project has under another GUID, pointing references at its copy. */
   reuseExisting: boolean
+  /** Remove the project's scripts from prefabs (and their children) and leave the .cs files out. */
+  stripScripts: boolean
 }
 
 export type ExportState =
@@ -187,6 +189,10 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
               <input type="checkbox" checked={options.skipByName} disabled={running} onChange={(e) => onOptions({ ...options, skipByName: e.target.checked })} />
               {t('export.skipByName')}
             </label>
+            <label className="check" title={t('export.stripScriptsHint')}>
+              <input type="checkbox" checked={options.stripScripts} disabled={running} onChange={(e) => onOptions({ ...options, stripScripts: e.target.checked })} />
+              {t('export.stripScripts')}
+            </label>
             {options.targetProject && (
               <label className="check" title={t('target.reuseHint')}>
                 <input type="checkbox" checked={options.reuseExisting} disabled={running} onChange={(e) => onOptions({ ...options, reuseExisting: e.target.checked })} />
@@ -216,6 +222,7 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
             {t('export.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes) })}{' '}
             <span className="mono">{state.result.path.split(/[\\/]/).pop()}</span>
           </span>
+          {state.result.scriptsRemoved !== undefined && <span className="small muted">{t('export.scriptsRemoved', { count: state.result.scriptsRemoved })}</span>}
           {state.result.target && <TargetSummary report={state.result.target} />}
           {state.result.skipped && state.result.skipped.length > 0 && (
             <span className="small muted">{t('export.skipped', { count: state.result.skipped.length, list: state.result.skipped.map((s) => s.path.split('/').pop()).join(', ') })}</span>

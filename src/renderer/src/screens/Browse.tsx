@@ -29,6 +29,7 @@ import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
 import { GearIcon, RefreshIcon } from '../components/Icons'
 import { LogoMark } from '../components/Logo'
+import { VersionBadge } from '../components/VersionBadge'
 import { flyToPack } from '../motion'
 import { SearchBox } from '../components/SearchBox'
 import { DRAWABLE } from '../viewer/formats'
@@ -171,7 +172,8 @@ export function Browse({
   const [pack, setPack] = useState<PackItem[]>([])
   const [skipByName, setSkipByName] = useState(false)
   const [reuseExisting, setReuseExisting] = useState(true)
-  const exportOptions: ExportOptions = { layout: exportLayout, skipByName, targetProject, reuseExisting }
+  const [stripScripts, setStripScripts] = useState(true)
+  const exportOptions: ExportOptions = { layout: exportLayout, skipByName, targetProject, reuseExisting, stripScripts }
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
   const reports = useRef(new Map<string, DependencyReport>())
   /** Materials found on prefabs, by model path: exported along with the model. */
@@ -721,6 +723,7 @@ export function Browse({
         <div className="brand" style={{ marginRight: 8 }}>
           <LogoMark size={34} />
           <span className="brand-name">Asset Hub</span>
+          <VersionBadge />
         </div>
         <Picker
           label={t('browse.repo')}
@@ -1017,6 +1020,7 @@ export function Browse({
               onOptions={(o) => {
                 setSkipByName(o.skipByName)
                 setReuseExisting(o.reuseExisting)
+                setStripScripts(o.stripScripts)
                 if (o.layout !== exportLayout) onExportLayout(o.layout)
               }}
               onExport={() => void runExport(pack)}

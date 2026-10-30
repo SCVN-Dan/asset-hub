@@ -24,7 +24,11 @@ on run
 		set progress completed steps to 0
 		set progress description to "Đang kết nối GitHub…"
 		set total to (do shell script "curl -fsIL " & quoted form of zipURL & " | awk 'tolower($1)==\"content-length:\" {n=$2} END {gsub(/\\r/,\"\",n); print n+0}'") as integer
-		do shell script "(curl -fsSL -o " & quoted form of zipPath & " " & quoted form of zipURL & "; echo $? > " & quoted form of (work & "/status") & ") > /dev/null 2>&1 &"
+		-- A dropped connection is retried up to 3 times, resuming where it stopped (-C -). curl's own
+		-- message goes to curl.log; the exit code is written aside and renamed into place, so "status"
+		-- never exists half-written.
+		set fetch to "for i in 1 2 3; do curl -fsSL -C - --connect-timeout 20 -o " & quoted form of zipPath & " " & quoted form of zipURL & " 2>> " & quoted form of (work & "/curl.log") & "; s=$?; [ $s = 0 ] && break; sleep 3; done; echo $s > " & quoted form of (work & "/status.part") & "; mv " & quoted form of (work & "/status.part") & " " & quoted form of (work & "/status")
+		do shell script "(" & fetch & ") > /dev/null 2>&1 &"
 		set progress description to "Đang tải Asset Hub…"
 		repeat
 			delay 0.3
@@ -33,7 +37,11 @@ on run
 			set progress additional description to (got div 1048576 as text) & " / " & (total div 1048576 as text) & " MB"
 			if (do shell script "test -f " & quoted form of (work & "/status") & " && echo done || echo wait") is "done" then exit repeat
 		end repeat
-		if (do shell script "cat " & quoted form of (work & "/status")) is not "0" then error "Không tải được Asset Hub từ GitHub. Kiểm tra kết nối mạng rồi thử lại."
+		set curlStatus to do shell script "cat " & quoted form of (work & "/status")
+		if curlStatus is not "0" then
+			set detail to do shell script "tail -n 1 " & quoted form of (work & "/curl.log") & " 2>/dev/null; true"
+			error "Không tải được Asset Hub từ GitHub (mã lỗi " & curlStatus & "). Kiểm tra kết nối mạng rồi thử lại." & return & return & detail
+		end if
 
 		-- Only a build that matches the checksum published next to it gets installed.
 		set progress description to "Đang kiểm tra file tải về…"

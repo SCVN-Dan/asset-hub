@@ -287,7 +287,8 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
           Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
         ),
         suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_'),
-        reuseExisting: raw.reuseExisting !== false
+        reuseExisting: raw.reuseExisting !== false,
+        stripScripts: raw.stripScripts === true
       }
       // Compared only with a folder that is really a Unity project (read, never written).
       if (typeof raw.targetProject === 'string' && raw.targetProject && (await isUnityProject(raw.targetProject))) req.targetProject = raw.targetProject

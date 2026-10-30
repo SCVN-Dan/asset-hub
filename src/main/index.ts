@@ -3,6 +3,7 @@ import { join, resolve } from 'path'
 import { IPC } from '@shared/ipc'
 import { DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXCLUDED_FOLDERS } from '@shared/settings'
 import { registerGitHubIpc } from './github'
+import { checkForUpdate, installUpdate } from './updater'
 import { THUMB_SCHEME, type CacheJanitor } from './caches'
 import { SettingsStore } from './settingsStore'
 import { isUnityProject } from './targetProject'
@@ -52,7 +53,8 @@ function createWindow(): void {
 // "Asset Hub" in menus and the Dock, while the data folder keeps the package name
 // ("asset-hub") so settings, sign-in and the cache stay where they are.
 app.setName('Asset Hub')
-app.setPath('userData', join(app.getPath('appData'), 'asset-hub'))
+// ASSETHUB_USER_DATA runs a second, separate copy (testing a build beside the installed app).
+app.setPath('userData', process.env.ASSETHUB_USER_DATA || join(app.getPath('appData'), 'asset-hub'))
 
 // Chromium keeps its own HTTP cache of every GitHub download, duplicating the blob cache in
 // AssetHubCache (it grew past 300 MB). A small one still lets API calls revalidate with ETags.
@@ -148,6 +150,17 @@ app.whenReady().then(() => {
     return url ?? null
   })
   ipcMain.handle(IPC.isUnityProject, (_event, path: unknown) => (typeof path === 'string' && path ? isUnityProject(path) : false))
+  ipcMain.handle(IPC.updateCheck, () => checkForUpdate().catch(() => null))
+  ipcMain.handle(IPC.updateInstall, async (event, version: unknown) => {
+    try {
+      await installUpdate(String(version), (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.updateProgress, progress)
+      })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    }
+  })
   ipcMain.handle(IPC.openExternal, async (_event, url: unknown) => {
     if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url)
   })

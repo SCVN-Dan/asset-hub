@@ -2,6 +2,7 @@ import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import type { Plugin } from 'vite'
+import { version } from './package.json'
 
 /** Fonts come as .woff2 and .woff; Electron's Chromium always takes the .woff2, so the .woff files are left out of the build. */
 function dropWoff(): Plugin {
@@ -31,6 +32,8 @@ export default defineConfig({
   },
   renderer: {
     resolve: { alias },
+    // Shown next to the name in the hub.
+    define: { __APP_VERSION__: JSON.stringify(version) },
     plugins: [react(), dropWoff()]
   }
 })

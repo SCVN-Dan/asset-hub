@@ -50,13 +50,26 @@ export const IPC = {
   catalogStatus: 'catalog:status',
   catalogList: 'catalog:list',
   catalogWhere: 'catalog:where',
-  catalogProgress: 'catalog:progress'
+  catalogProgress: 'catalog:progress',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
+  updateProgress: 'update:progress'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
 export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed'
 
 export type InstallProgress = { stage: 'download'; received: number; total: number } | { stage: 'verify' } | { stage: 'extract' }
+
+/** This version and, when the release repo has a later one, that one. */
+export interface UpdateInfo {
+  current: string
+  latest?: string
+  /** The app can replace itself (a packaged app in a folder this account may write to). */
+  canInstall: boolean
+  /** The release page, for installing by hand. */
+  page: string
+}
 
 export interface ExportRequest {
   repo: string
@@ -77,6 +90,8 @@ export interface ExportRequest {
   targetProject?: string
   /** Leave out files the project has under another GUID, pointing references at its copy. */
   reuseExisting?: boolean
+  /** Remove the project's own scripts (.cs, .dll in the repo) from prefabs and leave those files out. */
+  stripScripts?: boolean
 }
 
 /** What the package does to the target project. Paths of the project are "Assets/…". */
@@ -113,6 +128,8 @@ export interface ExportResult {
   bytes?: number
   skipped?: Array<{ path: string; reason: 'noMeta' | 'noGuid' | 'duplicateGuid' }>
   target?: TargetReport
+  /** Script components removed from prefabs (`stripScripts`). */
+  scriptsRemoved?: number
 }
 
 export type ExportProgress = { stage: 'resolve' | 'download' | 'write'; done: number; total: number }
@@ -291,5 +308,12 @@ export interface AssetHubApi {
     unityPackage(request: ExportRequest): Promise<IpcResult<ExportResult>>
     onProgress(listener: (progress: ExportProgress) => void): () => void
     showInFolder(path: string): Promise<void>
+  }
+  update: {
+    /** Asks the release repo for its latest version; null when it cannot be reached. */
+    check(): Promise<UpdateInfo | null>
+    /** Downloads, verifies and installs `version`, then restarts the app (resolves only on failure). */
+    install(version: string): Promise<{ ok: false; message: string } | { ok: true }>
+    onProgress(listener: (progress: InstallProgress) => void): () => void
   }
 }

@@ -299,6 +299,9 @@
     "layoutGrouped": "Gom dưới Assets/AssetHub/<repo>/",
     "layoutByType": "Theo loại: Assets/AssetHub/Prefabs, Models, Textures…",
     "skipByName": "Bỏ texture ghép theo tên",
+    "stripScripts": "Xoá script khỏi prefab",
+    "stripScriptsHint": "Gỡ các component script của dự án (file .cs, .dll) khỏi prefab và mọi object con, không đóng gói file script. Component của Unity và package (UI, TextMeshPro…) được giữ.",
+    "scriptsRemoved": "Đã xoá {{count}} component script khỏi prefab.",
     "clear": "Xoá gói",
     "export_other": "Xuất {{count}} model thành .unitypackage",
     "exporting": "Đang xuất…",
@@ -692,5 +695,15 @@
   "link": {
     "copy": "Copy link",
     "hint": "Link assethub://: đồng đội mở link (hoặc dán vào ô tìm kiếm) sẽ tới đúng asset này."
+  },
+  "update": {
+    "install": "Cập nhật v{{version}}",
+    "download": "Tải v{{version}}",
+    "downloading": "Đang tải {{percent}}%",
+    "verify": "Kiểm tra file…",
+    "extract": "Đang cài…",
+    "retry": "Lỗi · Thử lại",
+    "failed": "Cập nhật lỗi: {{message}}",
+    "hint": "Đã có bản {{version}}. Cài xong app tự khởi động lại; cài đặt và cache được giữ nguyên."
   }
 }

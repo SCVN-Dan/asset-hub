@@ -310,6 +310,9 @@
     "layoutGrouped": "Under Assets/AssetHub/<repo>/",
     "layoutByType": "By type: Assets/AssetHub/Prefabs, Models, Textures…",
     "skipByName": "Leave out textures matched by name",
+    "stripScripts": "Remove scripts from prefabs",
+    "stripScriptsHint": "Removes the project's script components (.cs, .dll files) from prefabs and all their child objects, and leaves the script files out. Unity and package components (UI, TextMeshPro…) are kept.",
+    "scriptsRemoved": "Removed {{count}} script components from prefabs.",
     "clear": "Clear",
     "export_one": "Export .unitypackage",
     "export_other": "Export {{count}} models as .unitypackage",
@@ -726,5 +729,15 @@
   "link": {
     "copy": "Copy link",
     "hint": "An assethub:// link: a teammate who opens it (or pastes it in the search box) lands on this asset."
+  },
+  "update": {
+    "install": "Update to v{{version}}",
+    "download": "Download v{{version}}",
+    "downloading": "Downloading {{percent}}%",
+    "verify": "Checking…",
+    "extract": "Installing…",
+    "retry": "Failed · Retry",
+    "failed": "Update failed: {{message}}",
+    "hint": "Version {{version}} is available. The app restarts once it is installed; settings and cache are kept."
   }
 }

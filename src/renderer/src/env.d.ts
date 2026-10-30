@@ -2,6 +2,8 @@
 import type { AssetHubApi } from '@shared/ipc'
 
 declare global {
+  /** package.json "version", filled in at build time. */
+  const __APP_VERSION__: string
   interface Window {
     api: AssetHubApi
   }
