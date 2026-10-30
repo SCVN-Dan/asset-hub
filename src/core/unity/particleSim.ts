@@ -65,6 +65,10 @@ export interface ParticleSim {
   startSize: MinMax
   /** Radians. */
   startRotation: MinMax
+  /** Start height and depth, when the system sizes particles per axis (`startSize` is the width): a long thin ray. */
+  startSize3D?: [MinMax, MinMax]
+  /** Radians around X and Y too, when the system rotates particles in 3D (Z is `startRotation`). */
+  startRotation3D?: [MinMax, MinMax]
   startColor: MinMaxColor
   gravity: MinMax
   maxParticles: number
@@ -79,8 +83,12 @@ export interface ParticleSim {
   limit?: { limit: MinMax; dampen: number }
   colorOverLifetime?: MinMaxColor
   sizeOverLifetime?: MinMax
+  /** Height and depth over lifetime, when the module scales each axis apart (`sizeOverLifetime` is the width). */
+  sizeOverLifetime3D?: [MinMax, MinMax]
   /** Radians per second. */
   rotationOverLifetime?: MinMax
+  /** Radians per second around X and Y, when the module turns each axis apart. */
+  rotationOverLifetime3D?: [MinMax, MinMax]
   sheet?: { tilesX: number; tilesY: number; singleRow: boolean; row: number; frame: MinMax; startFrame: MinMax; cycles: number }
   noise?: { strength: MinMax; frequency: number; scrollSpeed: number }
   /** Systems this one starts at its particles (ParticleSystem fileIDs); they emit only then. */
@@ -91,7 +99,11 @@ export interface ParticleSim {
   velocityScale: number
   /** Largest size on screen, as a fraction of the view height. */
   maxScreenSize: number
+  /** Which way billboards face: the camera, or the world's / the system's own axes (a ring lying on the ground). */
+  alignment: 'view' | 'world' | 'local' | 'facing' | 'velocity'
 }
+
+const ALIGNMENTS: ParticleSim['alignment'][] = ['view', 'world', 'local', 'facing', 'velocity']
 
 export type SubEmitterType = 'birth' | 'collision' | 'death' | 'trigger' | 'manual'
 const SUB_TYPES: SubEmitterType[] = ['birth', 'collision', 'death', 'trigger', 'manual']
@@ -214,6 +226,8 @@ export function parseParticleSim(ps: string, renderer?: string): ParticleSim {
     startSpeed: readMinMax(initial, 4, 'startSpeed', 5),
     startSize: readMinMax(initial, 4, 'startSize', 1),
     startRotation: readMinMax(initial, 4, 'startRotation'),
+    ...(yamlNum(initial, 4, 'size3D') === 1 ? { startSize3D: [readMinMax(initial, 4, 'startSizeY', 1), readMinMax(initial, 4, 'startSizeZ', 1)] as [MinMax, MinMax] } : {}),
+    ...(yamlNum(initial, 4, 'rotation3D') === 1 ? { startRotation3D: [readMinMax(initial, 4, 'startRotationX'), readMinMax(initial, 4, 'startRotationY')] as [MinMax, MinMax] } : {}),
     startColor: readMinMaxColor(initial, 4, 'startColor'),
     gravity: readMinMax(initial, 4, 'gravityModifier'),
     maxParticles: yamlNum(initial, 4, 'maxNumParticles') ?? 1000,
@@ -235,7 +249,8 @@ export function parseParticleSim(ps: string, renderer?: string): ParticleSim {
       : [],
     lengthScale: (renderer ? yamlNum(renderer, 2, 'm_LengthScale') : undefined) ?? 2,
     velocityScale: (renderer ? yamlNum(renderer, 2, 'm_VelocityScale') : undefined) ?? 0,
-    maxScreenSize: (renderer ? yamlNum(renderer, 2, 'm_MaxParticleSize') : undefined) ?? 0.5
+    maxScreenSize: (renderer ? yamlNum(renderer, 2, 'm_MaxParticleSize') : undefined) ?? 0.5,
+    alignment: ALIGNMENTS[(renderer ? yamlNum(renderer, 2, 'm_RenderAlignment') : undefined) ?? 0] ?? 'view'
   }
   if (on(shape))
     sim.shape = {
@@ -258,8 +273,14 @@ export function parseParticleSim(ps: string, renderer?: string): ParticleSim {
   if (on(force)) sim.force = [readMinMax(force, 4, 'x'), readMinMax(force, 4, 'y'), readMinMax(force, 4, 'z')]
   if (on(limit)) sim.limit = { limit: readMinMax(limit, 4, 'magnitude', 1), dampen: yamlNum(limit, 4, 'dampen') ?? 0 }
   if (on(color)) sim.colorOverLifetime = readMinMaxColor(color, 4, 'gradient')
-  if (on(size)) sim.sizeOverLifetime = readMinMax(size, 4, 'curve', 1)
-  if (on(rotation)) sim.rotationOverLifetime = readMinMax(rotation, 4, 'curve', Math.PI / 4)
+  if (on(size)) {
+    sim.sizeOverLifetime = readMinMax(size, 4, 'curve', 1)
+    if (yamlNum(size, 4, 'separateAxes') === 1) sim.sizeOverLifetime3D = [readMinMax(size, 4, 'y', 1), readMinMax(size, 4, 'z', 1)]
+  }
+  if (on(rotation)) {
+    sim.rotationOverLifetime = readMinMax(rotation, 4, 'curve', Math.PI / 4)
+    if (yamlNum(rotation, 4, 'separateAxes') === 1) sim.rotationOverLifetime3D = [readMinMax(rotation, 4, 'x', 0), readMinMax(rotation, 4, 'y', 0)]
+  }
   if (on(uv))
     sim.sheet = {
       tilesX: Math.max(1, yamlNum(uv, 4, 'tilesX') ?? 1),

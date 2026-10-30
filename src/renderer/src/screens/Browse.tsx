@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AssetSearch,
@@ -38,6 +38,9 @@ import { BUDGET_PRESETS, mergeStats, rankForPlayable, summaryIssues, type Budget
 import { useBudget } from '../budget'
 import { parseAssetLink } from '@shared/deeplink'
 import { FX_THUMB_VERSION, motionKey } from '../viewer/particleThumb'
+import { ANIM_THUMB_VERSION, MODEL_THUMB_VERSION } from '../viewer/thumbVersions'
+import { useSharedImports } from '../useSharedIndex'
+import { Splitter, useStoredSize } from '../components/Splitter'
 
 interface Props {
   source: AssetSource
@@ -121,6 +124,9 @@ export function Browse({
   targetProject
 }: Props) {
   const { t } = useTranslation()
+  // Detail panel width and preview height, as each person drags them (kept on this machine).
+  const [detailsWidth, setDetailsWidth] = useStoredSize('assethub.detailsWidth')
+  const [viewerHeight, setViewerHeight] = useStoredSize('assethub.viewerHeight')
   const budget = useBudget()
   const [repos, setRepos] = useState<Load<RepoRef[]>>({ status: 'loading' })
   const [repo, setRepo] = useState('')
@@ -255,6 +261,9 @@ export function Browse({
     .join('|')
   const clipNames = useMemo(() => new Map(Object.entries(modelStats).flatMap(([sha, s]) => (s.clipNames ? [[sha, s.clipNames] as const] : []))), [clipKey])
   /** Shas of models known to hold clips, for tabs that list them (`alsoShows`). */
+  /** Shown anyway: assets their handler leaves out of lists (clips no model was found for). */
+  const [showUnlisted, setShowUnlisted] = useState(false)
+  const unlistedKey = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.rigged === false).map(([sha]) => sha).sort().join('|'), [modelStats])
   const withClips = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.clips > 0).map(([sha]) => sha).sort().join('|'), [modelStats])
   /** Shas measured as effects or not (particles read), for the effects tab. */
   const withParticles = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.particles !== undefined).map(([sha, s]) => `${sha}:${s.emitters ?? 0}`).sort().join('|'), [modelStats])
@@ -264,11 +273,17 @@ export function Browse({
   /** Scans started (or done), as "kind:repo@branch". */
   const scans = useRef(new Set<string>())
   /** In the open tab: its own type, or another type the tab's handler also lists. */
+  const listed = useCallback((a: Asset) => showUnlisted || !registry.get(a.type)?.unlisted?.(modelStats[a.sha]), [registry, showUnlisted, unlistedKey])
   const inTab = useCallback(
     (a: Asset, tab: string) =>
-      tab === ALL ? !registry.get(a.type)?.hidden : a.type === tab || !!registry.get(tab)?.alsoShows?.(a, modelStats[a.sha], known),
-    // modelStats matters only through which models hold clips and which prefabs are effects.
-    [registry, withClips, withParticles, known]
+      tab === ALL ? !registry.get(a.type)?.hidden && listed(a) : (a.type === tab && listed(a)) || !!registry.get(tab)?.alsoShows?.(a, modelStats[a.sha], known),
+    // modelStats matters only through which models hold clips, which prefabs are effects and which clips have no model.
+    [registry, withClips, withParticles, known, listed]
+  )
+  /** In the open tab but left out (see `listed`), for the offer to show them. */
+  const unlistedCount = useMemo(
+    () => (showUnlisted || !unlistedKey ? 0 : assets.filter((a) => registry.get(a.type)?.unlisted?.(modelStats[a.sha]) && (typeFilter === ALL || a.type === typeFilter)).length),
+    [assets, registry, typeFilter, showUnlisted, unlistedKey]
   )
   /** Every model of the branch, as repo paths (rigs to play clips on). */
   const modelPaths = useMemo(() => assets.filter((a) => registry.get(a.type)?.preview.kind === 'three').map((a) => root + a.path), [assets, registry, root])
@@ -408,14 +423,18 @@ export function Browse({
   const renderable = gridItems.filter(canRender)
   const loadedCount = renderable.filter((a) => thumbs[a.sha]).length
 
-  /** Prefab cards drawn without numbers (effects as a plain "FX" before particles were read), or effects drawn the old way: tried once per session. */
+  /** Prefab cards drawn without numbers (effects as a plain "FX" before particles were read), or effect / clip cards drawn the old way: tried once per session. */
   const unmeasuredPrefabs = useRef(new Set<string>())
   /** An effect card older than the current way of drawing them (textures piled up, one frame). */
   const staleEffect = (a: Asset) => kindOf(a) === 'prefab' && !!modelStats[a.sha]?.particles && modelStats[a.sha]?.fxThumb !== FX_THUMB_VERSION && !unmeasuredPrefabs.current.has(a.sha)
+  /** A clip card drawn before the rig search last improved (shown as curves when no rig was found then). */
+  const staleClip = (a: Asset) => kindOf(a) === 'animation' && modelStats[a.sha]?.animThumb !== ANIM_THUMB_VERSION && !unmeasuredPrefabs.current.has(a.sha)
+  /** A model or prefab card drawn before the last fix to how they are drawn (some came out empty). */
+  const staleModel = (a: Asset) => (kindOf(a) === 'three' || kindOf(a) === 'prefab') && !!modelStats[a.sha] && modelStats[a.sha].modelThumb !== MODEL_THUMB_VERSION && !unmeasuredPrefabs.current.has(a.sha)
   const remeasure = (a: Asset) => {
     const s = modelStats[a.sha]
     if (!s) return kindOf(a) === 'prefab' && !!thumbs[a.sha] && !unmeasuredPrefabs.current.has(a.sha)
-    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures) || staleEffect(a)
+    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures) || staleEffect(a) || staleClip(a) || staleModel(a)
   }
 
   /** Queues a card's thumbnail, read from the open branch or (for results elsewhere) its main location. */
@@ -577,6 +596,7 @@ export function Browse({
       .finally(off)
   }, [typeFilter, live, registry])
 
+  const sharedImports = useSharedImports()
   // Thumbnails rendered earlier, keyed by the model's content hash.
   useEffect(() => {
     setThumbsLoaded(false)
@@ -593,7 +613,8 @@ export function Browse({
     return () => {
       cancelled = true
     }
-  }, [source, allAssets])
+    // Read again when a teammate's index brought thumbnails and numbers in.
+  }, [source, allAssets, sharedImports])
 
   const runExport = async (items: PackItem[]) => {
     if (!live || !items.length) return
@@ -723,7 +744,10 @@ export function Browse({
         </div>
       )}
 
-      <div className="browse-body">
+      <div
+        className="browse-body"
+        style={{ ...(detailsWidth ? { '--details-w': `${detailsWidth}px` } : {}), ...(viewerHeight ? { '--viewer-h': `${viewerHeight}px` } : {}) } as CSSProperties}
+      >
         <aside className="sidebar">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="label-caps">{t('browse.types')}</span>
@@ -771,6 +795,22 @@ export function Browse({
                 : <>
                     {t('browse.assetCount', { count: rankedShown.length })}
                     {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
+                    {unlistedCount > 0 && (
+                      <>
+                        {' · '}
+                        <button type="button" className="inline-link" onClick={() => setShowUnlisted(true)}>
+                          {t('browse.unlistedShow', { count: unlistedCount })}
+                        </button>
+                      </>
+                    )}
+                    {showUnlisted && unlistedKey && (
+                      <>
+                        {' · '}
+                        <button type="button" className="inline-link" onClick={() => setShowUnlisted(false)}>
+                          {t('browse.unlistedHide')}
+                        </button>
+                      </>
+                    )}
                   </>}
               {renderable.length > 0 && (
                 <span className="loaded-count" title={t('browse.loadedHint')}>
@@ -880,7 +920,7 @@ export function Browse({
                       thumbsLoaded && canRender(a)
                         ? (on) => {
                             if (!on) return thumbQueue.cancel(a.sha)
-                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a)) return
+                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a) && !staleClip(a) && !staleModel(a)) return
                             const src = catalogSource(a)
                             thumbQueue.request(a.sha, src.path, i, src.ctx, kindOf(a))
                           }
@@ -952,7 +992,7 @@ export function Browse({
                       live && thumbsLoaded && canRender(a)
                         ? (on) => {
                             if (!on) return thumbQueue.cancel(a.sha)
-                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a)) return
+                            if (thumbs[a.sha] && modelStats[a.sha] && !staleEffect(a) && !staleClip(a) && !staleModel(a)) return
                             thumbQueue.request(a.sha, root + a.path, i, undefined, kindOf(a))
                           }
                         : undefined
@@ -965,6 +1005,8 @@ export function Browse({
           )}
         </main>
 
+        {/* The grid keeps at least 360 px; the sidebar is 220–260 px. */}
+        <Splitter axis="x" target="next" min={300} max={() => window.innerWidth - 260 - 360} onResize={setDetailsWidth} label={t('details.resizePanel')} />
         {inCatalog ? (
           <CatalogDetails
             asset={catalogSelected}
@@ -995,6 +1037,7 @@ export function Browse({
           onSelectCopy={setSelectedId}
           excludedFolders={excludedFolders}
           onPrefabFiles={(path, files) => prefabFiles.current.set(path, files)}
+          viewerResizer={<Splitter axis="y" target="prev" min={160} max={() => window.innerHeight - 220} onResize={setViewerHeight} label={t('details.resizeViewer')} />}
         />
         )}
       </div>

@@ -97,6 +97,8 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
             Object.assign(effect, next)
             return next
           })
+          // It played while hidden by the overlay (textures were still loading): from the start, now that it shows.
+          effect.restart()
           setStatus('ready')
           // No snapshot: effect cards are filmed through their whole run in the background.
           callbacks.current.onStats(owner.stats(build.modelBytes, build.textures))
@@ -135,8 +137,25 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
           ? t('viewer.error', { message: error })
           : undefined
 
+  /** Another play of the effect on top of the running ones, like spawning the prefab again (spam it like in Unity). */
+  const fire = () => {
+    const effect = built.current?.effect
+    if (!effect || !fx) return
+    if (fx.paused) setEffect({ paused: false })
+    effect.fire()
+  }
+
   return (
-    <div className="viewer">
+    <div
+      className="viewer"
+      // Focused (clicked) viewer: Space fires the effect again.
+      tabIndex={fx ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (e.key !== ' ' || !fx || status !== 'ready') return
+        e.preventDefault()
+        if (!e.repeat) fire()
+      }}
+    >
       <div className="viewer-canvas" ref={host} />
       {overlay && (
         <div className="viewer-overlay" role="status">
@@ -176,20 +195,37 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
           </div>
           {fx && (
             <div className="viewer-tools viewer-tools-bottom" role="toolbar" aria-label={t('particles.title')}>
-              <button type="button" className="viewer-btn" aria-pressed={!fx.paused} onClick={() => setEffect({ paused: !fx.paused })}>
+              <button
+                type="button"
+                className="viewer-btn"
+                aria-pressed={!fx.paused}
+                onClick={() => {
+                  // Play starts the effect over at once; pause holds it where it is.
+                  if (fx.paused) built.current?.effect?.restart()
+                  setEffect({ paused: !fx.paused })
+                }}
+              >
                 {fx.paused ? t('particles.play') : t('particles.pause')}
+              </button>
+              <button type="button" className="viewer-btn" title={t('particles.fireHint')} onClick={fire}>
+                {t('particles.fire')}
               </button>
               <button type="button" className="viewer-btn" onClick={() => built.current?.effect?.restart()}>
                 {t('particles.restart')}
               </button>
+              <span className="viewer-sep" aria-hidden="true" />
               <button type="button" className="viewer-btn" aria-pressed={fx.loop} title={t('particles.loopHint')} onClick={() => setEffect({ loop: !fx.loop })}>
                 {t('particles.loop')}
               </button>
-              {[0.25, 0.5, 1].map((s) => (
-                <button key={s} type="button" className="viewer-btn" aria-pressed={fx.speed === s} onClick={() => setEffect({ speed: s })}>
-                  {s}×
-                </button>
-              ))}
+              {/* Speed apart, on the right: one choice among three, drawn as a single control. */}
+              <div className="viewer-seg" role="group" aria-label={t('particles.speed')}>
+                <span className="viewer-seg-label">{t('particles.speed')}</span>
+                {[0.25, 0.5, 1].map((s) => (
+                  <button key={s} type="button" className="viewer-btn" aria-pressed={fx.speed === s} onClick={() => setEffect({ speed: s })}>
+                    {s}×
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <span className="viewer-hint">{missing > 0 ? t('prefabView.missing', { count: missing }) : t('viewer.hint')}</span>

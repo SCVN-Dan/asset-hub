@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TreeEntry } from '../types'
-import { parseMaterialLook } from '../unity/yaml'
+import { parseMaterialLook, shaderBlend, shaderTextureProps } from '../unity/yaml'
 import { materialHandler } from '../handlers/material'
 import type { DepContext } from './fbx'
 import { resolveMaterialDependencies } from './material'
@@ -122,4 +122,27 @@ describe('parseMaterialLook (legacy particles)', () => {
     const text = 'Material:\n  m_SavedProperties:\n    m_Colors:\n    - _TintColor: {r: 0.5, g: 0.25, b: 0.5, a: 0.5}\n'
     expect(parseMaterialLook(text).color).toEqual({ r: 1, g: 0.5, b: 1, a: 0.5 })
   })
+
+  it('reads the blend a shader fixes in its code, not one taken from material properties', () => {
+    const shader = (blend: string) => `// Blend One Zero (old)\nShader "Custom/Fire" {\n  SubShader {\n    Tags { "Queue"="Transparent" }\n    ${blend}\n    Pass {}\n  }\n}`
+    expect(shaderBlend(shader('Blend SrcAlpha One'))).toBe('additive')
+    expect(shaderBlend(shader('blend srcalpha oneminussrcalpha'))).toBe('alpha')
+    expect(shaderBlend(shader('Blend One OneMinusSrcAlpha'))).toBe('premultiply')
+    expect(shaderBlend(shader('Blend DstColor Zero'))).toBe('multiply')
+    expect(shaderBlend(shader('Blend [_SrcBlend] [_DstBlend]'))).toBeUndefined()
+    expect(shaderBlend(shader(''))).toBeUndefined()
+  })
+
+  it('lists the texture slots a shader declares, in order', () => {
+    const code = 'Shader "Custom/Toon" {\n  Properties {\n    // _Old ("Old", 2D) = "white" {}\n    [NoScaleOffset] _MainTex ("Albedo", 2D) = "white" {}\n    _Color ("Tint", Color) = (1,1,1,1)\n    _Noise ("Noise", 2D) = "black" {}\n  }\n  SubShader { Pass {} }\n}'
+    expect(shaderTextureProps('a/Toon.shader', code)).toEqual(['_MainTex', '_Noise'])
+    const graph = [
+      '{\n    "m_SGVersion": 0,\n    "m_Type": "UnityEditor.ShaderGraph.Internal.Texture2DShaderProperty",\n    "m_DefaultReferenceName": "Texture2D_abc",\n    "m_OverrideReferenceName": "_MainTex",\n}',
+      '{\n    "m_SGVersion": 0,\n    "m_Type": "UnityEditor.ShaderGraph.Internal.Texture2DShaderProperty",\n    "m_DefaultReferenceName": "_Ramp",\n    "m_OverrideReferenceName": "",\n}'
+    ].join('\n\n')
+    expect(shaderTextureProps('a/Object.shadergraph', graph)).toEqual(['_MainTex', '_Ramp'])
+    const old = '{"m_SerializedProperties": [{"typeInfo": {"fullName": "UnityEditor.ShaderGraph.Internal.Texture2DShaderProperty"}, "JSONnodeData": "{\\n \\"m_DefaultReferenceName\\": \\"Texture2D_1\\",\\n \\"m_OverrideReferenceName\\": \\"_BaseMap\\"\\n}"}]}'
+    expect(shaderTextureProps('a/Old.shadergraph', old)).toEqual(['_BaseMap'])
+  })
 })
+

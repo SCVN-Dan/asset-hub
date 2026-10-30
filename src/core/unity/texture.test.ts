@@ -36,6 +36,13 @@ describe('texture import settings', () => {
     expect(imp.overrides).toEqual([{ target: 'Android', maxTextureSize: 512, compression: 1 }])
   })
 
+  it('reads where alpha comes from (white-on-black particle sheets take it from the grey level)', () => {
+    expect(parseTextureMeta(meta.replace('alphaIsTransparency: 1', 'alphaUsage: 2')).alphaSource).toBe('gray')
+    expect(parseTextureMeta(meta.replace('alphaIsTransparency: 1', 'alphaUsage: 0')).alphaSource).toBe('none')
+    expect(parseTextureMeta(meta.replace('alphaIsTransparency: 1', 'alphaUsage: 1')).alphaSource).toBe('input')
+    expect(parseTextureMeta(meta).alphaSource).toBeUndefined()
+  })
+
   it('caps the built size by the import max size, a mobile override first', () => {
     const imp = parseTextureMeta(meta)
     expect(importedTextureSize(4096, 2048, imp)).toBe(512)

@@ -11,8 +11,12 @@ export type TargetDecision =
   | { action: 'same'; existing: string }
   /** Same GUID, other content: Unity replaces the project's file (at its own path). */
   | { action: 'overwrite'; existing: string }
-  /** Same content under another GUID: left out, references point at the project's copy. */
-  | { action: 'reuse'; existing: string; guid: string }
+  /** Same content (or, for a shader, same name) under another GUID: left out, references point at the project's copy. */
+  | { action: 'reuse'; existing: string; guid: string; byName?: string }
+  /** A shader the project has under the same GUID, other content: left out, the project's version is kept. */
+  | { action: 'keep'; existing: string }
+  /** A shader named like one of the project's (other GUID): imported, but two shaders share the name. */
+  | { action: 'clash'; existing: string; name: string }
   /** Its path is taken by another asset: Unity imports it as "Name 1". */
   | { action: 'rename'; existing: string }
 
@@ -24,6 +28,14 @@ export interface PackageCandidate {
   pathname: string
   /** Content hash (same function as the project's). */
   hash: string
+  /** Shader files only: the name materials and `Shader.Find` know it by. */
+  shader?: { name: string; kind: ProjectShader['kind'] }
+}
+
+export interface ProjectShader {
+  path: string
+  guid: string
+  kind: 'shader' | 'shadergraph'
 }
 
 export interface TargetIndex {
@@ -35,6 +47,8 @@ export interface TargetIndex {
   hashOf: ReadonlyMap<string, string>
   /** Lower-case project paths that exist. */
   paths: ReadonlySet<string>
+  /** The project's shaders by name. */
+  shaders?: ReadonlyMap<string, ProjectShader>
 }
 
 export interface TargetPlan {
@@ -46,6 +60,9 @@ export interface TargetPlan {
 /**
  * Decides per file. `reuse` only applies when allowed: otherwise a same-content
  * file under another GUID is imported as a second copy (`add`, or `rename`).
+ * Shaders go by name too: one the project already has under that name is used
+ * instead of a second one (`Shader.Find` could return either), and a changed
+ * shader does not replace the project's, which its other materials rely on.
  */
 export function planAgainstTarget(files: readonly PackageCandidate[], target: TargetIndex, reuse: boolean): TargetPlan {
   const decisions = new Map<string, TargetDecision>()
@@ -53,7 +70,8 @@ export function planAgainstTarget(files: readonly PackageCandidate[], target: Ta
   for (const f of files) {
     const existing = target.byGuid.get(f.guid)
     if (existing) {
-      decisions.set(f.path, target.hashOf.get(existing) === f.hash ? { action: 'same', existing } : { action: 'overwrite', existing })
+      const same = target.hashOf.get(existing) === f.hash
+      decisions.set(f.path, same ? { action: 'same', existing } : { action: f.shader && reuse ? 'keep' : 'overwrite', existing })
       continue
     }
     const twin = target.byHash.get(f.hash)
@@ -62,10 +80,39 @@ export function planAgainstTarget(files: readonly PackageCandidate[], target: Ta
       remap.set(f.guid, twin.guid)
       continue
     }
+    const named = f.shader && target.shaders?.get(f.shader.name)
+    if (named) {
+      // A .shader and a Shader Graph keep the shader under different file IDs: only a GUID swap of the same kind is safe.
+      if (reuse && named.kind === f.shader!.kind) {
+        decisions.set(f.path, { action: 'reuse', existing: named.path, guid: named.guid, byName: f.shader!.name })
+        remap.set(f.guid, named.guid)
+      } else decisions.set(f.path, { action: 'clash', existing: named.path, name: f.shader!.name })
+      continue
+    }
     decisions.set(f.path, target.paths.has(f.pathname.toLowerCase()) ? { action: 'rename', existing: f.pathname } : { action: 'add' })
   }
   return { decisions, remap }
 }
+
+/**
+ * The name a shader file gives its shader: `Shader "Custom/Toon"` in a .shader,
+ * "<path>/<file name>" for a Shader Graph (path "Shader Graphs" unless set).
+ */
+export function shaderName(path: string, text: string): string | undefined {
+  if (/\.shader$/i.test(path)) {
+    const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+    return /^\s*Shader\s+"([^"]+)"/.exec(code)?.[1]
+  }
+  if (/\.shadergraph$/i.test(path)) {
+    const folder = /"m_Path"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text)?.[1] || 'Shader Graphs'
+    const file = path.split('/').pop()!.replace(/\.shadergraph$/i, '')
+    return `${folder.replace(/\/+$/, '')}/${file}`
+  }
+  return undefined
+}
+
+export const shaderKind = (path: string): ProjectShader['kind'] | undefined =>
+  /\.shader$/i.test(path) ? 'shader' : /\.shadergraph$/i.test(path) ? 'shadergraph' : undefined
 
 const GUID_REF = /(guid: )([0-9a-f]{32})/g
 

@@ -33,6 +33,10 @@ export const IPC = {
   getThumbs: 'thumbs:get',
   saveThumb: 'thumbs:save',
   cacheUsage: 'cache:usage',
+  sharedIndexStatus: 'sharedIndex:status',
+  sharedIndexImport: 'sharedIndex:import',
+  sharedIndexExport: 'sharedIndex:export',
+  sharedIndexProgress: 'sharedIndex:progress',
   clearCache: 'cache:clear',
   getStats: 'stats:get',
   saveStats: 'stats:save',
@@ -86,6 +90,18 @@ export interface TargetReport {
   overwrite: Array<{ path: string; existing: string }>
   /** Path taken by another asset: Unity will import it as "Name 1". */
   renamed: Array<{ path: string; existing: string }>
+  /** Shaders the project has under the same name (other GUID): left out, materials use the project's. */
+  shaderByName: Array<{ path: string; existing: string }>
+  /** Shaders the project has under the same GUID with other content: left out, the project's version is kept. */
+  shaderKept: Array<{ path: string; existing: string }>
+  /** Shaders imported although the project has one by the same name. */
+  shaderClash: Array<{ path: string; existing: string }>
+  /** Materials switched to a project shader by `.assethub/shader-mapping.json` ("existing" = "from → to"). */
+  shaderMapped: Array<{ path: string; existing: string }>
+  /** Exported assets using package scripts the project lacks ("existing" = their GUIDs, shortened): "Missing Script" after import. */
+  missingScripts: Array<{ path: string; existing: string }>
+  /** Problems with the mapping file (rules skipped). */
+  mappingErrors: string[]
   /** URP versions of the source and target projects, when they differ. */
   urp?: { source: string; target?: string }
 }
@@ -119,6 +135,39 @@ export interface CacheUsage {
   thumbs: number
   /** Git clones, measurements and the rest. */
   other: number
+}
+
+/** What a shared index folder holds (`manifest.json`). */
+export interface SharedIndexManifest {
+  format: 1
+  /** ISO time it was written; a newer one is taken in. */
+  exportedAt: string
+  /** GitHub login of who wrote it. */
+  exportedBy?: string
+  /** Asset types indexed (handler ids); an index made for other types is left alone. */
+  types: string
+  repos: Array<{ repo: string; branches: number; commits: number }>
+  thumbs: number
+  stats: number
+}
+
+/** Counts of what an import took in, or an export wrote. */
+export interface SharedIndexResult {
+  commits: number
+  facts: number
+  stats: number
+  thumbs: number
+}
+
+export interface SharedIndexStatus {
+  state: 'idle' | 'importing' | 'exporting' | 'error'
+  error?: string
+  /** In the shared folder now. */
+  manifest?: SharedIndexManifest
+  /** `exportedAt` of the index taken in last. */
+  importedAt?: string
+  last?: SharedIndexResult
+  lastAction?: 'imported' | 'exported'
 }
 
 export interface IpcError {
@@ -216,6 +265,15 @@ export interface AssetHubApi {
     /** URLs of the thumbnails rendered earlier, for those of `keys` that have one. */
     get(keys: string[]): Promise<Record<string, string>>
     save(key: string, dataUrl: string): Promise<void>
+  }
+  /** A catalog, facts, measurements and thumbnails shared through a folder (`Settings.sharedIndexDir`). */
+  sharedIndex: {
+    status(): Promise<IpcResult<SharedIndexStatus>>
+    /** Takes in the folder's index now, even one taken in before. */
+    import(): Promise<IpcResult<SharedIndexStatus>>
+    /** Writes this app's index there (after taking in what is already there). */
+    export(): Promise<IpcResult<SharedIndexStatus>>
+    onStatus(listener: (status: SharedIndexStatus) => void): () => void
   }
   cache: {
     /** Bytes the cache folder holds, by kind. */

@@ -6,6 +6,7 @@ import { FbxViewer } from './FbxViewer'
 import { buildPrefab, dressPrefab } from './prefabBuild'
 import { FX_THUMB_VERSION, filmEffect, particleStats } from './particleThumb'
 import { buildEffect } from './effectBuild'
+import { MODEL_THUMB_VERSION } from './thumbVersions'
 
 /** A card for prefabs with nothing 3D to draw (UI, effects, scripts only): their kind, written large. */
 function labelCard(label: string): string {
@@ -42,9 +43,9 @@ export async function renderPrefabThumbnail(live: LiveContext, path: string): Pr
       await dressPrefab(viewer, build)
       const film = effect && filmEffect(viewer, effect)
       const url = film?.still ?? viewer.snapshot()
-      if (!fx) return { url, stats: summarizeStats(viewer.stats(build.modelBytes, build.textures), report.partial ? 'thumb' : 'viewer') }
+      if (!fx) return { url, stats: { ...summarizeStats(viewer.stats(build.modelBytes, build.textures), report.partial ? 'thumb' : 'viewer'), modelThumb: MODEL_THUMB_VERSION } }
       const stats = build.meshes ? particleStats(fx, summarizeStats(viewer.stats(build.modelBytes, build.textures), report.partial ? 'thumb' : 'viewer')) : particleStats(fx)
-      return { url, motion: film?.motion, stats: { ...stats, maxTextureSize: Math.max(stats.maxTextureSize, effect?.maxTextureSize ?? 0), ...(film ? { fxThumb: FX_THUMB_VERSION } : {}) } }
+      return { url, motion: film?.motion, stats: { ...stats, maxTextureSize: Math.max(stats.maxTextureSize, effect?.maxTextureSize ?? 0), modelThumb: MODEL_THUMB_VERSION, ...(film ? { fxThumb: FX_THUMB_VERSION } : {}) } }
     } finally {
       effect?.dispose()
       viewer.dispose()

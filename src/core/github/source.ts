@@ -175,6 +175,8 @@ const EFFECT_KIND = 'prefabfx3'
 const SPRITE_KIND = 'spritemeta'
 /** .asset blob SHA → '1' when it is a TextMeshPro font asset. */
 const TMP_KIND = 'tmpfont'
+/** Facts by blob SHA worth sharing with a team: the same blob gives the same fact on every machine. */
+export const SHARED_FACT_KINDS = [SHA_KIND, PREFAB_KIND, EFFECT_KIND, SPRITE_KIND, TMP_KIND] as const
 /** Textures whose .meta can say "sprite". */
 const SPRITE_TEXTURE = /\.(png|jpe?g|tga|psd|gif|bmp|tiff?)$/i
 /**
@@ -617,6 +619,28 @@ export class GitHubAssetSource implements AssetSource {
     }
   }
 
+  /** Facts by blob SHA of one repo (what `SHARED_FACT_KINDS` name), as kept in memory. */
+  sharedFacts(kind: string, repo: string): Promise<Record<string, unknown>> {
+    return this.sharedCache(kind, repo)
+  }
+
+  /**
+   * Adds facts found elsewhere (a shared index) to what this app knows, in
+   * the object the scans write to, so a later save keeps them. Facts already
+   * known stay. Returns how many were added.
+   */
+  async mergeSharedFacts(kind: string, repo: string, facts: Record<string, unknown>): Promise<number> {
+    const known = await this.sharedCache(kind, repo)
+    let added = 0
+    for (const [sha, fact] of Object.entries(facts)) {
+      if (sha in known) continue
+      known[sha] = fact
+      added++
+    }
+    if (added) await this.options.cache?.set(kind, repo, SHA_KEY, known).catch(() => {})
+    return added
+  }
+
   /** One shared, lazily loaded object per cache kind and repo. */
   private sharedCache(kind: string, repo: string): Promise<Record<string, unknown>> {
     const key = `${kind}:${repo}`
@@ -710,9 +734,36 @@ export class GitHubAssetSource implements AssetSource {
     return bytes
   }
 
+  /**
+   * Text files of a commit (prefabs, materials, .meta…), from the blob cache
+   * when read before (any branch: a blob SHA is its content), the rest in one
+   * GraphQL pass, kept for next time. LFS files are not cached here: their
+   * text is the pointer, and their key holds the real file.
+   */
   private async readTexts(repo: string, snap: Snapshot, paths: readonly string[]): Promise<Map<string, string>> {
     const present = paths.filter((p) => snap.byPath.has(p))
-    return present.length ? this.client.getBlobTexts(repo, snap.commit, present) : new Map()
+    if (!present.length) return new Map()
+    const cache = this.options.blobCache
+    const out = new Map<string, string>()
+    const todo: string[] = []
+    const dec = new TextDecoder()
+    await Promise.all(
+      present.map(async (p) => {
+        const e = snap.byPath.get(p)!
+        const hit = cache && !e.lfs ? await cache.get(e.sha).catch(() => undefined) : undefined
+        if (hit) out.set(p, dec.decode(hit))
+        else todo.push(p)
+      })
+    )
+    if (!todo.length) return out
+    const enc = new TextEncoder()
+    for (const [p, text] of await this.client.getBlobTexts(repo, snap.commit, todo)) {
+      out.set(p, text)
+      const e = snap.byPath.get(p)!
+      // The cache is an optimisation: a failed write must not fail the read.
+      if (cache && !e.lfs) void cache.set(e.sha, enc.encode(text)).catch(() => undefined)
+    }
+    return out
   }
 
   /** GUID → repo path for every indexed .meta in the commit; concurrent callers share one build. */

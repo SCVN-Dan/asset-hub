@@ -96,6 +96,26 @@ ${curveYaml}    maxNumParticles: 50
     expect(sim.colorOverLifetime).toBeUndefined()
   })
 
+  it('reads the 3D start rotation and which way billboards face (a ring laid on the ground)', () => {
+    const rot = (key: string, v: number) => `    ${key}:\n      serializedVersion: 2\n      minMaxState: 0\n      scalar: ${v}\n      minScalar: 0\n`
+    const ps = `ParticleSystem:\n  InitialModule:\n    enabled: 1\n    rotation3D: 1\n${rot('startRotationX', -1.5707963)}${rot('startRotationY', 0)}`
+    const sim = parseParticleSim(ps, '  m_RenderMode: 0\n  m_RenderAlignment: 2\n')
+    expect(sim.alignment).toBe('local')
+    expect(evalMinMax(sim.startRotation3D![0], 0, 1)).toBeCloseTo(-Math.PI / 2)
+    expect(parseParticleSim(ps.replace('rotation3D: 1', 'rotation3D: 0')).startRotation3D).toBeUndefined()
+    expect(parseParticleSim(ps).alignment).toBe('view')
+  })
+
+  it('reads sizes per axis: a long thin ray, and axes scaled apart over lifetime', () => {
+    const k = (key: string, v: number) => `    ${key}:\n      serializedVersion: 2\n      minMaxState: 0\n      scalar: ${v}\n      minScalar: ${v}\n`
+    const ps = `ParticleSystem:\n  InitialModule:\n    enabled: 1\n    size3D: 1\n${k('startSize', 5)}${k('startSizeY', 0.5)}${k('startSizeZ', 1)}  SizeModule:\n    enabled: 1\n${k('curve', 1).replace(/^ {4}/gm, '    ')}${k('y', 0.2)}${k('z', 1)}    separateAxes: 1\n`
+    const sim = parseParticleSim(ps)
+    expect(evalMinMax(sim.startSize, 0, 1)).toBe(5)
+    expect(evalMinMax(sim.startSize3D![0], 0, 1)).toBe(0.5)
+    expect(evalMinMax(sim.sizeOverLifetime3D![0], 0, 1)).toBe(0.2)
+    expect(parseParticleSim(ps.replace('size3D: 1', 'size3D: 0').replace('separateAxes: 1', 'separateAxes: 0')).startSize3D).toBeUndefined()
+  })
+
   it('reads sub emitters and trails', () => {
     const ps = `ParticleSystem:
   lengthInSec: 1

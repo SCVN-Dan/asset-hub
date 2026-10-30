@@ -152,6 +152,29 @@ export class RepoCatalog {
     return this.data
   }
 
+  /**
+   * Takes in a catalog made elsewhere (a teammate's shared index): its branch
+   * list when it was read more recently, and every listed commit a branch
+   * points at that this one has not listed. Returns how many commits were added.
+   */
+  merge(other: RepoCatalog): number {
+    const o = other.data
+    if ((o.checkedAt ?? 0) > (this.data.checkedAt ?? 0)) this.setBranches(o.branches, o.defaultBranch, o.checkedAt)
+    const live = new Set(this.data.branches.map((b) => b.commit))
+    let added = 0
+    for (const [commit, flat] of Object.entries(o.commits)) {
+      if (commit in this.data.commits || !live.has(commit)) continue
+      const entries: TreeEntry[] = []
+      for (let i = 0; i < flat.length; i += 2) {
+        const [sha, size] = o.blobs[flat[i + 1]]
+        entries.push(size < 0 ? { path: o.paths[flat[i]], type: 'blob', sha, lfs: true } : { path: o.paths[flat[i]], type: 'blob', sha, size })
+      }
+      this.addCommit(commit, entries)
+      added++
+    }
+    return added
+  }
+
   private indexOf<V>(index: Map<string, number>, list: V[], key: string, value: V): number {
     let i = index.get(key)
     if (i === undefined) {

@@ -26,8 +26,13 @@ export interface MaterialSlot {
   file: TextureFile
 }
 
-const TRANSPARENT_PNG =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
+/**
+ * Stands in for a texture that is not found: plain white, so the material's
+ * colour and vertex colours still show. (A transparent one turned untextured
+ * models black and see-through: rigs like Customer_Red.fbx vanished.)
+ */
+export const BLANK_TEXTURE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'
 /** In priority order: URP's _BaseMap wins over the legacy _MainTex that URP materials also keep. */
 const COLOR_ORDER = ['_basemap', '_basecolormap', '_albedo', '_maintex', '_diffuse']
 const COLOR_PROPS = new Set(COLOR_ORDER)
@@ -86,7 +91,7 @@ export class FbxViewer {
       setTimeout(resolve, 4000)
     })
     manager.onStart = () => (started = true)
-    manager.setURLModifier((url) => textures.get(baseLower(url))?.url ?? TRANSPARENT_PNG)
+    manager.setURLModifier((url) => textures.get(baseLower(url))?.url ?? BLANK_TEXTURE)
     manager.addHandler(/\.tga$/i, new TGALoader(manager))
     const model = new FBXLoader(manager).parse(fbx, '')
     this.model = model

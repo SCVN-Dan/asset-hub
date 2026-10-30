@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
-import { modelImportScale, parseMaterialLook, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
+import { meshForFileId, modelImportScale, parseMaterialLook, shaderBlend, shaderTextureProps, type BuiltinMesh, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { mainTexture } from './particleThumb'
 import { EffectPlayer, EmitterPlayer, type EmitterLook } from './particlePlayer'
@@ -9,6 +9,27 @@ import { unwrap } from '../remoteSource'
 
 /** Mesh particles from models larger than this are drawn as billboards. */
 const MAX_MESH_BYTES = 8 * 1024 * 1024
+
+/** Unity's own meshes at their sizes (Quad and Plane facing along Z and Y like Unity's). */
+function builtinGeometry(mesh: BuiltinMesh): THREE.BufferGeometry {
+  switch (mesh) {
+    case 'quad':
+      return new THREE.PlaneGeometry(1, 1)
+    case 'plane':
+      return new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2)
+    case 'cube':
+      return new THREE.BoxGeometry(1, 1, 1)
+    case 'sphere':
+      return new THREE.SphereGeometry(0.5, 24, 16)
+    case 'cylinder':
+      return new THREE.CylinderGeometry(0.5, 0.5, 2, 24)
+    case 'capsule':
+      return new THREE.CapsuleGeometry(0.5, 1, 8, 16)
+  }
+}
+
+/** Unity's legacy particle shaders blend one fixed way, whatever numbers their materials kept from another shader. */
+const FIXED_BLEND = /^(Legacy Shaders|Mobile)\/Particles\//
 
 /** Blend from the shader's name when the material does not say (legacy "Particles/Additive"…). */
 function blendFromShader(label: string | undefined): EmitterLook['blend'] {
@@ -59,10 +80,25 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
     return p
   }
 
+  const shaders = new Map<string, Promise<{ blend?: EmitterLook['blend']; textures: string[] } | undefined>>()
+  /** What a project shader tells: the blend its code fixes, if it does, and the texture slots it reads. */
+  const loadShader = (path: string) => {
+    let p = shaders.get(path)
+    if (!p) {
+      p = window.api.assets.readFile(live.repo, live.branch, path, background).then((r) => {
+        if (!r.ok) return undefined
+        const text = new TextDecoder().decode(r.data)
+        return { blend: /\.shader$/i.test(path) ? shaderBlend(text) : undefined, textures: shaderTextureProps(path, text) }
+      })
+      shaders.set(path, p)
+    }
+    return p
+  }
+
   const meshes = new Map<string, Promise<THREE.BufferGeometry | undefined>>()
-  /** The first mesh of a model, in Unity's import units (what a mesh particle is). */
-  const loadMesh = (path: string) => {
-    let p = meshes.get(path)
+  /** The mesh of a model a particle system names (by fileID; else its first), in Unity's import units. */
+  const loadMesh = (path: string, fileID?: string) => {
+    let p = meshes.get(`${path}#${fileID}`)
     if (!p) {
       p = (async () => {
         try {
@@ -70,8 +106,10 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
           const [bytes, meta] = await Promise.all([read(path).then(unwrap), read(`${path}.meta`).then((r) => (r.ok ? new TextDecoder().decode(r.data) : ''))])
           if (bytes.byteLength > MAX_MESH_BYTES) return undefined
           const root = new FBXLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')
-          let mesh: THREE.Mesh | undefined
-          root.traverse((o) => (mesh ??= (o as THREE.Mesh).isMesh ? (o as THREE.Mesh) : undefined))
+          const all: THREE.Mesh[] = []
+          root.traverse((o) => (o as THREE.Mesh).isMesh && all.push(o as THREE.Mesh))
+          const named = fileID ? meshForFileId(all.map((m) => m.name || m.parent?.name || ''), fileID) : -1
+          const mesh = all[Math.max(0, named)]
           if (!mesh) return undefined
           const { globalScale, useFileScale } = modelImportScale(meta)
           const unit = Number(root.userData.unitScaleFactor) || 1
@@ -81,17 +119,22 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
           return undefined
         }
       })()
-      meshes.set(path, p)
+      meshes.set(`${path}#${fileID}`, p)
     }
     return p
   }
   /** Texture, colour and blend of one material. */
   const lookOf = async (guid: string | undefined): Promise<Omit<EmitterLook, 'mesh' | 'trail'>> => {
     const material = guid ? byGuid.get(guid) : undefined
-    const texPath = mainTexture(material)
+    const shader = material?.shader
+    const info = shader?.kind === 'project' && shader.path ? await loadShader(shader.path) : undefined
+    const coded = info?.blend
+    const texPath = mainTexture(material, info?.textures)
     const [texture, look] = await Promise.all([texPath ? loadTexture(texPath) : undefined, material?.path ? loadLook(material.path) : undefined])
     const c = look?.color
-    return { texture, blend: look?.blend ?? blendFromShader(material?.shader?.label), tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1] }
+    // A blend fixed by the shader wins over the material's numbers, which may be left from another shader.
+    const fixed = shader && FIXED_BLEND.test(shader.label) ? blendFromShader(shader.label) : coded
+    return { texture, blend: fixed ?? look?.blend ?? blendFromShader(shader?.label), tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1] }
   }
 
   const players = await Promise.all(
@@ -100,7 +143,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
       const [look, trail, mesh] = await Promise.all([
         lookOf(emitter.material),
         emitter.sim.trail ? lookOf(emitter.trailMaterial ?? emitter.material) : undefined,
-        meshPath && /\.fbx$/i.test(meshPath) ? loadMesh(meshPath) : undefined
+        meshPath && /\.fbx$/i.test(meshPath) ? loadMesh(meshPath, emitter.meshFileID) : emitter.renderMode === 'mesh' && emitter.builtinMesh ? builtinGeometry(emitter.builtinMesh) : undefined
       ])
       const player = new EmitterPlayer(emitter, { ...look, trail, mesh })
       object.add(player.mesh)

@@ -108,14 +108,14 @@ export function ImageViewer({ live, path, onInfo, onStats, onLoading }: Props) {
           window.api.assets.readFile(live.repo, live.branch, `${path}.meta`).then((r) => (r.ok ? new TextDecoder().decode(r.data) : undefined))
         ])
         if (cancelled) return
-        const img = await decodeImage(path, bytes)
+        const imp = metaText ? parseTextureMeta(metaText) : undefined
+        const img = await decodeImage(path, bytes, imp?.alphaSource)
         if (cancelled) return img.bitmap.close()
         // Kept until the next image, to redraw when outlines are toggled.
         bitmap.current = img.bitmap
         const el = canvas.current!
         el.width = img.width
         el.height = img.height
-        const imp = metaText ? parseTextureMeta(metaText) : undefined
         const spriteInfo = metaText ? parseSpriteMeta(metaText) : undefined
         setSprite(spriteInfo)
         callbacks.current.onInfo({ width: img.width, height: img.height, bytes: bytes.byteLength, format: img.format, hasAlpha: img.hasAlpha, import: imp, sprite: spriteInfo })

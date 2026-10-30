@@ -99,13 +99,17 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
 
   const guidPaths: Record<string, string> = {}
   const parts: PartRef[] = []
+  const packageScripts: string[] = []
   for (const [guid, n] of uses) {
     const path = ctx.pathForGuid(guid)
     const k = kinds.get(guid)
     const kind: PartRef['kind'] = k === 'script' ? 'script' : k === 'model' ? 'model' : k === 'instance' ? (path && !/\.prefab$/i.test(path) ? 'model' : 'prefab') : 'other'
     const unsure = !path && (ctx.unsure?.(guid) ?? false)
     // Scripts and other assets not in the repo come from packages: nothing to carry, nothing to report.
-    if (!path && (kind === 'script' || kind === 'other') && !unsure) continue
+    if (!path && (kind === 'script' || kind === 'other') && !unsure) {
+      if (kind === 'script') packageScripts.push(guid)
+      continue
+    }
     if (path) {
       guidPaths[guid] = path
       addWithMeta(path)
@@ -130,6 +134,7 @@ export async function resolvePrefabDependencies(prefabPath: string, ctx: DepCont
     files: [...files],
     parts,
     guidPaths,
-    ...(particles.length ? { particles } : {})
+    ...(particles.length ? { particles } : {}),
+    ...(packageScripts.length ? { packageScripts } : {})
   }
 }

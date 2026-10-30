@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'fs/promises'
 import { join } from 'path'
-import { groupCatalog, planScan, RepoCatalog, SourceError, whereIs, type CatalogAsset, type CatalogLocation, type RepoRef, type ScanTask, type TreeEntry } from '@core/index'
+import { groupCatalog, planScan, RepoCatalog, SourceError, whereIs, type CatalogAsset, type CatalogLocation, type RepoCatalogData, type RepoRef, type ScanTask, type TreeEntry } from '@core/index'
 import type { GitHubAssetSource } from '@core/github/source'
 import type { CatalogStatus, IpcError } from '@shared/ipc'
 import { writeAtomic } from './caches'
@@ -125,6 +125,25 @@ export class CatalogService {
       this.listed = { key, version, result }
     }
     return this.listed.result
+  }
+
+  /** Every saved repo's catalog, as stored (for a shared index). */
+  async snapshot(): Promise<RepoCatalogData[]> {
+    return (await Promise.all((await this.savedRepos()).map((r) => this.load(r)))).map((c) => c.toJSON())
+  }
+
+  /** Takes in a catalog from a shared index (see `RepoCatalog.merge`); returns how many commits it added. */
+  async merge(raw: unknown): Promise<number> {
+    const repo = (raw as { repo?: unknown } | undefined)?.repo
+    if (typeof repo !== 'string' || !repo.includes('/')) return 0
+    // Made for other asset types: nothing to take in (its commits would be listed again anyway).
+    if (((raw as { types?: string }).types ?? 'fbx') !== this.types) return 0
+    const catalog = await this.load(repo)
+    const added = catalog.merge(RepoCatalog.parse(repo, raw, this.types))
+    // A newer branch list counts as a change too.
+    this.scheduleSave(catalog)
+    this.update({})
+    return added
   }
 
   /** Where else a file with this content is, in every saved repo. */

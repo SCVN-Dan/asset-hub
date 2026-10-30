@@ -83,7 +83,8 @@ function TargetSummary({ report }: { report: TargetReport }) {
   const { t } = useTranslation()
   const project = report.project.split(/[\\/]/).pop()
   const list = (items: Array<{ path: string; existing: string }>) => items.slice(0, 6).map((i) => `${fileName(i.path)} → ${i.existing}`).join(', ') + (items.length > 6 ? ' …' : '')
-  const nothing = !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.urp
+  const nothing =
+    !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.shaderByName.length && !report.shaderKept.length && !report.shaderClash.length && !report.shaderMapped.length && !report.mappingErrors.length && !report.missingScripts.length && !report.urp
   return (
     <div className="target-summary small">
       <span className="muted">{nothing ? t('target.clean', { project }) : t('target.title', { project })}</span>
@@ -99,6 +100,24 @@ function TargetSummary({ report }: { report: TargetReport }) {
           {t('target.renamed', { count: report.renamed.length, list: list(report.renamed) })}
         </span>
       )}
+      {report.shaderByName.length > 0 && <span title={list(report.shaderByName)}>{t('target.shaderByName', { count: report.shaderByName.length, list: list(report.shaderByName) })}</span>}
+      {report.shaderKept.length > 0 && <span title={list(report.shaderKept)}>{t('target.shaderKept', { count: report.shaderKept.length, list: list(report.shaderKept) })}</span>}
+      {report.shaderClash.length > 0 && (
+        <span className="warn-text" title={list(report.shaderClash)}>
+          {t('target.shaderClash', { count: report.shaderClash.length, list: list(report.shaderClash) })}
+        </span>
+      )}
+      {report.shaderMapped.length > 0 && <span title={list(report.shaderMapped)}>{t('target.shaderMapped', { count: report.shaderMapped.length, list: list(report.shaderMapped) })}</span>}
+      {report.missingScripts.length > 0 && (
+        <span className="warn-text" title={list(report.missingScripts)}>
+          {t('target.missingScripts', { count: report.missingScripts.length, list: list(report.missingScripts) })}
+        </span>
+      )}
+      {report.mappingErrors.map((error) => (
+        <span key={error} className="warn-text">
+          {t('target.mappingError', { error })}
+        </span>
+      ))}
       {report.urp && <span className="warn-text">{report.urp.target ? t('target.urp', { source: report.urp.source, target: report.urp.target }) : t('target.noUrp', { source: report.urp.source })}</span>}
     </div>
   )

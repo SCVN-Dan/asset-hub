@@ -1,5 +1,5 @@
 import { imageSize } from '@core/checks/playable'
-import { baseName, decodePsd, guessTextureRole, isPsd, type DependencyReport, type MaterialRef } from '@core/index'
+import { baseName, decodePsd, guessTextureRole, isPsd, parseTextureMeta, type DependencyReport, type MaterialRef, type TextureImport } from '@core/index'
 import { unwrap } from '../remoteSource'
 import type { LiveContext } from '../components/ModelViewer'
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
@@ -20,13 +20,45 @@ async function psdToPng(bytes: Uint8Array): Promise<Blob | undefined> {
   return (await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))) ?? undefined
 }
 
-/** Downloads one texture from the repo and serves it through a blob URL (revoke it when done). */
+type AlphaSource = TextureImport['alphaSource']
+
+/**
+ * A picture with the alpha Unity gives it on import: "From Gray Scale" makes
+ * it from the mean of red, green and blue (effect sheets drawn white on
+ * black), "None" makes it opaque. Anything else keeps the file's own alpha.
+ */
+export async function applyAlphaSource(bitmap: ImageBitmap, source: AlphaSource): Promise<ImageBitmap> {
+  if (source !== 'gray' && source !== 'none') return bitmap
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const g = canvas.getContext('2d')!
+  g.drawImage(bitmap, 0, 0)
+  const pixels = g.getImageData(0, 0, bitmap.width, bitmap.height)
+  const d = pixels.data
+  for (let i = 0; i < d.length; i += 4) d[i + 3] = source === 'gray' ? Math.round((d[i] + d[i + 1] + d[i + 2]) / 3) : 255
+  bitmap.close()
+  return createImageBitmap(pixels)
+}
+
+/** Where a texture's alpha comes from, by its .meta. */
+async function alphaSourceOf(live: LiveContext, path: string, background: boolean): Promise<AlphaSource> {
+  const r = await window.api.assets.readFile(live.repo, live.branch, `${path}.meta`, background)
+  return r.ok ? parseTextureMeta(new TextDecoder().decode(r.data)).alphaSource : undefined
+}
+
+/** Downloads one texture from the repo and serves it through a blob URL (revoke it when done), with the alpha Unity imports it with. */
 export async function fetchTextureFile(live: LiveContext, path: string, background = false): Promise<TextureFile | undefined> {
   if (!DRAWABLE.test(path)) return undefined
   try {
-    const bytes = unwrap(await window.api.assets.readFile(live.repo, live.branch, path, background))
+    const [bytes, source] = await Promise.all([window.api.assets.readFile(live.repo, live.branch, path, background).then(unwrap), alphaSourceOf(live, path, background).catch(() => undefined)])
     // Judged by content: .psd files, and PSD files saved with a .png name, become PNG for the browser.
-    const blob = isPsd(bytes) ? await psdToPng(bytes) : new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[path.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream' })
+    let blob = isPsd(bytes) ? await psdToPng(bytes) : new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[path.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream' })
+    if (blob && (source === 'gray' || source === 'none')) {
+      const bitmap = await applyAlphaSource(await createImageBitmap(blob), source)
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      canvas.getContext('2d')!.drawImage(bitmap, 0, 0)
+      bitmap.close()
+      blob = await canvas.convertToBlob({ type: 'image/png' })
+    }
     if (!blob) return undefined
     return { name: baseName(path), url: URL.createObjectURL(blob), bytes: bytes.byteLength, ...imageSize(path, bytes) }
   } catch {
@@ -99,7 +131,7 @@ function sampleAlpha(bitmap: ImageBitmap): boolean {
 }
 
 /** Decodes PNG / JPEG / GIF / BMP / WebP through the browser, PSD and TGA through our own decoders. */
-export async function decodeImage(path: string, bytes: Uint8Array): Promise<DecodedImage> {
+export async function decodeImage(path: string, bytes: Uint8Array, alphaSource?: AlphaSource): Promise<DecodedImage> {
   const format = formatOf(path, bytes)
   let bitmap: ImageBitmap
   if (format === 'PSD') {
@@ -120,5 +152,7 @@ export async function decodeImage(path: string, bytes: Uint8Array): Promise<Deco
     if (!DRAWABLE.test(path) && format !== 'PNG' && format !== 'JPEG') throw new Error(`${format} cannot be previewed`)
     bitmap = await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>]))
   }
+  // Shown with the alpha Unity imports it with.
+  bitmap = await applyAlphaSource(bitmap, alphaSource)
   return { bitmap, width: bitmap.width, height: bitmap.height, hasAlpha: sampleAlpha(bitmap), format }
 }

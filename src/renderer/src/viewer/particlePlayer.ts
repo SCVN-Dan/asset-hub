@@ -26,6 +26,9 @@ attribute vec3 iVel;
 attribute vec4 iColor;
 attribute vec3 iSRF;
 uniform float uMode;
+uniform mat3 uAlign;
+attribute vec2 iRotXY;
+attribute float iSizeY;
 uniform vec2 uTiles;
 uniform float uLength;
 uniform float uVelScale;
@@ -35,6 +38,8 @@ varying vec2 vCorner;
 varying vec4 vColor;
 void main() {
   float size = iSRF.x * uSizeScale;
+  // Height apart from width when the system sizes per axis (a long thin ray).
+  float sizeY = iSizeY * uSizeScale;
   float rot = iSRF.y;
   float frame = iSRF.z;
   vColor = iColor;
@@ -46,7 +51,17 @@ void main() {
   vUv = vec2((fx + uv.x) / uTiles.x, 1.0 - (fy + 1.0 - uv.y) / uTiles.y);
   float c = cos(rot);
   float s = sin(rot);
-  vec2 p = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
+  vec2 q = corner * vec2(size, sizeY);
+  vec2 p = vec2(c * q.x - s * q.y, s * q.x + c * q.y);
+  if (uMode > 3.5) {
+    // Facing the system's (Local) or the world's axes, turned by the particle's own 3D rotation: a ring on the ground.
+    // Z is already in p; then X, then Y, like Unity.
+    float cx = cos(iRotXY.x), sx = sin(iRotXY.x), cy = cos(iRotXY.y), sy = sin(iRotXY.y);
+    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cx, sx, 0.0, -sx, cx);
+    mat3 ry = mat3(cy, 0.0, -sy, 0.0, 1.0, 0.0, sy, 0.0, cy);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(iPos + uAlign * ry * rx * vec3(p, 0.0), 1.0);
+    return;
+  }
   if (uMode > 1.5 && uMode < 2.5) {
     // Horizontal: lying flat, facing up.
     gl_Position = projectionMatrix * modelViewMatrix * vec4(iPos + vec3(p.x, 0.0, p.y), 1.0);
@@ -63,7 +78,7 @@ void main() {
     mv.xy += side * corner.x * size + dir * (corner.y - 0.5) * len;
   } else if (uMode > 2.5) {
     // Vertical: faces the camera but stays upright.
-    mv.xy += vec2(corner.x * size, corner.y * size);
+    mv.xy += vec2(corner.x * size, corner.y * sizeY);
   } else {
     mv.xy += p;
   }
@@ -76,14 +91,18 @@ uniform sampler2D map;
 uniform float uHasMap;
 uniform vec4 uTint;
 uniform float uMultiply;
+uniform float uPremultiply;
 varying vec2 vUv;
 varying vec2 vCorner;
 varying vec4 vColor;
 void main() {
   // Without a texture: a soft round dot, like Unity's default particle.
-  vec4 tex = uHasMap > 0.5 ? texture2D(map, vUv) : vec4(1.0, 1.0, 1.0, smoothstep(0.5, 0.15, length(vCorner)));
+  // (smoothstep needs its edges in order: reversed ones are undefined, and draw a hard disc on some GPUs.)
+  vec4 tex = uHasMap > 0.5 ? texture2D(map, vUv) : vec4(1.0, 1.0, 1.0, 1.0 - smoothstep(0.15, 0.5, length(vCorner)));
   vec4 c = tex * vColor * uTint;
   if (c.a < 0.003) discard;
+  // Premultiplied blending (One, OneMinusSrcAlpha) expects colour already scaled by alpha, as Unity's shaders do.
+  if (uPremultiply > 0.5) c.rgb *= c.a;
   gl_FragColor = uMultiply > 0.5 ? vec4(mix(vec3(1.0), c.rgb, c.a), 1.0) : c;
   #include <colorspace_fragment>
 }
@@ -120,12 +139,15 @@ uniform sampler2D map;
 uniform float uHasMap;
 uniform vec4 uTint;
 uniform float uMultiply;
+uniform float uPremultiply;
 varying vec2 vUv;
 varying vec4 vColor;
 void main() {
   vec4 tex = uHasMap > 0.5 ? texture2D(map, vUv) : vec4(1.0);
   vec4 c = tex * vColor * uTint;
   if (c.a < 0.003) discard;
+  // Premultiplied blending (One, OneMinusSrcAlpha) expects colour already scaled by alpha, as Unity's shaders do.
+  if (uPremultiply > 0.5) c.rgb *= c.a;
   gl_FragColor = uMultiply > 0.5 ? vec4(mix(vec3(1.0), c.rgb, c.a), 1.0) : c;
   #include <colorspace_fragment>
 }
@@ -261,6 +283,7 @@ function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit
       uHasMap: { value: look.texture ? 1 : 0 },
       uTint: { value: new THREE.Vector4(toLinear(look.tint[0]), toLinear(look.tint[1]), toLinear(look.tint[2]), look.tint[3]) },
       uMultiply: { value: look.blend === 'multiply' ? 1 : 0 },
+      uPremultiply: { value: look.blend === 'premultiply' ? 1 : 0 },
       ...extra
     },
     transparent: true,
@@ -291,8 +314,9 @@ export class EmitterPlayer {
   private readonly sim: ParticleSim
   private readonly max: number
   private readonly shapeRot?: THREE.Quaternion
-  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute }
+  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute; rotXY: THREE.InstancedBufferAttribute; sizeY: THREE.InstancedBufferAttribute }
   private readonly meshes?: THREE.InstancedMesh
+  private readonly meshAlpha?: THREE.InstancedBufferAttribute
   private readonly trail?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; attrs: Record<'a' | 'b' | 'width' | 'colorA' | 'colorB' | 'u', THREE.InstancedBufferAttribute>; hist: Float32Array; histTime: Float32Array; histCount: Uint8Array; has: Uint8Array }
   // Per particle.
   private readonly pos: Float32Array
@@ -301,6 +325,12 @@ export class EmitterPlayer {
   private readonly life: Float32Array
   private readonly size: Float32Array
   private readonly rot: Float32Array
+  /** Start height and depth (equal to `size` unless the system sizes per axis). */
+  private readonly sizeYZ: Float32Array
+  /** Angles around X and Y (3D rotation), mirrored like the rest. */
+  private readonly rotXY: Float32Array
+  /** World alignment: undoes the system's own rotation, so quads follow the world's axes. */
+  private readonly align?: THREE.Matrix4
   private readonly rand: Float32Array
   private readonly color: Float32Array
   private count = 0
@@ -313,7 +343,9 @@ export class EmitterPlayer {
   constructor(
     /** `prefab` names the nested prefab it comes from (absent for the opened one). */
     readonly emitter: ParticleEmitter & { prefab?: string },
-    look: EmitterLook
+    private readonly look: EmitterLook,
+    /** Plays one cycle only, even when the system loops (a shot fired on top of the effect). */
+    readonly once = false
   ) {
     this.sim = emitter.sim
     // Enough for the effect without reserving Unity's default 1000 for a 20-particle sparkle.
@@ -325,6 +357,9 @@ export class EmitterPlayer {
     this.life = new Float32Array(n)
     this.size = new Float32Array(n)
     this.rot = new Float32Array(n * 2)
+    this.rotXY = new Float32Array(n * 2)
+    this.sizeYZ = new Float32Array(n * 2)
+    if (this.sim.alignment === 'world') this.align = new THREE.Matrix4()
     this.rand = new Float32Array(n * 4)
     this.color = new Float32Array(n * 4)
     if (this.sim.shape && this.sim.shape.rotation.some((v) => v !== 0)) this.shapeRot = shapeRotation(this.sim.shape)
@@ -343,7 +378,26 @@ export class EmitterPlayer {
       material.opacity = c[3]
       if (look.blend === 'additive') material.blending = THREE.AdditiveBlending
       else if (look.blend === 'multiply') material.blending = THREE.MultiplyBlending
-      this.meshes = new THREE.InstancedMesh(look.mesh, material, n)
+      else if (look.blend === 'premultiply') {
+        // three.js scales the colour by alpha itself when told the output is premultiplied.
+        material.premultipliedAlpha = true
+        material.blending = THREE.CustomBlending
+        material.blendSrc = THREE.OneFactor
+        material.blendDst = THREE.OneMinusSrcAlphaFactor
+      }
+      // Each particle's own alpha (fading, a see-through shield), as three.js instances only carry a colour.
+      const geometry = look.mesh.clone()
+      this.meshAlpha = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1).setUsage(THREE.DynamicDrawUsage)
+      geometry.setAttribute('instanceAlpha', this.meshAlpha)
+      material.onBeforeCompile = (shader) => {
+        shader.vertexShader = shader.vertexShader
+          .replace('#include <common>', '#include <common>\nattribute float instanceAlpha;\nvarying float vInstanceAlpha;')
+          .replace('#include <begin_vertex>', '#include <begin_vertex>\nvInstanceAlpha = instanceAlpha;')
+        shader.fragmentShader = shader.fragmentShader
+          .replace('#include <common>', '#include <common>\nvarying float vInstanceAlpha;')
+          .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vInstanceAlpha;')
+      }
+      this.meshes = new THREE.InstancedMesh(geometry, material, n)
       this.meshes.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       this.meshes.setColorAt(0, new THREE.Color(1, 1, 1))
       this.meshes.count = 0
@@ -354,15 +408,20 @@ export class EmitterPlayer {
       const sheet = this.sim.sheet
       const geometry = quad()
       const attr = (size: number) => new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage)
-      const q = { geometry, pos: attr(3), vel: attr(3), color: attr(4), srf: attr(3) }
+      const q = { geometry, pos: attr(3), vel: attr(3), color: attr(4), srf: attr(3), rotXY: attr(2), sizeY: attr(1) }
+      geometry.setAttribute('iRotXY', q.rotXY)
+      geometry.setAttribute('iSizeY', q.sizeY)
       geometry.setAttribute('iPos', q.pos)
       geometry.setAttribute('iVel', q.vel)
       geometry.setAttribute('iColor', q.color)
       geometry.setAttribute('iSRF', q.srf)
       geometry.instanceCount = 0
-      const mode = { billboard: 0, mesh: 0, none: 0, stretched: 1, horizontal: 2, vertical: 3 }[emitter.renderMode]
+      // Billboards aligned to the system's axes, not the camera, are drawn as quads in its space.
+      const oriented = emitter.renderMode === 'billboard' && (this.sim.alignment === 'local' || this.sim.alignment === 'world')
+      const mode = oriented ? 4 : { billboard: 0, mesh: 0, none: 0, stretched: 1, horizontal: 2, vertical: 3 }[emitter.renderMode]
       const material = shaderMaterial(VERT, FRAG, look, {
         uMode: { value: mode },
+        uAlign: { value: new THREE.Matrix3() },
         uTiles: { value: new THREE.Vector2(sheet?.tilesX ?? 1, sheet?.tilesY ?? 1) },
         uLength: { value: this.sim.lengthScale },
         uVelScale: { value: this.sim.velocityScale },
@@ -399,6 +458,16 @@ export class EmitterPlayer {
     this.restart()
   }
 
+  /** Loops for good: a shot (`once`) plays its first cycle only. */
+  private get looping(): boolean {
+    return this.sim.looping && !this.once
+  }
+
+  /** Another player of the same system and look (shared textures and meshes), playing one cycle. */
+  shot(): EmitterPlayer {
+    return new EmitterPlayer(this.emitter, this.look, true)
+  }
+
   /** Starts over: a new delay, no particles; prewarmed loops start full. */
   restart(): void {
     this.count = 0
@@ -407,7 +476,7 @@ export class EmitterPlayer {
     this.lastCycle = -1
     this.lastCycleTime = -1e-6
     this.delay = evalMinMax(this.sim.startDelay, 0, Math.random())
-    if (this.sim.prewarm && this.sim.looping && !this.isSub) {
+    if (this.sim.prewarm && this.looping && !this.isSub) {
       this.delay = 0
       for (let t = 0; t < this.sim.duration; t += 1 / 30) this.step(1 / 30)
     }
@@ -417,7 +486,7 @@ export class EmitterPlayer {
   /** Done for good: a one-shot past its duration with nothing left alive (sub emitters: nothing alive). */
   get finished(): boolean {
     if (this.isSub) return this.count === 0
-    return !this.sim.looping && this.time > this.delay + this.sim.duration && this.count === 0
+    return !this.looping && this.time > this.delay + this.sim.duration && this.count === 0
   }
 
   get alive(): number {
@@ -429,6 +498,13 @@ export class EmitterPlayer {
     if (this.quads && this.mesh.parent) {
       const s = this.mesh.parent.getWorldScale(scratch)
       this.quads.material.uniforms.uSizeScale.value = (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3
+    }
+    if (this.align && this.mesh.parent) {
+      // In the mirrored space the particles live in: mirror · (system's rotation)⁻¹ · mirror.
+      const mirror = new THREE.Matrix4().makeScale(-1, 1, 1)
+      const undo = new THREE.Matrix4().makeRotationFromQuaternion(this.mesh.parent.getWorldQuaternion(new THREE.Quaternion()).invert())
+      this.align.copy(mirror).multiply(undo).multiply(mirror)
+      this.quads?.material.uniforms.uAlign.value.setFromMatrix4(this.align)
     }
     this.upload()
   }
@@ -481,9 +557,10 @@ export class EmitterPlayer {
     const s = this.sim
     const local = this.time - this.delay
     if (local < 0) return
-    if (!s.looping && local > s.duration + dt) return
-    const cycle = s.looping ? Math.floor(local / s.duration) : 0
-    const ct = s.looping ? local - cycle * s.duration : Math.min(local, s.duration)
+    const looping = this.looping
+    if (!looping && local > s.duration + dt) return
+    const cycle = looping ? Math.floor(local / s.duration) : 0
+    const ct = looping ? local - cycle * s.duration : Math.min(local, s.duration)
     const from = cycle !== this.lastCycle ? -1e-6 : this.lastCycleTime
     this.lastCycle = cycle
     this.lastCycleTime = ct
@@ -518,10 +595,18 @@ export class EmitterPlayer {
     this.vel.set([d.x * speed, d.y * speed, d.z * speed], i * 3)
     this.age[i] = 0
     this.life[i] = Math.max(0.01, evalMinMax(s.startLifetime, nt, Math.random()))
-    this.size[i] = evalMinMax(s.startSize, nt, Math.random()) * (parent && inherit & 2 ? parent.size : 1)
+    const inherited = parent && inherit & 2 ? parent.size : 1
+    this.size[i] = evalMinMax(s.startSize, nt, Math.random()) * inherited
+    const [sy, sz] = s.startSize3D ?? []
+    this.sizeYZ[i * 2] = sy ? evalMinMax(sy, nt, Math.random()) * inherited : this.size[i]
+    this.sizeYZ[i * 2 + 1] = sz ? evalMinMax(sz, nt, Math.random()) * inherited : this.size[i]
     // Unity turns clockwise for a positive angle; mirrored here.
     this.rot[i * 2] = -evalMinMax(s.startRotation, nt, Math.random())
     this.rot[i * 2 + 1] = 0
+    // X keeps its sign under the X mirror; Y turns the other way, like Z.
+    const [rx, ry] = s.startRotation3D ?? []
+    this.rotXY[i * 2] = rx ? evalMinMax(rx, nt, Math.random()) : 0
+    this.rotXY[i * 2 + 1] = ry ? -evalMinMax(ry, nt, Math.random()) : 0
     for (let k = 0; k < 4; k++) this.rand[i * 4 + k] = Math.random()
     const c = evalMinMaxColor(s.startColor, nt, Math.random())
     if (parent && inherit & 1) for (let k = 0; k < 4; k++) c[k] *= parent.color[k]
@@ -613,6 +698,10 @@ export class EmitterPlayer {
       this.pos[i * 3 + 1] += (vy + oy) * dt
       this.pos[i * 3 + 2] += (vz + oz) * dt
       if (s.rotationOverLifetime) this.rot[i * 2 + 1] -= evalMinMax(s.rotationOverLifetime, t, r(2)) * dt
+      if (s.rotationOverLifetime3D) {
+        this.rotXY[i * 2] += evalMinMax(s.rotationOverLifetime3D[0], t, r(2)) * dt
+        this.rotXY[i * 2 + 1] -= evalMinMax(s.rotationOverLifetime3D[1], t, r(2)) * dt
+      }
       for (const sub of births) if (Math.random() <= sub.probability) this.fire(sub, i, false, dt)
       if (this.trail?.has[i]) this.record(i)
       i++
@@ -651,6 +740,8 @@ export class EmitterPlayer {
     this.life[i] = this.life[last]
     this.size[i] = this.size[last]
     this.rot.copyWithin(i * 2, last * 2, last * 2 + 2)
+    this.rotXY.copyWithin(i * 2, last * 2, last * 2 + 2)
+    this.sizeYZ.copyWithin(i * 2, last * 2, last * 2 + 2)
     this.rand.copyWithin(i * 4, last * 4, last * 4 + 4)
     this.color.copyWithin(i * 4, last * 4, last * 4 + 4)
     const tr = this.trail
@@ -676,20 +767,35 @@ export class EmitterPlayer {
     const c = [0, 0, 0, 0]
     const matrix = new THREE.Matrix4()
     const q = new THREE.Quaternion()
-    const zAxis = new THREE.Vector3(0, 0, 1)
+    const euler = new THREE.Euler(0, 0, 0, 'YXZ')
+    const turned = new THREE.Matrix4()
     const color = new THREE.Color()
     for (let i = 0; i < this.count; i++) {
       const t = this.age[i] / this.life[i]
       const r = (k: number) => this.rand[i * 4 + k]
       this.colorAt(i, t, c)
-      const size = Math.max(0, this.size[i] * (s.sizeOverLifetime ? evalMinMax(s.sizeOverLifetime, t, r(2)) : 1))
+      const over = s.sizeOverLifetime ? evalMinMax(s.sizeOverLifetime, t, r(2)) : 1
+      const size = Math.max(0, this.size[i] * over)
+      const [overY, overZ] = s.sizeOverLifetime3D ? s.sizeOverLifetime3D.map((c) => evalMinMax(c, t, r(2))) : [over, over]
+      const sizeY = Math.max(0, this.sizeYZ[i * 2] * overY)
+      const sizeZ = Math.max(0, this.sizeYZ[i * 2 + 1] * overZ)
       const angle = this.rot[i * 2] + this.rot[i * 2 + 1]
       if (this.meshes) {
         // Mirrored back: the mesh comes from an FBX already in three.js handedness.
-        matrix.compose(scratch.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]), q.setFromAxisAngle(zAxis, angle), new THREE.Vector3(-size, size, size))
+        // Z, then X, then Y, like Unity; World alignment undoes the system's rotation first.
+        q.setFromEuler(euler.set(this.rotXY[i * 2], this.rotXY[i * 2 + 1], angle))
+        if (this.align) {
+          turned.compose(new THREE.Vector3(), q, new THREE.Vector3(-size, sizeY, sizeZ))
+          matrix.makeTranslation(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]).multiply(this.align).multiply(turned)
+        } else matrix.compose(scratch.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]), q, new THREE.Vector3(-size, sizeY, sizeZ))
         this.meshes.setMatrixAt(i, matrix)
-        // No per-particle alpha on meshes: fading darkens instead (right for additive, close for others).
-        this.meshes.setColorAt(i, color.setRGB(c[0] * c[3], c[1] * c[3], c[2] * c[3], THREE.SRGBColorSpace))
+        if (this.look.blend === 'multiply') {
+          // Multiply has no alpha: fading goes towards white, which leaves the background as it is.
+          this.meshes.setColorAt(i, color.setRGB(1 - (1 - c[0]) * c[3], 1 - (1 - c[1]) * c[3], 1 - (1 - c[2]) * c[3], THREE.SRGBColorSpace))
+        } else {
+          this.meshes.setColorAt(i, color.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace))
+          ;(this.meshAlpha!.array as Float32Array)[i] = c[3]
+        }
         continue
       }
       const qd = this.quads!
@@ -708,14 +814,17 @@ export class EmitterPlayer {
       srf[i * 3] = size
       srf[i * 3 + 1] = angle
       srf[i * 3 + 2] = frame
+      ;(qd.rotXY.array as Float32Array).set(this.rotXY.subarray(i * 2, i * 2 + 2), i * 2)
+      ;(qd.sizeY.array as Float32Array)[i] = sizeY
     }
     if (this.meshes) {
       this.meshes.count = this.count
       this.meshes.instanceMatrix.needsUpdate = true
       if (this.meshes.instanceColor) this.meshes.instanceColor.needsUpdate = true
+      if (this.meshAlpha) this.meshAlpha.needsUpdate = true
     } else if (this.quads) {
       this.quads.geometry.instanceCount = this.count
-      for (const a of [this.quads.pos, this.quads.vel, this.quads.color, this.quads.srf]) a.needsUpdate = true
+      for (const a of [this.quads.pos, this.quads.vel, this.quads.color, this.quads.srf, this.quads.rotXY, this.quads.sizeY]) a.needsUpdate = true
     }
     if (this.trail) this.uploadTrails(c)
   }
@@ -775,12 +884,16 @@ export class EmitterPlayer {
     this.quads?.material.dispose()
     if (this.meshes) {
       this.meshes.dispose()
+      this.meshes.geometry.dispose()
       ;(this.meshes.material as THREE.Material).dispose()
     }
     this.trail?.geometry.dispose()
     this.trail?.material.dispose()
   }
 }
+
+/** Shots of an effect playing at once at most (`EffectPlayer.fire`): spamming the button stays smooth. */
+const MAX_SHOTS = 12
 
 /** Share of particles at each end of an axis left out of the camera's frame: the odd stray should not shrink the effect. */
 const STRAYS = 0.02
@@ -794,6 +907,8 @@ export class EffectPlayer {
   /** Largest side of the textures its emitters use. */
   maxTextureSize = 0
   private wait = 0
+  /** Extra plays fired on top (`fire`), each removed once it is over. */
+  private shots: EmitterPlayer[][] = []
 
   constructor(readonly emitters: EmitterPlayer[]) {}
 
@@ -806,11 +921,45 @@ export class EffectPlayer {
       this.wait += step
       if (this.wait > 0.5) this.restart()
     }
+    for (const shot of this.shots) for (const e of shot) e.update(step)
+    const over = this.shots.filter((shot) => shot.every((e) => e.finished))
+    if (!over.length) return
+    for (const shot of over) for (const e of shot) e.dispose()
+    this.shots = this.shots.filter((shot) => !over.includes(shot))
   }
 
+  /** Clears the shots fired, and plays the effect from its start. */
   restart(): void {
     this.wait = 0
+    this.clearShots()
     for (const e of this.emitters) e.restart()
+  }
+
+  /**
+   * Plays the effect once more on top of what is playing, like instantiating
+   * the prefab again in a game: each emitter gets a copy at the same place
+   * (sub emitters linked among the copies), removed when it is over. The
+   * oldest shot goes when too many are playing.
+   */
+  fire(): void {
+    if (this.shots.length >= MAX_SHOTS) for (const e of this.shots.shift()!) e.dispose()
+    const copies = this.emitters.map((e) => {
+      const copy = e.shot()
+      copy.isSub = e.isSub
+      e.mesh.parent?.add(copy.mesh)
+      return copy
+    })
+    copies.forEach((copy, i) => {
+      for (const sub of this.emitters[i].subs) copy.subs.push({ ...sub, player: copies[this.emitters.indexOf(sub.player)] })
+      // Sub emitters start empty: they wait for their parents' particles.
+      if (copy.isSub) copy.restart()
+    })
+    this.shots.push(copies)
+  }
+
+  private clearShots(): void {
+    for (const shot of this.shots) for (const e of shot) e.dispose()
+    this.shots = []
   }
 
   /**
@@ -838,34 +987,41 @@ export class EffectPlayer {
 
   /**
    * Where the particles really go: plays the effect through once without
-   * drawing and keeps the box nearly all of them stay in (a few strays left
-   * out), padded by their size. Starts the effect over afterwards. Falls back
-   * on `extent()` when nothing was emitted.
+   * drawing and keeps, per emitter, the box nearly all of its particles stay
+   * in (a few strays left out), padded by their size. Per emitter, so a few
+   * big ones (a glow, a ground ring) are framed next to a hundred sparks.
+   * Starts the effect over afterwards. Falls back on `extent()` when nothing
+   * was emitted.
    */
   measuredExtent(): THREE.Box3 {
     const { warm, length } = this.span()
-    const axes: [number[], number[], number[]] = [[], [], []]
-    const sizes: number[] = []
+    const samples = this.emitters.map(() => ({ axes: [[], [], []] as [number[], number[], number[]], sizes: [] as number[] }))
     this.restart()
     const step = 1 / 30
     for (let t = 0, frame = 0; t < warm + length; t += step, frame++) {
       for (const e of this.emitters) e.update(step)
       if (frame % 3) continue
-      for (const e of this.emitters)
+      this.emitters.forEach((e, i) =>
         e.sample((at, size) => {
-          axes[0].push(at.x)
-          axes[1].push(at.y)
-          axes[2].push(at.z)
-          sizes.push(size)
+          samples[i].axes[0].push(at.x)
+          samples[i].axes[1].push(at.y)
+          samples[i].axes[2].push(at.z)
+          samples[i].sizes.push(size)
         })
+      )
     }
     this.restart()
-    if (sizes.length < 8) return this.extent()
+    if (samples.reduce((n, s) => n + s.sizes.length, 0) < 8) return this.extent()
     const pick = (values: number[], q: number) => values.sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(q * values.length))]
-    const pad = pick(sizes, 0.5) / 2
-    const lo = axes.map((v) => pick(v, STRAYS) - pad)
-    const hi = axes.map((v) => pick(v, 1 - STRAYS) + pad)
-    return new THREE.Box3(new THREE.Vector3(lo[0], lo[1], lo[2]), new THREE.Vector3(hi[0], hi[1], hi[2]))
+    const box = new THREE.Box3()
+    for (const { axes, sizes } of samples) {
+      if (!sizes.length) continue
+      const pad = pick(sizes, 0.5) / 2
+      const lo = axes.map((v) => pick(v, STRAYS) - pad)
+      const hi = axes.map((v) => pick(v, 1 - STRAYS) + pad)
+      box.union(new THREE.Box3(new THREE.Vector3(lo[0], lo[1], lo[2]), new THREE.Vector3(hi[0], hi[1], hi[2])))
+    }
+    return box
   }
 
   /** How far particles may fly, around each emitter's object (for framing the camera). */
@@ -883,6 +1039,7 @@ export class EffectPlayer {
   }
 
   dispose(): void {
+    this.clearShots()
     for (const e of this.emitters) e.dispose()
   }
 }

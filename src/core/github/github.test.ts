@@ -270,6 +270,18 @@ describe('GitHubAssetSource file access', () => {
     expect(progress.at(-1)).toBe(2) // material + texture metas; model metas are not indexed
   })
 
+  it('keeps text files read once, so opening an asset again reads nothing over the network', async () => {
+    const { src, calls } = make()
+    await src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')
+    const graphql = () => calls.filter((c) => c.endsWith('/graphql')).length
+    const before = graphql()
+    expect(before).toBeGreaterThan(0)
+    // The .meta and .mat texts come from the blob cache this time.
+    const report = await src.resolve('o/r', 'main', 'p/Assets/Hero.fbx', 'p/')
+    expect(report.materials[0]).toMatchObject({ name: 'M', path: 'p/Assets/M.mat' })
+    expect(graphql()).toBe(before)
+  })
+
   it('finds files by name nearest to a path', async () => {
     const { src } = make()
     expect(await src.findByNames('o/r', 'main', ['t.PNG', 'nope.png'], 'p/Assets/Hero.fbx', 'p/')).toEqual({ 't.PNG': 'p/Assets/T.png', 'nope.png': null })

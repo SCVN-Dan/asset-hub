@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isYamlAsset, planAgainstTarget, remapGuids, urpMismatch, urpVersion, type TargetIndex } from './target'
+import { isYamlAsset, planAgainstTarget, remapGuids, shaderName, urpMismatch, urpVersion, type TargetIndex } from './target'
 
 const G = (c: string) => c.repeat(32)
 
@@ -62,5 +62,43 @@ describe('package against the target project', () => {
     expect(urpMismatch('14.0.8', '12.1.7')).toBe(true)
     expect(urpMismatch('14.0.8', undefined)).toBe(true)
     expect(urpMismatch(undefined, '14.0.8')).toBe(false)
+  })
+})
+
+describe('shaders against the target project', () => {
+  const shaders = new Map([
+    ['Custom/Toon', { path: 'Assets/Shaders/Toon.shader', guid: G('7'), kind: 'shader' as const }],
+    ['Shader Graphs/Water', { path: 'Assets/SG/Water.shadergraph', guid: G('8'), kind: 'shadergraph' as const }]
+  ])
+  const index: TargetIndex = { ...target, byGuid: new Map([...target.byGuid, [G('1'), 'Assets/Shaders/Old.shader']]), hashOf: new Map([...target.hashOf, ['Assets/Shaders/Old.shader', 'h-old']]), shaders }
+  const files = [
+    { path: 'p/Toon.shader', guid: G('2'), pathname: 'Assets/AssetHub/Toon.shader', hash: 'h-toon', shader: { name: 'Custom/Toon', kind: 'shader' as const } },
+    { path: 'p/Old.shader', guid: G('1'), pathname: 'Assets/AssetHub/Old.shader', hash: 'h-new', shader: { name: 'Custom/Old', kind: 'shader' as const } },
+    { path: 'p/Water.shader', guid: G('3'), pathname: 'Assets/AssetHub/Water.shader', hash: 'h-water', shader: { name: 'Shader Graphs/Water', kind: 'shader' as const } }
+  ]
+
+  it('uses the project shader of the same name, and keeps a changed one', () => {
+    const plan = planAgainstTarget(files, index, true)
+    expect(Object.fromEntries(plan.decisions)).toEqual({
+      'p/Toon.shader': { action: 'reuse', existing: 'Assets/Shaders/Toon.shader', guid: G('7'), byName: 'Custom/Toon' },
+      'p/Old.shader': { action: 'keep', existing: 'Assets/Shaders/Old.shader' },
+      // A Shader Graph keeps its shader under another file ID: not swapped, only reported.
+      'p/Water.shader': { action: 'clash', existing: 'Assets/SG/Water.shadergraph', name: 'Shader Graphs/Water' }
+    })
+    expect([...plan.remap]).toEqual([[G('2'), G('7')]])
+  })
+
+  it('only reports name clashes and overwrites when reuse is off', () => {
+    const plan = planAgainstTarget(files, index, false)
+    expect(plan.decisions.get('p/Toon.shader')).toEqual({ action: 'clash', existing: 'Assets/Shaders/Toon.shader', name: 'Custom/Toon' })
+    expect(plan.decisions.get('p/Old.shader')).toEqual({ action: 'overwrite', existing: 'Assets/Shaders/Old.shader' })
+    expect(plan.remap.size).toBe(0)
+  })
+
+  it('reads shader names from .shader code and Shader Graph files', () => {
+    expect(shaderName('a/Toon.shader', '// Shader "Commented/Out"\n/* Shader "Nope" */\nShader "Custom/Toon"\n{\n}')).toBe('Custom/Toon')
+    expect(shaderName('a/Water.shadergraph', '{\n    "m_Type": "UnityEditor.ShaderGraph.GraphData",\n    "m_Path": "FX/Liquids",\n}')).toBe('FX/Liquids/Water')
+    expect(shaderName('a/Lava.shadergraph', '{"m_Path": ""}')).toBe('Shader Graphs/Lava')
+    expect(shaderName('a/x.hlsl', 'Shader "X"')).toBeUndefined()
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isStatsSummary, mergeStats, rankForPlayable, summaryIssues, type StatsSummary } from './playable'
+import { isStatsSummary, mergeStats, newerCard, rankForPlayable, summaryIssues, type StatsSummary } from './playable'
 
 const stat = (o: Partial<StatsSummary>): StatsSummary => ({
   triangles: 1000,
@@ -69,5 +69,18 @@ describe('mergeStats', () => {
   it('keeps the effect card version when an effect is measured again', () => {
     expect(mergeStats(stat({ source: 'thumb', fxThumb: 1 }), stat({ source: 'viewer', particles: 40 })).fxThumb).toBe(1)
     expect(mergeStats(undefined, stat({ source: 'thumb' })).fxThumb).toBeUndefined()
+  })
+})
+
+describe('card versions', () => {
+  it('survive measuring again, whichever measurement wins', () => {
+    const drawn = stat({ source: 'thumb', modelThumb: 2, animThumb: 4 })
+    expect(mergeStats(drawn, stat({ source: 'viewer' }))).toMatchObject({ source: 'viewer', modelThumb: 2, animThumb: 4 })
+    expect(mergeStats(stat({ source: 'viewer' }), stat({ source: 'thumb', modelThumb: 2 }))).toMatchObject({ source: 'viewer', modelThumb: 2 })
+  })
+
+  it('tell which card is newer, for any kind of card', () => {
+    expect(newerCard(stat({ modelThumb: 2 }), stat({}))).toBe(true)
+    expect(newerCard(stat({ fxThumb: 2 }), stat({ fxThumb: 2, modelThumb: 2 }))).toBe(false)
   })
 })

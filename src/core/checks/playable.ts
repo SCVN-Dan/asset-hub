@@ -113,6 +113,12 @@ export interface StatsSummary {
   emitters?: number
   /** Version of the effect card drawn for it (a still plus frames played on hover); older ones are drawn again. */
   fxThumb?: number
+  /** Version of the rig search an animation clip's card was drawn with; older ones are drawn again. */
+  animThumb?: number
+  /** Version of the way a model or prefab card was drawn; older ones are drawn again. */
+  modelThumb?: number
+  /** For an animation clip: whether its card found a model to pose it on. */
+  rigged?: boolean
   /** `viewer` counts every texture the model uses; `thumb` the ones named inside the FBX, plus those of its .mat files when `matTextures`. */
   source: 'thumb' | 'viewer'
   /** A model thumbnail that also counted the textures of its .mat files (older ones did not, and are measured again once). */
@@ -161,13 +167,25 @@ export function summaryIssues(s: StatsSummary, budget = PLAYABLE_BUDGET): Budget
  * and the effect card version it brings are added to it instead.
  */
 export function mergeStats(kept: StatsSummary | undefined, summary: StatsSummary): StatsSummary {
-  // A remeasured effect keeps the card already drawn for it.
-  if (summary.source !== 'thumb' || kept?.source !== 'viewer') return kept?.fxThumb && !summary.fxThumb ? { ...summary, fxThumb: kept.fxThumb } : summary
+  if (summary.source !== 'thumb' || kept?.source !== 'viewer') return keepCardVersions(kept, summary)
   const merged = { ...kept }
   if (summary.clipNames && !kept.clipNames) merged.clipNames = summary.clipNames
-  if (summary.fxThumb) merged.fxThumb = summary.fxThumb
+  for (const f of CARD_VERSIONS) if (summary[f] !== undefined) merged[f] = summary[f]
   return merged
 }
+
+/** How each kind of card was drawn (see the fields): an older version is drawn again. */
+export const CARD_VERSIONS = ['fxThumb', 'animThumb', 'modelThumb'] as const
+
+/** `summary`, keeping the card versions of `kept` it does not have: measuring again does not redraw the card. */
+export function keepCardVersions(kept: StatsSummary | undefined, summary: StatsSummary): StatsSummary {
+  const out = { ...summary }
+  for (const f of CARD_VERSIONS) if (out[f] === undefined && kept?.[f] !== undefined) out[f] = kept[f]
+  return out
+}
+
+/** True when `a`'s card was drawn a newer way than `b`'s, for any kind of card. */
+export const newerCard = (a: StatsSummary | undefined, b: StatsSummary | undefined) => CARD_VERSIONS.some((f) => (a?.[f] ?? 0) > (b?.[f] ?? 0))
 
 export function isStatsSummary(v: unknown): v is StatsSummary {
   const s = v as Record<string, unknown> | null

@@ -6,10 +6,26 @@ import type { EffectPlayer } from './particlePlayer'
 /** Main colour map of a particle material, by the slot names Unity's particle shaders use. */
 const MAIN_PROPS = ['_MainTex', '_BaseMap', '_BaseColorMap', '_Texture', '_TintTex']
 
-/** The texture that gives a particle material its look. */
-export function mainTexture(m: MaterialRef | undefined): string | undefined {
-  const withPath = (m?.textures ?? []).filter((t) => t.path)
-  return (withPath.find((t) => MAIN_PROPS.includes(t.prop ?? '')) ?? withPath[0])?.path
+/** Slots that shape or distort a particle rather than colour it: never its look. */
+const HELPER_PROP = /noise|mask|bump|normal|dissolve|distort|flow/i
+
+/**
+ * The texture that gives a particle material its look. A main slot holding
+ * one of Unity's own textures (default white) or one not found means no
+ * texture, not the next slot: that is often a noise or mask map, opaque.
+ */
+export function mainTexture(m: MaterialRef | undefined, declared?: readonly string[]): string | undefined {
+  const textures = m?.textures ?? []
+  // The shader's own list, when it was read: its first colour slot the material fills.
+  const read = declared?.filter((p) => !HELPER_PROP.test(p) && textures.some((t) => t.prop === p))
+  if (read?.length) return textures.find((t) => t.prop === read[0])?.path
+  // Materials keep slots of shaders they used before (a stale _BaseMap on a legacy particle material):
+  // the slot the shader reads comes first — _MainTex for Unity's own and hand-written shaders, _BaseMap for URP and Shader Graph.
+  const legacy = !m?.shader || m.shader.kind === 'builtin' || (m.shader.kind === 'project' && /\.shader$/i.test(m.shader.path ?? ''))
+  const order = legacy ? MAIN_PROPS : ['_BaseMap', ...MAIN_PROPS.filter((p) => p !== '_BaseMap')]
+  const main = order.map((p) => textures.find((t) => t.prop === p)).find((t) => t)
+  if (main) return main.path
+  return textures.find((t) => t.path && !HELPER_PROP.test(t.prop ?? ''))?.path
 }
 
 /** Particle numbers of an effect, merged into what was measured of its models (if any). */
@@ -30,8 +46,8 @@ export function particleStats(report: DependencyReport, base?: StatsSummary): St
 /** Frames of a moving effect card, laid out as a square sheet. */
 export const MOTION_FRAMES = 16
 const MOTION_COLS = 4
-/** Bumped when effect cards are drawn differently: older ones are drawn again once. */
-export const FX_THUMB_VERSION = 2
+/** Bumped when effect cards are drawn differently: older ones are drawn again once. v3: blend from the shader, no noise maps as colour; v4: Unity's own meshes, framed per emitter; v5: premultiplied blending, soft default dots; v6: alpha from grey level as Unity imports it; v7: billboards facing the system's axes; v8: 3D rotation per particle, the right mesh of a model, the slot the shader reads; v9: sizes per axis; v10: alpha per mesh particle. */
+export const FX_THUMB_VERSION = 10
 
 /** Cache key of an effect's moving card, next to its still one. */
 export const motionKey = (key: string) => `${key}.fx`

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseAnimClip, sampleCurve } from './animClip'
-import { rigCandidates } from '../deps/anim'
+import { controllersPlaying, rigCandidates } from '../deps/anim'
 import { animationHandler } from '../handlers/animation'
 import type { TreeEntry } from '../types'
 
@@ -112,6 +112,19 @@ describe('rigCandidates', () => {
     expect(idle).not.toContain('p/Assets/Game/Animation/Enemy/Orc/Idle.fbx')
     expect(animationHandler.match({ path: 'a/Run.ANIM', type: 'blob', sha: 'x' })).toBe(true)
   })
+
+  it('also tries models named in the clip file name, when its folders only name the game (xp_hero NetCatch layout)', () => {
+    const g = 'p/Assets/NetCatch/'
+    const paths = [`${g}Models/ASMR-Fish/LP.fbx`, `${g}Models/ASMR-Fish/Belt.fbx`, `${g}Models/ASMR-Fish/Soldier.fbx`, `${g}Models/Customers/Customer_Red.fbx`, `${g}Models/Customers/The_Bowls.fbx`, `${g}Art/CH/Customer.fbx`, `${g}Models/Player/TF_Player.fbx`, `${g}Models/Weapon/CrossBow.fbx`]
+    const byPath = new Map<string, TreeEntry>(paths.map((p) => [p, { path: p, type: 'blob', sha: p }]))
+    const rigs = rigCandidates(`${g}Animations/ASMR-Fish/Customer_Idle.anim`, { root: 'p/', byPath })
+    // The usual best guess stays first; the models whose file name says "Customer" come next (a folder saying it is not enough).
+    expect(new Set(rigs.slice(1, 3))).toEqual(new Set([`${g}Models/Customers/Customer_Red.fbx`, `${g}Art/CH/Customer.fbx`]))
+    // An action alone ("Idle") names nobody: nothing is slipped in.
+    expect(rigCandidates(`${g}Animations/ASMR-Fish/Idle.anim`, { root: 'p/', byPath })).not.toContain(`${g}Models/Customers/Customer_Red.fbx`)
+    // A character's folder keeps its model first even when the clip names what it holds.
+    expect(rigCandidates(`${g}Animations/Player/Attack_CrossBow.anim`, { root: 'p/', byPath })[0]).toBe(`${g}Models/Player/TF_Player.fbx`)
+  })
 })
 
 import { isStatsSummary, summarizeStats } from '../checks/playable'
@@ -127,5 +140,26 @@ describe('models holding clips', () => {
     expect(isStatsSummary({ ...stats, clipNames: [1] })).toBe(false)
     expect(animationHandler.alsoShows?.(fbx('Goblin.fbx'), stats)).toBe(true)
     expect(animationHandler.alsoShows?.({ ...fbx('Run.anim'), type: 'animation' }, stats)).toBe(false)
+  })
+
+  it('finds the character from the Animator Controller that plays the clip (Stack_Idle in Customer.controller)', async () => {
+    const g = 'p/Assets/NetCatch/'
+    const texts: Record<string, string> = {
+      [`${g}Animations/ASMR-Fish/Stack_Idle.anim.meta`]: 'fileFormatVersion: 2\nguid: 731e9ef676f004d5bbccff188f57ce77\n',
+      [`${g}Animations/ASMR-Fish/Customer.controller`]: '  m_Motion: {fileID: 7400000, guid: 731e9ef676f004d5bbccff188f57ce77, type: 2}',
+      [`${g}Animations/ASMR-Fish/Player.controller`]: '  m_Motion: {fileID: 7400000, guid: 0000000000000000000000000000abcd, type: 2}'
+    }
+    const paths = [...Object.keys(texts), `${g}Animations/ASMR-Fish/Stack_Idle.anim`, `${g}Models/ASMR-Fish/LP.fbx`, `${g}Models/Customers/Customer_Red.fbx`, `${g}Models/Player/TF_Player.fbx`]
+    const byPath = new Map<string, TreeEntry>(paths.map((p) => [p, { path: p, type: 'blob', sha: p }]))
+    let reads = 0
+    const ctx = { root: 'p/', byPath, readTexts: async (ps: readonly string[]) => ((reads += ps.length), new Map(ps.map((p) => [p, texts[p] ?? '']))) }
+    const clip = `${g}Animations/ASMR-Fish/Stack_Idle.anim`
+    const controllers = await controllersPlaying(clip, ctx)
+    expect(controllers).toEqual([`${g}Animations/ASMR-Fish/Customer.controller`])
+    expect(rigCandidates(clip, ctx, 8, controllers)[0]).toBe(`${g}Models/Customers/Customer_Red.fbx`)
+    // Controllers are read once per commit: the next clip asks only for its own .meta.
+    const before = reads
+    await controllersPlaying(clip, ctx)
+    expect(reads - before).toBe(1)
   })
 })

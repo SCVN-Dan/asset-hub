@@ -12,10 +12,12 @@ import { installGh, readInstalledGh } from './ghInstaller'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
 import { CacheJanitor, FileBlobCache, FileCommitCache, StatsStore, THUMB_SCHEME, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
+import { SharedIndexService } from './sharedIndex'
 
 interface Session {
   source: GitHubAssetSource
   catalog: CatalogService
+  sharedIndex: SharedIndexService
   status: AuthStatus
   /** Repo list kept for a few minutes, for catalog scans. */
   repos?: { at: number; list: Promise<RepoRef[]> }
@@ -52,7 +54,10 @@ async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
 const electronFetch: FetchLike = (url, init) => net.fetch(url, init)
 
 /** Owns the GitHub session in the main process; the token never reaches the renderer. */
-export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; cacheLimit: () => number; toolsDir: string }): CacheJanitor {
+/** Checks for a newer shared index this often while signed in. */
+const SHARED_INDEX_CHECK_MS = 30 * 60_000
+
+export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; cacheLimit: () => number; sharedIndexDir: () => string | undefined; toolsDir: string }): { janitor: CacheJanitor; sharedIndexChanged(): void } {
   const store = new AuthStore(options.authFile)
   const janitor = new CacheJanitor(options.cacheDir, options.cacheLimit)
   const cache = new FileCommitCache(options.cacheDir, janitor.noteWrite)
@@ -95,7 +100,18 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       registry.all().map((h) => h.id).join(','),
       (status: CatalogStatus) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.catalogProgress, status))
     )
-    session = { source, catalog, status: { signedIn: true, login: user.login, method, persisted } }
+    const types = registry.all().map((h) => h.id).join(',')
+    const sharedIndex = new SharedIndexService(
+      { catalog, source, stats: statsStore, thumbs },
+      options.sharedIndexDir,
+      () => join(options.cacheDir(), 'shared-index.json'),
+      types,
+      user.login,
+      (status) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.sharedIndexProgress, status))
+    )
+    session = { source, catalog, sharedIndex, status: { signedIn: true, login: user.login, method, persisted } }
+    // A teammate's index makes searching across branches instant: taken in right away when newer.
+    void sharedIndex.check()
     return session.status
   }
 
@@ -358,5 +374,15 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.clearCache, () => wrap(() => janitor.clear()))
   // Leftovers and the size limit are dealt with once the app has settled.
   setTimeout(() => void janitor.cleanStale().then(() => janitor.prune()), 15_000)
-  return janitor
+
+  const requireShared = (): SharedIndexService => {
+    if (!session) throw new SourceError('unauthorized', 'Not signed in')
+    return session.sharedIndex
+  }
+  ipcMain.handle(IPC.sharedIndexStatus, () => wrap(() => requireShared().status()))
+  ipcMain.handle(IPC.sharedIndexImport, () => wrap(() => requireShared().importNow().then(() => requireShared().status())))
+  ipcMain.handle(IPC.sharedIndexExport, () => wrap(() => requireShared().exportNow().then(() => requireShared().status())))
+  setInterval(() => void session?.sharedIndex.check(), SHARED_INDEX_CHECK_MS)
+
+  return { janitor, sharedIndexChanged: () => void session?.sharedIndex.check() }
 }

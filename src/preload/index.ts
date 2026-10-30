@@ -81,6 +81,16 @@ const api: AssetHubApi = {
     get: (keys) => ipcRenderer.invoke(IPC.getThumbs, keys),
     save: (key, dataUrl) => ipcRenderer.invoke(IPC.saveThumb, key, dataUrl)
   },
+  sharedIndex: {
+    status: () => ipcRenderer.invoke(IPC.sharedIndexStatus),
+    import: () => ipcRenderer.invoke(IPC.sharedIndexImport),
+    export: () => ipcRenderer.invoke(IPC.sharedIndexExport),
+    onStatus: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
+      ipcRenderer.on(IPC.sharedIndexProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.sharedIndexProgress, handler)
+    }
+  },
   cache: {
     usage: () => ipcRenderer.invoke(IPC.cacheUsage),
     clear: () => ipcRenderer.invoke(IPC.clearCache)

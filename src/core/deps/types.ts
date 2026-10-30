@@ -108,6 +108,8 @@ export interface DependencyReport {
   rigs?: string[]
   /** Prefabs: GUID → repo path of everything found, so a preview can put the prefab together. */
   guidPaths?: Record<string, string>
+  /** Prefabs: GUIDs of scripts not in the repo (from packages): the target project needs them too. */
+  packageScripts?: string[]
   /** Prefabs: their particle systems, nested prefabs' included (`prefab` names the nested one). */
   particles?: Array<ParticleEmitter & { prefab?: string }>
 }

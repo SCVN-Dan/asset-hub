@@ -7,6 +7,7 @@ import { BUDGET_KEYS, BUDGET_PRESETS, DEFAULT_BUDGET_PRESET, budgetFor, type Bud
 import { Dropdown } from '../components/Dropdown'
 import { ChevronLeftIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
+import { useSharedIndex } from '../useSharedIndex'
 
 interface Props {
   settings: AppSettings
@@ -217,6 +218,8 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
       </section>
 
       <CacheSetting settings={settings} onChange={onChange} />
+
+      {auth?.signedIn && <SharedIndexSetting settings={settings} onChange={onChange} />}
     </div>
   )
 }
@@ -257,6 +260,69 @@ function CacheSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange
         <span className="muted small" role="status">
           {t('settings.cacheUsage', { downloads: formatBytes(usage.downloads), thumbs: formatBytes(usage.thumbs), other: formatBytes(usage.other) })}
         </span>
+      )}
+    </section>
+  )
+}
+
+/** A folder the team shares: an index one person writes and everyone takes in, so cross-branch search starts full. */
+function SharedIndexSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
+  const { t, i18n } = useTranslation()
+  const status = useSharedIndex()
+  const [failed, setFailed] = useState<string>()
+  const busy = status?.state === 'importing' || status?.state === 'exporting'
+  const choose = async () => {
+    const folder = await window.api.chooseFolder()
+    if (folder) onChange({ sharedIndexDir: folder })
+  }
+  const act = async (fn: () => ReturnType<typeof window.api.sharedIndex.import>) => {
+    setFailed(undefined)
+    const r = await fn()
+    if (!r.ok) setFailed(r.error.message)
+  }
+  const when = (iso: string) => new Date(iso).toLocaleString(i18n.language)
+  const m = status?.manifest
+  const error = failed ?? (status?.state === 'error' ? status.error : undefined)
+  return (
+    <section className="setting">
+      <h2>
+        <label htmlFor="shared-index">{t('settings.sharedIndex')}</label>
+      </h2>
+      <span className="muted small">{t('settings.sharedIndexHelp')}</span>
+      <div className="field-row">
+        <input id="shared-index" className="input mono" value={settings.sharedIndexDir ?? ''} placeholder={t('settings.sharedIndexNone')} readOnly />
+        <button type="button" className="btn" onClick={() => void choose()}>
+          {t('settings.choose')}
+        </button>
+        {settings.sharedIndexDir && (
+          <button type="button" className="btn" onClick={() => onChange({ sharedIndexDir: '' })}>
+            {t('settings.sharedIndexStop')}
+          </button>
+        )}
+      </div>
+      {settings.sharedIndexDir && (
+        <>
+          <span className="muted small" role="status">
+            {m
+              ? t('settings.sharedIndexThere', { when: when(m.exportedAt), who: m.exportedBy ?? '?', repos: m.repos.length, thumbs: m.thumbs })
+              : t('settings.sharedIndexEmpty')}
+            {status?.importedAt && ` · ${t('settings.sharedIndexTaken', { when: when(status.importedAt) })}`}
+          </span>
+          <div className="field-row">
+            <button type="button" className="btn" disabled={busy || !m} onClick={() => void act(window.api.sharedIndex.import)}>
+              {status?.state === 'importing' ? t('settings.sharedIndexImporting') : t('settings.sharedIndexImport')}
+            </button>
+            <button type="button" className="btn" disabled={busy} onClick={() => void act(window.api.sharedIndex.export)}>
+              {status?.state === 'exporting' ? t('settings.sharedIndexExporting') : t('settings.sharedIndexExport')}
+            </button>
+          </div>
+          {status?.state === 'idle' && status.last && (
+            <span className="muted small">
+              {t(status.lastAction === 'exported' ? 'settings.sharedIndexExported' : 'settings.sharedIndexImported', { ...status.last })}
+            </span>
+          )}
+          {error && <span className="small" style={{ color: 'var(--warn-text)' }}>{t('settings.sharedIndexFailed', { error })}</span>}
+        </>
       )}
     </section>
   )

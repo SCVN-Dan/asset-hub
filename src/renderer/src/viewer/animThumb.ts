@@ -5,6 +5,7 @@ import { unwrap } from '../remoteSource'
 import { pickRig, rigOrder, THUMB_POSE, toThreeClip } from './animPlayer'
 import { offscreenHost } from './backgroundThumb'
 import { FbxViewer } from './FbxViewer'
+import { ANIM_THUMB_VERSION } from './thumbVersions'
 
 const W = 320
 const H = 240
@@ -57,16 +58,16 @@ export async function renderAnimThumbnail(live: LiveContext, path: string): Prom
     window.api.assets.resolve(live.repo, live.branch, path, live.root, 'instant').then(unwrap)
   ])
   const info = parseAnimClip(new TextDecoder().decode(bytes))
-  const stats: StatsSummary = { triangles: 0, vertices: 0, bones: 0, clips: 1, materials: 0, fileBytes: bytes.byteLength, textureBytes: 0, maxTextureSize: 0, clipLength: info.length, source: 'viewer' }
+  const stats: StatsSummary = { triangles: 0, vertices: 0, bones: 0, clips: 1, materials: 0, fileBytes: bytes.byteLength, textureBytes: 0, maxTextureSize: 0, clipLength: info.length, source: 'viewer', animThumb: ANIM_THUMB_VERSION }
   const posable = (info.kind === 'generic' || info.kind === 'legacy') && !info.compressed
   const best = posable && report.rigs?.length ? await pickRig(live, info, rigOrder(live, path, report.rigs), { background: true, tries: 3 }) : undefined
-  if (!best) return { url: curveCard(info, CARD_LABEL[info.kind]), stats }
+  if (!best) return { url: curveCard(info, CARD_LABEL[info.kind]), stats: { ...stats, rigged: false } }
   const viewer = new FbxViewer(offscreenHost())
   try {
     viewer.showGroup(best.rig.root)
     viewer.playClip(toThreeClip(info, best.rig), false)
     viewer.poseAt(info.length * THUMB_POSE)
-    return { url: viewer.snapshot(), stats }
+    return { url: viewer.snapshot(), stats: { ...stats, rigged: true } }
   } finally {
     viewer.dispose()
   }

@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, rename, rm, stat, utimes, writeFile } from 'f
 import { join } from 'path'
 import { promisify } from 'util'
 import { gunzip, gzip } from 'zlib'
-import { isStatsSummary, mergeStats, type StatsSummary } from '@core/checks/playable'
+import { isStatsSummary, keepCardVersions, mergeStats, type StatsSummary } from '@core/checks/playable'
 import type { BlobCache, CommitCache } from '@core/github/source'
 import type { CacheUsage } from '@shared/ipc'
 
@@ -189,9 +189,20 @@ export class ThumbnailStore {
     ;(await this.index()).set(name, Date.now())
   }
 
-  /** Forgets what is on disk (the folder was emptied or changed). */
-  reset(): void {
-    this.indexes.clear()
+  /** Names of every thumbnail on disk (keys as stored), for a shared index. */
+  async names(): Promise<string[]> {
+    return [...(await this.index()).keys()]
+  }
+
+  /** Adds a thumbnail from a shared index; one already here stays unless `replace` (a newer kind of card). */
+  async importFile(name: string, bytes: Uint8Array, replace = false): Promise<boolean> {
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) return false
+    const index = await this.index()
+    if (index.has(name) && !replace) return false
+    await rm(join(this.dir(), `${name}.txt`), { force: true })
+    await writeAtomic(join(this.dir(), `${name}.img`), bytes)
+    index.set(name, Date.now())
+    return true
   }
 }
 
@@ -229,10 +240,38 @@ export class StatsStore {
     return out
   }
 
+  /** Every measurement, for a shared index. */
+  async all(): Promise<Record<string, StatsSummary>> {
+    return { ...(await this.load()) }
+  }
+
+  /**
+   * Measurements from a shared index: taken where none is known here, or
+   * where it is fuller (a viewer measurement over a thumbnail one). Returns how many were taken.
+   */
+  async importMany(raw: unknown): Promise<number> {
+    if (!raw || typeof raw !== 'object') return 0
+    const all = await this.load()
+    let taken = 0
+    for (const [key, summary] of Object.entries(raw as Record<string, unknown>)) {
+      if (!isStatsSummary(summary)) continue
+      const kept = all[key]
+      if (kept && !(kept.source === 'thumb' && summary.source === 'viewer')) continue
+      all[key] = keepCardVersions(kept, summary)
+      taken++
+    }
+    if (taken) this.scheduleWrite(all)
+    return taken
+  }
+
   async save(key: string, summary: unknown): Promise<void> {
     if (!isStatsSummary(summary)) return
     const all = await this.load()
     all[key] = mergeStats(all[key], summary)
+    this.scheduleWrite(all)
+  }
+
+  private scheduleWrite(all: Record<string, StatsSummary>): void {
     clearTimeout(this.timer)
     this.timer = setTimeout(() => void writeAtomic(this.file(), JSON.stringify(all)).catch(() => {}), 1000)
   }

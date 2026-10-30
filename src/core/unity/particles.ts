@@ -5,6 +5,11 @@
 import { materialList, ref, refGuid, splitDocs } from './prefabScene'
 import { parseParticleSim, type ParticleSim } from './particleSim'
 
+/** Unity's built-in meshes, by file ID in its default resources. */
+export const BUILTIN_MESHES = { '10202': 'cube', '10206': 'cylinder', '10207': 'sphere', '10208': 'capsule', '10209': 'plane', '10210': 'quad' } as const
+export type BuiltinMesh = (typeof BUILTIN_MESHES)[keyof typeof BUILTIN_MESHES]
+const DEFAULT_RESOURCES = '0000000000000000e000000000000000'
+
 export type ParticleRenderMode = 'billboard' | 'stretched' | 'horizontal' | 'vertical' | 'mesh' | 'none'
 
 /** Optional modules worth knowing about (others, like colour over lifetime, cost little). */
@@ -36,6 +41,10 @@ export interface ParticleEmitter {
   trailMaterial?: string
   /** Mesh GUID when particles are meshes. */
   mesh?: string
+  /** Which mesh of that model (its fileID: models often hold many). */
+  meshFileID?: string
+  /** One of Unity's own meshes (Quad, Cube…), which no repo holds. */
+  builtinMesh?: BuiltinMesh
   modules: ParticleModule[]
   /** Texture sheet animation grid (columns × rows). */
   sheet?: [number, number]
@@ -166,7 +175,7 @@ export function parseParticleSystems(yaml: string): ParticleEmitter[] {
         renderMode,
         ...(materials[0] ? { material: materials[0] } : {}),
         ...(modules.includes('trails') && materials[1] ? { trailMaterial: materials[1] } : {}),
-        ...(renderMode === 'mesh' && renderer && refGuid(renderer, 'm_Mesh') ? { mesh: refGuid(renderer, 'm_Mesh')!.guid } : {}),
+        ...(renderMode === 'mesh' && renderer ? meshOf(refGuid(renderer, 'm_Mesh')) : {}),
         modules: modules.filter((m) => m !== 'subEmitters' || subEmitters > 0),
         ...(modules.includes('textureSheet') ? { sheet: [num(uv, 4, 'tilesX') ?? 1, num(uv, 4, 'tilesY') ?? 1] as [number, number] } : {}),
         subEmitters,
@@ -239,4 +248,11 @@ export function particleTotals(emitters: readonly ParticleEmitter[]): ParticleTo
     duration: Math.max(0, ...emitters.filter((e) => !e.looping).map((e) => e.duration + e.lifetime)),
     looping: emitters.some((e) => e.looping)
   }
+}
+
+function meshOf(ref: { fileID: string; guid: string } | undefined): Pick<ParticleEmitter, 'mesh' | 'meshFileID' | 'builtinMesh'> {
+  if (!ref) return {}
+  if (ref.guid !== DEFAULT_RESOURCES) return { mesh: ref.guid, meshFileID: ref.fileID }
+  const builtin = BUILTIN_MESHES[ref.fileID as keyof typeof BUILTIN_MESHES]
+  return builtin ? { builtinMesh: builtin } : {}
 }

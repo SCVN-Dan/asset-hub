@@ -12,6 +12,8 @@ export const animationHandler: AssetTypeHandler = {
   resolveDependencies: resolveAnimationDependencies,
   // Models holding clips (measured), or named like animation files (Model@Run.fbx), are animations too.
   alsoShows: (asset, stats) => asset.type === 'fbx' && ((stats?.clips ?? 0) > 0 || asset.name.includes('@')),
+  // Its card found no model to pose it on: curves alone say little.
+  unlisted: (stats) => stats?.rigged === false,
   preview: {
     kind: 'animation',
     // Played in the renderer with three.js; nothing to prepare here.

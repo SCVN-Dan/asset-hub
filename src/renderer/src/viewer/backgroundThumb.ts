@@ -4,6 +4,7 @@ import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
 import { FbxViewer, type MaterialSlot, type TextureFile } from './FbxViewer'
 import { fetchTextureFile, guessedSlots, reportSlotPaths } from './textures'
+import { MODEL_THUMB_VERSION } from './thumbVersions'
 
 /** Keeps background renders light: a few textures, the .mat ones first. Others still count by their size. */
 const MAX_TEXTURES = 8
@@ -50,7 +51,7 @@ export async function renderThumbnail(live: LiveContext, path: string): Promise<
     if (slots.length) await viewer.applyMaterialSlots(slots)
     else if (!viewer.hasColorMaps() && files.length) await viewer.applyMaterialSlots(guessedSlots(files))
     // Measured while the model is loaded anyway: lets results be ranked without opening them.
-    const stats: StatsSummary = { ...summarizeStats(viewer.stats(bytes.byteLength, files), 'thumb'), matTextures: true }
+    const stats: StatsSummary = { ...summarizeStats(viewer.stats(bytes.byteLength, files), 'thumb'), matTextures: true, modelThumb: MODEL_THUMB_VERSION }
     stats.textureBytes += skippedBytes(report, new Set(byPath.keys()))
     return { url: viewer.snapshot(), stats }
   } finally {

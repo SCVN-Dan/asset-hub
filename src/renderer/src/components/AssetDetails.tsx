@@ -54,6 +54,8 @@ interface Props {
   models?: readonly string[]
   /** Opened from a tab of animations: a model starts playing its first clip. */
   playClips?: boolean
+  /** Bar under the preview that resizes it. */
+  viewerResizer?: ReactNode
 }
 
 type PrefabSearch =
@@ -85,7 +87,8 @@ function TextureSection({ info }: { info: ImageInfo }) {
   const cells: Array<[string, string]> = [
     [t('texture.size'), `${info.width} × ${info.height}`],
     [t('texture.file'), `${formatBytes(info.bytes)} · ${info.format}`],
-    [t('texture.alpha'), info.hasAlpha ? t('texture.yes') : t('texture.no')],
+    // As Unity imports it: alpha made from brightness, or dropped, says so.
+    [t('texture.alpha'), imp?.alphaSource === 'gray' ? t('texture.alphaGray') : imp?.alphaSource === 'none' ? t('texture.alphaNone') : info.hasAlpha ? t('texture.yes') : t('texture.no')],
     ...(imp
       ? ([
           [t('texture.type'), t(`texture.types.${TEXTURE_TYPES[imp.textureType ?? 0] ?? 'default'}`)],
@@ -583,7 +586,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models, viewerResizer }: Props) {
   const { t } = useTranslation()
   const budget = useBudget()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
@@ -790,6 +793,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         </div>
       )}
       </Suspense>
+      {viewerResizer}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <h2>{asset.name}</h2>

@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'fs/promises'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { contentHash, hashProjectFile, isUnityProject, scanProject } from './targetProject'
+import { contentHash, hashProjectFile, isUnityProject, packageFiles, scanProject } from './targetProject'
 
 const G = (c: string) => c.repeat(32)
 let root = ''
@@ -15,6 +15,9 @@ beforeAll(async () => {
   await writeFile(join(root, 'Assets/Art/rock.png.meta'), `fileFormatVersion: 2\nguid: ${G('a')}\nTextureImporter:\n`)
   await writeFile(join(root, 'Assets/Art/Hidden~/skip.png'), 'PNGDATA')
   await writeFile(join(root, 'Assets/.DS_Store'), 'x')
+  await mkdir(join(root, 'Library/PackageCache/com.unity.render-pipelines.universal@14.0.8/Shaders'), { recursive: true })
+  await writeFile(join(root, 'Library/PackageCache/com.unity.render-pipelines.universal@14.0.8/Shaders/Lit.shader'), 'Shader "Universal Render Pipeline/Lit" {}')
+  await writeFile(join(root, 'Library/PackageCache/com.unity.render-pipelines.universal@14.0.8/Shaders/Lit.shader.meta'), `guid: ${G('b')}\n`)
 })
 
 afterAll(() => rm(root, { recursive: true, force: true }))
@@ -31,5 +34,9 @@ describe('target project', () => {
     expect([...p.sizes]).toEqual([['Assets/Art/rock.png', 7]])
     expect(p.bySize.get(7)).toEqual(['Assets/Art/rock.png'])
     expect(await hashProjectFile(root, 'Assets/Art/rock.png')).toBe(contentHash(new TextEncoder().encode('PNGDATA')))
+  })
+
+  it('finds the shaders of the project packages with their GUIDs', async () => {
+    expect([...(await packageFiles(root, /\.shader$/))]).toEqual([['Library/PackageCache/com.unity.render-pipelines.universal@14.0.8/Shaders/Lit.shader', G('b')]])
   })
 })

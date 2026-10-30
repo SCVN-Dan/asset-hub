@@ -3,6 +3,7 @@ import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { clone as cloneWithBones } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import {
   fbxMeshNames,
+  meshForFileId,
   modelImportScale,
   parseFbxMeta,
   parseMaterialLook,
@@ -17,7 +18,7 @@ import {
 } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
-import type { FbxViewer, MaterialSlot, TextureFile } from './FbxViewer'
+import { BLANK_TEXTURE, type FbxViewer, type MaterialSlot, type TextureFile } from './FbxViewer'
 import { DRAWABLE, fetchTextureFile } from './textures'
 
 /** Nested prefabs are put together this deep, like the resolver follows them. */
@@ -26,7 +27,6 @@ const MAX_DEPTH = 4
 const MAX_MODEL_BYTES = 40 * 1024 * 1024
 /** Textures per prefab preview: colour and normal maps of the materials used most. */
 const MAX_TEXTURES = 24
-const TRANSPARENT_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
 /** A prefab put together as a three.js group, with what is needed to dress and measure it. */
 export interface PrefabBuild {
@@ -93,9 +93,10 @@ function sharedRun(a: string, b: string): number {
 
 /**
  * Which mesh of a model each mesh fileID the prefab uses stands for. Newer
- * Unity derives these fileIDs from names it does not list, so they are matched
- * through the GameObjects' names: listed names first, then equal names, then
- * the closest names (each mesh used once), and a last fileID gets the last mesh.
+ * Unity derives these fileIDs from mesh names it does not list: worked out
+ * from the names first, then through the GameObjects' names: listed names,
+ * equal names, the closest names (each mesh used once), and a last fileID
+ * gets the last mesh.
  * Unmatched fileIDs map to undefined: the whole model is shown there instead.
  */
 function assignMeshes(tpl: ModelTemplate, refs: ReadonlyMap<string, readonly string[]>): Map<string, THREE.Mesh | undefined> {
@@ -106,7 +107,14 @@ function assignMeshes(tpl: ModelTemplate, refs: ReadonlyMap<string, readonly str
     out.set(fileID, mesh)
     free.delete(mesh)
   }
+  // Exact first: the fileID Unity derives from each mesh's name.
+  const exact = tpl.meshes.map(meshName)
+  for (const fileID of refs.keys()) {
+    const i = meshForFileId(exact, fileID)
+    if (i >= 0 && free.has(tpl.meshes[i])) take(fileID, tpl.meshes[i])
+  }
   for (const [fileID, names] of refs) {
+    if (out.has(fileID)) continue
     const wanted = [tpl.names.get(fileID), ...names].filter((n): n is string => !!n).map((n) => n.toLowerCase())
     const hit = [...free].find((m) => wanted.includes(meshName(m).toLowerCase()))
     if (hit) take(fileID, hit)
@@ -169,7 +177,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
         if (bytes.byteLength > MAX_MODEL_BYTES) return
         modelBytes += bytes.byteLength
         const manager = new THREE.LoadingManager()
-        manager.setURLModifier(() => TRANSPARENT_PNG)
+        manager.setURLModifier(() => BLANK_TEXTURE)
         const root = new FBXLoader(manager).parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')
         const { globalScale, useFileScale } = modelImportScale(meta ?? '')
         const unit = Number(root.userData.unitScaleFactor) || 1

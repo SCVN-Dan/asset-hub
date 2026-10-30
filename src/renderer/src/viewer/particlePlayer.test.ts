@@ -26,6 +26,7 @@ function sim(over: Partial<ParticleSim>): ParticleSim {
     lengthScale: 2,
     velocityScale: 0,
     maxScreenSize: 0.5,
+    alignment: 'view',
     ...over
   }
 }
@@ -107,3 +108,47 @@ describe('camera framing', () => {
     expect(effect.measuredExtent().equals(effect.extent())).toBe(true)
   })
 })
+
+describe('firing shots on top (spam like Unity)', () => {
+  const burst = (over: Partial<ParticleSim> = {}) => sim({ startLifetime: k(0.5), bursts: [{ time: 0, count: k(10), cycles: 1, interval: 0.01, probability: 1 }], ...over })
+  const make = (s: ParticleSim) => {
+    const root = new THREE.Group()
+    const player = new EmitterPlayer({ ...emitter('1', s), lifetime: 0.5 }, { blend: 'additive', tint: [1, 1, 1, 1] })
+    root.add(player.mesh)
+    return { root, effect: new EffectPlayer([player]) }
+  }
+
+  it('adds a play next to the running one, removed once it is over', () => {
+    const { root, effect } = make(burst())
+    effect.loop = false
+    effect.update(0.1)
+    expect(effect.alive).toBe(10)
+    effect.fire()
+    effect.update(0.1)
+    // The shot plays at the same place, alongside the first play.
+    expect(root.children).toHaveLength(2)
+    effect.update(2)
+    effect.update(0.1)
+    expect(root.children).toHaveLength(1)
+  })
+
+  it('plays one cycle of a looping system, and is cleared by a restart', () => {
+    const { root, effect } = make(burst({ looping: true, duration: 0.5 }))
+    effect.fire()
+    effect.update(0.1)
+    expect(root.children).toHaveLength(2)
+    for (let i = 0; i < 20; i++) effect.update(0.1)
+    // The original keeps looping; the shot is gone after its one cycle.
+    expect(root.children).toHaveLength(1)
+    effect.fire()
+    effect.restart()
+    expect(root.children).toHaveLength(1)
+  })
+
+  it('keeps at most a dozen shots playing', () => {
+    const { root, effect } = make(burst({ startLifetime: k(10) }))
+    for (let i = 0; i < 20; i++) effect.fire()
+    expect(root.children).toHaveLength(13)
+  })
+})
+

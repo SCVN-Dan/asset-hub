@@ -101,6 +101,15 @@ describe('particle systems', () => {
     expect(particleTotals(parseParticleSystems(yaml))).toEqual({ emitters: 2, peak: 97, duration: 2.8, looping: true })
   })
 
+  it('knows Unity\'s own meshes on mesh particles, which no repo holds', () => {
+    const builtin = (fileID: number) =>
+      parseParticleSystems(emitter(100, 'Ring', { renderer: `  m_RenderMode: 4\n  m_Mesh: {fileID: ${fileID}, guid: 0000000000000000e000000000000000, type: 0}\n` }))[0]
+    expect(builtin(10210)).toMatchObject({ renderMode: 'mesh', builtinMesh: 'quad' })
+    expect(builtin(10210).mesh).toBeUndefined()
+    expect(builtin(10202).builtinMesh).toBe('cube')
+    expect(builtin(99999).builtinMesh).toBeUndefined()
+  })
+
   it('caps the peak at the maximum particle count', () => {
     const big = emitter(100, 'Rain', { burst: BURSTS.replace(/scalar: 30/, 'scalar: 900').replace(/minScalar: 30/, 'minScalar: 900') })
     expect(parseParticleSystems(big)[0].peak).toBe(200)

@@ -15,7 +15,13 @@ export const KNOWN_PACKAGE_SHADERS: Record<string, string> = {
 /** Built-in shaders by fileID (they share one GUID). */
 export const BUILTIN_SHADER_NAMES: Record<string, string> = {
   '46': 'Standard',
-  '45': 'Standard (Specular setup)'
+  '45': 'Standard (Specular setup)',
+  '200': 'Legacy Shaders/Particles/Additive',
+  '203': 'Legacy Shaders/Particles/Alpha Blended',
+  '210': 'Particles/Standard Surface',
+  '211': 'Particles/Standard Unlit',
+  '10720': 'Mobile/Particles/Additive',
+  '10721': 'Mobile/Particles/Alpha Blended'
 }
 
 const GUID = '[0-9a-f]{32}'
@@ -140,6 +146,50 @@ function blendOf(floats: Record<string, number>): MaterialLook['blend'] {
   return undefined
 }
 
+const BLEND_FACTORS: Record<string, MaterialLook['blend']> = {
+  'srcalpha one': 'additive',
+  'one one': 'additive',
+  'oneminusdstcolor one': 'additive',
+  'srcalpha oneminussrcalpha': 'alpha',
+  'one oneminussrcalpha': 'premultiply',
+  'dstcolor zero': 'multiply',
+  'zero srccolor': 'multiply',
+  'dstcolor srccolor': 'multiply'
+}
+
+/**
+ * The blend a shader's code sets (`Blend SrcAlpha One`…), when fixed there.
+ * Undefined when it comes from material properties (`Blend [_SrcBlend] [_DstBlend]`)
+ * or is not one a preview tells apart: the material's numbers then decide.
+ */
+export function shaderBlend(shaderText: string): MaterialLook['blend'] {
+  const code = shaderText.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  const m = /^\s*Blend\s+(\w+)\s+(\w+)/im.exec(code)
+  return m ? BLEND_FACTORS[`${m[1]} ${m[2]}`.toLowerCase()] : undefined
+}
+
+/**
+ * The texture slots a shader declares, in its order: `_MainTex ("Albedo", 2D)`
+ * in a .shader's Properties, Texture2D properties (by reference name) in a
+ * Shader Graph — the old format nests them as escaped JSON, hence the
+ * optional backslashes.
+ */
+export function shaderTextureProps(path: string, text: string): string[] {
+  if (/\.shadergraph$/i.test(path)) {
+    const out: string[] = []
+    for (const m of text.matchAll(/Texture2DShaderProperty/g)) {
+      const block = text.slice(m.index, m.index + 4000).split(/\\?"m_Type\\?"|\\?"typeInfo\\?"/)[0]
+      const ref = (key: string) => new RegExp(`\\\\?"${key}\\\\?":\\s*\\\\?"(\\w*)`).exec(block)?.[1]
+      const name = ref('m_OverrideReferenceName') || ref('m_DefaultReferenceName')
+      if (name && !out.includes(name)) out.push(name)
+    }
+    return out
+  }
+  const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
+  const props = /Properties\s*\{([\s\S]*?)\n\s*\}/.exec(code)?.[1] ?? ''
+  return [...props.matchAll(/(_\w+)\s*\(\s*"[^"]*"\s*,\s*2D\s*\)/g)].map((m) => m[1])
+}
+
 export function parseMaterialLook(matText: string): MaterialLook {
   const colors: Record<string, Rgba> = {}
   for (const [k, v] of propertyList(matText, 'm_Colors')) {
@@ -208,9 +258,14 @@ export interface TextureImport {
   sRGB?: boolean
   mipmaps?: boolean
   alphaIsTransparency?: boolean
+  /** Where alpha comes from: the file's own channel, none (opaque), or made from the colour's grey level. */
+  alphaSource?: 'none' | 'input' | 'gray'
   /** Per-platform overrides that are switched on. */
   overrides: Array<{ target: string; maxTextureSize?: number; compression?: number }>
 }
+
+/** TextureImporter alphaUsage: 0 None, 1 Input Texture Alpha, 2 From Gray Scale. */
+const ALPHA_SOURCES: Record<number, TextureImport['alphaSource']> = { 0: 'none', 1: 'input', 2: 'gray' }
 
 export function parseTextureMeta(metaText: string): TextureImport {
   const text = metaText.replace(/\r\n/g, '\n')
@@ -239,6 +294,7 @@ export function parseTextureMeta(metaText: string): TextureImport {
     sRGB: flag(head, 'sRGBTexture'),
     mipmaps: flag(head, 'enableMipMap'),
     alphaIsTransparency: flag(head, 'alphaIsTransparency'),
+    ...(ALPHA_SOURCES[num(head, 'alphaUsage') ?? -1] ? { alphaSource: ALPHA_SOURCES[num(head, 'alphaUsage')!] } : {}),
     overrides: platforms.filter((p) => p.overridden && p.target !== 'DefaultTexturePlatform').map(({ target, maxTextureSize, compression }) => ({ target, maxTextureSize, compression }))
   }
 }

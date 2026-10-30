@@ -91,6 +91,11 @@ export interface AssetTypeHandler {
   facts?: FactKind
   /** No tab and not under All: only listed by other tabs (`alsoShows`), once a scan has found them. */
   hidden?: boolean
+  /**
+   * Left out of lists once measured to be of no use to look at (a clip no
+   * model was found to play it on); the grid offers to show them anyway.
+   */
+  unlisted?(stats: StatsSummary | undefined): boolean
   /** How a user takes it: a `.unitypackage` with its dependencies (default), or the file itself (a texture). */
   delivery?: 'unitypackage' | 'file'
 }

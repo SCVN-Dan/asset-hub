@@ -9,7 +9,21 @@ const MAX_RIGS = 8
 const entrySize = (e: TreeEntry | undefined) => (e ? (e.lfs ? (e.lfsSize ?? e.size) : e.size) : undefined)
 
 /** Folder names that say nothing about which character a clip is for. */
-const GENERIC = new Set(['animation', 'animations', 'anim', 'anims', 'animator', 'animators', 'clip', 'clips', 'motion', 'motions', 'enemy', 'enemies', 'character', 'characters', 'model', 'models', 'fbx', 'fbxs', 'art', 'assets', 'prefab', 'prefabs', 'old', 'new', 'common', 'basic'])
+const GENERIC = new Set(['animation', 'animations', 'anim', 'anims', 'animator', 'animators', 'clip', 'clips', 'motion', 'motions', 'enemy', 'enemies', 'character', 'characters', 'model', 'models', 'fbx', 'fbxs', 'art', 'assets', 'prefab', 'prefabs', 'old', 'new', 'common', 'basic', 'controller', 'controllers', 'override'])
+
+/** Words of a clip's name that say what it does, not who does it ("Customer_Idle": "idle"). */
+const ACTIONS = new Set([
+  'idle', 'run', 'running', 'walk', 'walking', 'jog', 'sprint', 'attack', 'atk', 'melee', 'skill', 'cast', 'spell', 'shoot', 'fire', 'aim', 'reload', 'throw',
+  'hit', 'hurt', 'damage', 'die', 'dying', 'death', 'dead', 'stun', 'knockback', 'jump', 'fall', 'land', 'landing', 'spawn', 'appear', 'disappear', 'intro', 'outro',
+  'pick', 'pickup', 'carry', 'stack', 'drop', 'push', 'pull', 'punch', 'kick', 'block', 'dodge', 'dash', 'roll', 'slide', 'climb', 'swim', 'fly', 'flying',
+  'sit', 'sitting', 'stand', 'standing', 'talk', 'wave', 'dance', 'victory', 'win', 'lose', 'fail', 'cheer', 'celebrate', 'happy', 'sad', 'angry',
+  'eat', 'eating', 'drink', 'sleep', 'work', 'working', 'cut', 'chop', 'dig', 'mine', 'move', 'turn', 'left', 'right', 'front', 'back', 'forward', 'backward',
+  'start', 'end', 'loop', 'pose', 'tpose', 'action', 'emote', 'react', 'reaction', 'fast', 'slow', 'combo', 'charge', 'swing', 'slash', 'stab', 'catch', 'hold', 'open', 'close', 'upgrade'
+])
+/** Models named in the clip's own name, slipped in right after the best guess (the rig check then picks among them). */
+const NAMED_EXTRA = 2
+/** Animator controllers read to find the ones playing a clip, nearest first (a few KB each). */
+const CONTROLLERS_READ = 24
 
 /**
  * Models that may carry the rig a clip animates, most likely first, and only
@@ -18,9 +32,13 @@ const GENERIC = new Set(['animation', 'animations', 'anim', 'anims', 'animator',
  * action ("Idle" would match every character's idle animation file). Models
  * sharing no character word with the clip are kept only from its own folder;
  * with none related at all, the closest few are offered. Animation-only files
- * (Model@Run.fbx, FBX under an Animation folder) come after models.
+ * (Model@Run.fbx, FBX under an Animation folder) come after models. When the
+ * clip's name also names someone ("Customer_Idle" in a folder named after the
+ * game), the models named so are tried right after the best guess. Animator
+ * controllers that play the clip (`controllers`) say best whose it is
+ * ("Customer.controller" plays "Stack_Idle"): models they name go first.
  */
-export function rigCandidates(animPath: string, ctx: Pick<DepContext, 'root' | 'byPath'>, limit = MAX_RIGS): string[] {
+export function rigCandidates(animPath: string, ctx: Pick<DepContext, 'root' | 'byPath'>, limit = MAX_RIGS, controllers: readonly string[] = []): string[] {
   const split = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2 && !GENERIC.has(w))
   const folders = dirName(animPath).slice(ctx.root.length).split('/')
   // The clip's folder and the one above it ("Player/WeaponAnims", "Enemy/Goblin_Melee").
@@ -45,7 +63,39 @@ export function rigCandidates(animPath: string, ctx: Pick<DepContext, 'root' | '
   }
   scored.sort((a, b) => b.score - a.score || a.path.length - b.path.length)
   const related = scored.filter((s) => s.related)
-  return (related.length ? related : scored.slice(0, 3)).slice(0, limit).map((s) => s.path)
+  const ranked = (related.length ? related : scored.slice(0, 3)).map((s) => s.path)
+  const all = scored.map((s) => s.path)
+  const clipWords = nameWords(baseName(animPath)).filter((w) => !ACTIONS.has(w) && !character.has(w))
+  const byController = namedModels([...new Set(controllers.flatMap((c) => nameWords(baseName(c))))], all)
+  const byName = namedModels(clipWords, all)
+  return [...new Set([...byController.slice(0, NAMED_EXTRA), ...ranked.slice(0, 1), ...byName.slice(0, NAMED_EXTRA), ...ranked.slice(1)])].slice(0, limit)
+}
+
+/** Words of a file name that can name something ("Customer_Red.fbx": customer, red), digits and generic words left out. */
+const nameWords = (file: string) =>
+  file
+    .replace(/\.[^.]+$/, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map((w) => w.replace(/\d+$/, ''))
+    .filter((w) => w.length > 2 && !GENERIC.has(w))
+
+/**
+ * Models whose file name has one of `named` ("customer" → "Customer_Red.fbx"),
+ * most words first, then those whose name starts with one. Animation-only
+ * files are left out.
+ */
+function namedModels(named: readonly string[], models: readonly string[]): string[] {
+  if (!named.length) return []
+  return models
+    .filter((p) => !baseName(p).includes('@'))
+    .map((p) => {
+      const own = nameWords(baseName(p))
+      return { p, hits: named.filter((w) => own.some((o) => o.includes(w))).length, starts: named.some((w) => own[0]?.startsWith(w)) }
+    })
+    .filter((m) => m.hits > 0)
+    .sort((a, b) => b.hits - a.hits || Number(b.starts) - Number(a.starts) || a.p.length - b.p.length)
+    .map((m) => m.p)
 }
 
 /** A clip needs only what it references by GUID (sprites of a sprite animation, objects in events). */
@@ -74,7 +124,7 @@ export async function resolveAnimationDependencies(animPath: string, ctx: DepCon
   }
   // Only clips that move transforms need a rig to be seen.
   const info = parseAnimClip(text)
-  const rigs = info.kind === 'generic' || info.kind === 'legacy' ? rigCandidates(animPath, ctx) : []
+  const rigs = info.kind === 'generic' || info.kind === 'legacy' ? rigCandidates(animPath, ctx, MAX_RIGS, await controllersPlaying(animPath, ctx)) : []
   return {
     kind: 'none',
     materials: [],
@@ -86,4 +136,43 @@ export async function resolveAnimationDependencies(animPath: string, ctx: DepCon
     parts,
     rigs
   }
+}
+
+/** Animator controllers (of the nearest few) whose states play this clip, found by its GUID. */
+export async function controllersPlaying(animPath: string, ctx: Pick<DepContext, 'root' | 'byPath' | 'readTexts'>): Promise<string[]> {
+  const meta = `${animPath}.meta`
+  if (!ctx.byPath.has(meta)) return []
+  const guid = /guid: ([0-9a-f]{32})/.exec((await ctx.readTexts([meta])).get(meta) ?? '')?.[1]
+  if (!guid) return []
+  const near = dirName(animPath).split('/')
+  const closeness = (p: string) => {
+    const parts = dirName(p).split('/')
+    let shared = 0
+    while (shared < near.length && shared < parts.length && near[shared] === parts[shared]) shared++
+    return shared
+  }
+  const nearest = [...ctx.byPath.keys()]
+    .filter((p) => /\.(controller|overrideController)$/i.test(p) && p.startsWith(ctx.root))
+    .map((p) => ({ p, shared: closeness(p) }))
+    .sort((a, b) => b.shared - a.shared || a.p.length - b.p.length)
+    .slice(0, CONTROLLERS_READ)
+    .map((c) => c.p)
+  if (!nearest.length) return []
+  const texts = await controllerTexts(ctx, nearest)
+  return nearest.filter((p) => texts.get(p)?.includes(guid))
+}
+
+/** Controller texts already read, per commit (its file list): clips side by side ask for the same ones. */
+const controllerCache = new WeakMap<object, Map<string, Promise<string>>>()
+
+async function controllerTexts(ctx: Pick<DepContext, 'byPath' | 'readTexts'>, paths: readonly string[]): Promise<Map<string, string>> {
+  let known = controllerCache.get(ctx.byPath)
+  if (!known) controllerCache.set(ctx.byPath, (known = new Map()))
+  const todo = paths.filter((p) => !known!.has(p))
+  if (todo.length) {
+    const read = ctx.readTexts(todo)
+    // A failed read is not kept: the next clip tries again.
+    for (const p of todo) known.set(p, read.then((t) => t.get(p) ?? '', () => (known!.delete(p), '')))
+  }
+  return new Map(await Promise.all(paths.map(async (p) => [p, await known!.get(p)!] as const)))
 }

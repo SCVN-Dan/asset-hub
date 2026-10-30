@@ -1,13 +1,13 @@
 import * as THREE from 'three'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
 import { clone as cloneWithBones } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { BLANK_TEXTURE } from './FbxViewer'
 import { modelImportScale, sampleCurve, type AnimClipInfo } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
 
 /** Rigs bigger than this are not downloaded to try a clip on. */
 export const MAX_RIG_BYTES = 30 * 1024 * 1024
-const TRANSPARENT_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 /** The animated root's name in tracks ("" paths in Unity). */
 const ROOT = '__clipRoot'
 
@@ -51,7 +51,7 @@ async function parseRig(live: LiveContext, path: string, background: boolean): P
   ])
   if (bytes.byteLength > MAX_RIG_BYTES) throw new Error(`${path} is too large to try as a rig`)
   const manager = new THREE.LoadingManager()
-  manager.setURLModifier(() => TRANSPARENT_PNG)
+  manager.setURLModifier(() => BLANK_TEXTURE)
   const root = new FBXLoader(manager).parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')
   root.name = ROOT
   const { globalScale, useFileScale } = modelImportScale(meta)

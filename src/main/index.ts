@@ -62,8 +62,8 @@ app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 // draw them on a canvas (exported package previews) without tainting it.
 protocol.registerSchemesAsPrivileged([{ scheme: THUMB_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
 
-/** Owns the cache folder's size limit, once signed-in services are set up. */
-let janitor: CacheJanitor | undefined
+/** The cache folder's size limit and the shared index, once set up. */
+let github: { janitor: CacheJanitor; sharedIndexChanged(): void } | undefined
 
 // assethub:// links open an asset in the app. Under `npm run dev` the protocol points at the dev
 // Electron with the app's path; macOS only hands links to a packaged app (Phase 10).
@@ -130,8 +130,9 @@ app.whenReady().then(() => {
   ipcMain.handle(IPC.getSettings, () => settings.get())
   ipcMain.handle(IPC.setSettings, (_event, patch: unknown) => {
     const next = settings.set(patch)
-    // A lower limit applies right away.
-    if (patch && typeof patch === 'object' && 'cacheLimitGB' in patch) void janitor?.prune()
+    // A lower limit applies right away; a new shared folder is read at once.
+    if (patch && typeof patch === 'object' && 'cacheLimitGB' in patch) void github?.janitor.prune()
+    if (patch && typeof patch === 'object' && 'sharedIndexDir' in patch) github?.sharedIndexChanged()
     return next
   })
   ipcMain.handle(IPC.chooseFolder, async (event) => {
@@ -151,10 +152,11 @@ app.whenReady().then(() => {
     if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url)
   })
 
-  janitor = registerGitHubIpc({
+  github = registerGitHubIpc({
     authFile: join(userData, 'auth.json'),
     cacheDir: () => settings.get().cacheDir,
     cacheLimit: () => (settings.get().cacheLimitGB ?? DEFAULT_CACHE_LIMIT_GB) * 1024 ** 3,
+    sharedIndexDir: () => settings.get().sharedIndexDir,
     toolsDir: join(userData, 'tools')
   })
 

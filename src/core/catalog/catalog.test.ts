@@ -67,3 +67,35 @@ describe('RepoCatalog', () => {
     expect(old.pending().map((b) => b.name)).toEqual(['main'])
   })
 })
+
+describe('RepoCatalog.merge', () => {
+  it('takes commits listed elsewhere for the branches it knows, keeping LFS files unknown-size', () => {
+    const mine = hero()
+    mine.addCommit('c-main', [file('A.fbx', 'a')])
+    const theirs = hero()
+    theirs.addCommit('c-main', [file('Other.fbx', 'x')])
+    theirs.addCommit('c-fish', [file('Fish.fbx', 'f', 300), { path: 'Big.fbx', type: 'blob', sha: 'b', lfs: true }])
+    expect(mine.merge(theirs)).toBe(1)
+    const files = [...mine.files()]
+    // Its own listing of a commit stays.
+    expect(files.filter((f) => f.branch === 'main').map((f) => f.path)).toEqual(['A.fbx'])
+    expect(files.filter((f) => f.branch === 'vn/fish')).toEqual([
+      { branch: 'vn/fish', path: 'Fish.fbx', sha: 'f', size: 300, lfs: false },
+      { branch: 'vn/fish', path: 'Big.fbx', sha: 'b', size: undefined, lfs: true }
+    ])
+  })
+
+  it('adopts a more recently read branch list, and skips commits no branch points at', () => {
+    const mine = hero()
+    const theirs = RepoCatalog.empty('org/hero')
+    theirs.setBranches([{ name: 'main', commit: 'c-main2', date: '2026-10-28T00:00:00Z' }], 'main', NOW + 1000)
+    theirs.addCommit('c-main2', [file('New.fbx', 'n')])
+    const stale = hero()
+    stale.addCommit('c-old', [file('Old.fbx', 'o')])
+    expect(mine.merge(theirs)).toBe(1)
+    expect(mine.branches.map((b) => b.name)).toEqual(['main'])
+    // An older list does not replace a newer one, and its commits for gone branches are not taken.
+    expect(mine.merge(stale)).toBe(0)
+    expect(mine.branches.map((b) => b.commit)).toEqual(['c-main2'])
+  })
+})

@@ -16,9 +16,10 @@ export async function renderImageThumbnail(live: LiveContext, path: string): Pro
     window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
     window.api.assets.readFile(live.repo, live.branch, `${path}.meta`, true).then((r) => (r.ok ? new TextDecoder().decode(r.data) : undefined))
   ])
-  const img = await decodeImage(path, bytes)
+  const imp = meta ? parseTextureMeta(meta) : undefined
+  const img = await decodeImage(path, bytes, imp?.alphaSource)
   // Judged at the size it is built at: a 2048 px source capped to 512 on import is fine for playables.
-  const built = meta ? importedTextureSize(img.width, img.height, parseTextureMeta(meta)) : Math.max(img.width, img.height)
+  const built = imp ? importedTextureSize(img.width, img.height, imp) : Math.max(img.width, img.height)
   try {
     const canvas = document.createElement('canvas')
     canvas.width = W

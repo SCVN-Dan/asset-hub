@@ -161,7 +161,8 @@ describe('resolvePrefabDependencies', () => {
       ['script', 'Door.cs', 1],
       ['other', 'Knock.wav', 1]
     ])
-    // The package script (G(21)) is left out: not in the repo, nothing to carry.
+    // The package script (G(21)) is left out: not in the repo, nothing to carry — but the target project needs it.
+    expect(report.packageScripts).toEqual([G(21)])
     expect(report.materials.map((m) => m.name)).toEqual(['Roof', 'Wall'])
     expect(report.files).toEqual(
       expect.arrayContaining(['proj/Assets/House.prefab', 'proj/Assets/Chimney.prefab.meta', 'proj/Assets/Models/House.fbx', 'proj/Assets/M/Wall.mat', 'proj/Assets/Scripts/Door.cs', 'proj/Assets/Audio/Knock.wav'])
