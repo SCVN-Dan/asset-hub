@@ -10,6 +10,41 @@ import { unwrap } from '../remoteSource'
 /** Mesh particles from models larger than this are drawn as billboards. */
 const MAX_MESH_BYTES = 8 * 1024 * 1024
 
+/**
+ * Effect packs with their own shaders often keep the mask in a colour channel
+ * (a "gas alpha" from green, a flame drawn white on black) and leave the
+ * file's alpha solid. When the alpha is opaque everywhere but the edges are
+ * black, the alpha is taken from the brightest channel. Undefined otherwise:
+ * the file's alpha is real.
+ */
+function maskFromColour(image: HTMLImageElement): HTMLCanvasElement | undefined {
+  const w = image.naturalWidth
+  const h = image.naturalHeight
+  if (!w || !h) return undefined
+  const canvas = document.createElement('canvas')
+  canvas.width = w
+  canvas.height = h
+  const g = canvas.getContext('2d', { willReadFrequently: true })!
+  g.drawImage(image, 0, 0)
+  const pixels = g.getImageData(0, 0, w, h)
+  const d = pixels.data
+  let edge = 0
+  let edges = 0
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] < 250) return undefined
+    const x = (i / 4) % w
+    const y = Math.floor(i / 4 / w)
+    if (x === 0 || y === 0 || x === w - 1 || y === h - 1) {
+      edge += Math.max(d[i], d[i + 1], d[i + 2])
+      edges++
+    }
+  }
+  if (edge / edges > 24) return undefined
+  for (let i = 0; i < d.length; i += 4) d[i + 3] = Math.max(d[i], d[i + 1], d[i + 2])
+  g.putImageData(pixels, 0, 0)
+  return canvas
+}
+
 /** Unity's own meshes at their sizes (Quad and Plane facing along Z and Y like Unity's). */
 function builtinGeometry(mesh: BuiltinMesh): THREE.BufferGeometry {
   switch (mesh) {
@@ -50,13 +85,18 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
   const textures = new Map<string, Promise<THREE.Texture | undefined>>()
   const looks = new Map<string, Promise<MaterialLook | undefined>>()
   let maxSide = 0
-  const loadTexture = (path: string) => {
-    let p = textures.get(path)
+  /** `alphaInColour`: a custom shader blending by alpha, which may take it from a colour channel (see `maskFromColour`). */
+  const loadTexture = (path: string, alphaInColour = false) => {
+    let p = textures.get(`${path}#${alphaInColour}`)
     if (!p) {
       p = fetchTextureFile(live, path, background).then(async (file) => {
         if (!file) return undefined
         try {
           const tex = await new THREE.TextureLoader().loadAsync(file.url)
+          if (alphaInColour) {
+            const masked = maskFromColour(tex.image as HTMLImageElement)
+            if (masked) tex.image = masked
+          }
           tex.colorSpace = THREE.SRGBColorSpace
           const img = tex.image as { width?: number; height?: number } | undefined
           maxSide = Math.max(maxSide, img?.width ?? 0, img?.height ?? 0)
@@ -67,7 +107,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
           URL.revokeObjectURL(file.url)
         }
       })
-      textures.set(path, p)
+      textures.set(`${path}#${alphaInColour}`, p)
     }
     return p
   }
@@ -130,11 +170,14 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
     const info = shader?.kind === 'project' && shader.path ? await loadShader(shader.path) : undefined
     const coded = info?.blend
     const texPath = mainTexture(material, info?.textures)
-    const [texture, look] = await Promise.all([texPath ? loadTexture(texPath) : undefined, material?.path ? loadLook(material.path) : undefined])
+    const look = material?.path ? await loadLook(material.path) : undefined
     const c = look?.color
     // A blend fixed by the shader wins over the material's numbers, which may be left from another shader.
     const fixed = shader && FIXED_BLEND.test(shader.label) ? blendFromShader(shader.label) : coded
-    return { texture, blend: fixed ?? look?.blend ?? blendFromShader(shader?.label), tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1] }
+    const blend = fixed ?? look?.blend ?? blendFromShader(shader?.label)
+    const custom = !!shader && shader.kind !== 'builtin' && (blend === 'alpha' || blend === 'premultiply')
+    const texture = texPath ? await loadTexture(texPath, custom) : undefined
+    return { texture, blend, tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1] }
   }
 
   const players = await Promise.all(

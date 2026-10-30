@@ -7,7 +7,7 @@ import type { EffectPlayer } from './particlePlayer'
 const MAIN_PROPS = ['_MainTex', '_BaseMap', '_BaseColorMap', '_Texture', '_TintTex']
 
 /** Slots that shape or distort a particle rather than colour it: never its look. */
-const HELPER_PROP = /noise|mask|bump|normal|dissolve|distort|flow/i
+const HELPER_PROP = /noise|mask|bump|normal|dissol|dist|flow|^_vo/i
 
 /**
  * The texture that gives a particle material its look. A main slot holding
@@ -46,8 +46,8 @@ export function particleStats(report: DependencyReport, base?: StatsSummary): St
 /** Frames of a moving effect card, laid out as a square sheet. */
 export const MOTION_FRAMES = 16
 const MOTION_COLS = 4
-/** Bumped when effect cards are drawn differently: older ones are drawn again once. v3: blend from the shader, no noise maps as colour; v4: Unity's own meshes, framed per emitter; v5: premultiplied blending, soft default dots; v6: alpha from grey level as Unity imports it; v7: billboards facing the system's axes; v8: 3D rotation per particle, the right mesh of a model, the slot the shader reads; v9: sizes per axis; v10: alpha per mesh particle. */
-export const FX_THUMB_VERSION = 10
+/** Bumped when effect cards are drawn differently: older ones are drawn again once. v3: blend from the shader, no noise maps as colour; v4: Unity's own meshes, framed per emitter; v5: premultiplied blending, soft default dots; v6: alpha from grey level as Unity imports it; v7: billboards facing the system's axes; v8: 3D rotation per particle, the right mesh of a model, the slot the shader reads; v9: sizes per axis; v10: alpha per mesh particle; v11: masks kept in a colour channel. */
+export const FX_THUMB_VERSION = 11
 
 /** Cache key of an effect's moving card, next to its still one. */
 export const motionKey = (key: string) => `${key}.fx`

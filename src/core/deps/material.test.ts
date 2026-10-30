@@ -136,6 +136,9 @@ describe('parseMaterialLook (legacy particles)', () => {
   it('lists the texture slots a shader declares, in order', () => {
     const code = 'Shader "Custom/Toon" {\n  Properties {\n    // _Old ("Old", 2D) = "white" {}\n    [NoScaleOffset] _MainTex ("Albedo", 2D) = "white" {}\n    _Color ("Tint", Color) = (1,1,1,1)\n    _Noise ("Noise", 2D) = "black" {}\n  }\n  SubShader { Pass {} }\n}'
     expect(shaderTextureProps('a/Toon.shader', code)).toEqual(['_MainTex', '_Noise'])
+    // Packs keep a "Particle Texture" _MainTex they never read: what the code samples comes first.
+    const pack = 'Shader "HunFX/simple" {\n  Properties {\n    _MainTex ("Particle Texture", 2D) = "white" {}\n    _MainTexture("MainTexture", 2D) = "white" {}\n  }\n  SubShader { Pass { CGPROGRAM\n float4 c = tex2D( _MainTexture, uv );\n ENDCG } }\n}'
+    expect(shaderTextureProps('a/simple.shader', pack)).toEqual(['_MainTexture', '_MainTex'])
     const graph = [
       '{\n    "m_SGVersion": 0,\n    "m_Type": "UnityEditor.ShaderGraph.Internal.Texture2DShaderProperty",\n    "m_DefaultReferenceName": "Texture2D_abc",\n    "m_OverrideReferenceName": "_MainTex",\n}',
       '{\n    "m_SGVersion": 0,\n    "m_Type": "UnityEditor.ShaderGraph.Internal.Texture2DShaderProperty",\n    "m_DefaultReferenceName": "_Ramp",\n    "m_OverrideReferenceName": "",\n}'

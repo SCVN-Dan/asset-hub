@@ -730,11 +730,14 @@ export function Browse({
         >
           <RefreshIcon />
         </button>
-        <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={onQuery} />
-        <button type="button" className="btn" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
-          <GearIcon />
-          {login && <span className="small">{login}</span>}
-        </button>
+        {/* Search and Settings move together: when the bar wraps, Settings stays at the right end. */}
+        <div className="topbar-end">
+          <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={onQuery} />
+          <button type="button" className="btn topbar-settings" aria-label={t('common.settings')} title={t('common.settings')} onClick={onSettings}>
+            <GearIcon />
+            {login && <span className="small">{login}</span>}
+          </button>
+        </div>
       </header>
 
       {source.isDemo && (

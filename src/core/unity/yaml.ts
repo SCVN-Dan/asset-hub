@@ -169,10 +169,11 @@ export function shaderBlend(shaderText: string): MaterialLook['blend'] {
 }
 
 /**
- * The texture slots a shader declares, in its order: `_MainTex ("Albedo", 2D)`
- * in a .shader's Properties, Texture2D properties (by reference name) in a
- * Shader Graph — the old format nests them as escaped JSON, hence the
- * optional backslashes.
+ * The texture slots a shader declares: `_MainTex ("Albedo", 2D)` in a
+ * .shader's Properties — the ones its code samples first, in that order
+ * (packs keep a "Particle Texture" _MainTex they never read) — and Texture2D
+ * properties (by reference name) in a Shader Graph, whose old format nests
+ * them as escaped JSON, hence the optional backslashes.
  */
 export function shaderTextureProps(path: string, text: string): string[] {
   if (/\.shadergraph$/i.test(path)) {
@@ -187,7 +188,10 @@ export function shaderTextureProps(path: string, text: string): string[] {
   }
   const code = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')
   const props = /Properties\s*\{([\s\S]*?)\n\s*\}/.exec(code)?.[1] ?? ''
-  return [...props.matchAll(/(_\w+)\s*\(\s*"[^"]*"\s*,\s*2D\s*\)/g)].map((m) => m[1])
+  const declared = [...props.matchAll(/(_\w+)\s*\(\s*"[^"]*"\s*,\s*2D\s*\)/g)].map((m) => m[1])
+  const sampled = [...code.matchAll(/(?:tex2D\w*|SAMPLE_TEXTURE2D\w*)\s*\(\s*(_\w+)|(_\w+)\.Sample\w*\s*\(/g)].map((m) => m[1] ?? m[2])
+  const read = [...new Set(sampled.filter((p) => declared.includes(p)))]
+  return [...read, ...declared.filter((p) => !read.includes(p))]
 }
 
 export function parseMaterialLook(matText: string): MaterialLook {
