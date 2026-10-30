@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "postinstall": "node scripts/dev-app-name.mjs",
-    "dist": "electron-vite build && electron-builder --mac"
+    "dist": "electron-vite build && electron-builder --mac dmg",
+    "dist:web": "electron-vite build && electron-builder --mac zip && node scripts/make-web-installer.mjs",
+    "release": "node scripts/publish-release.mjs"
   },
   "devDependencies": {
     "@fontsource/be-vietnam-pro": "^5.3.0",
@@ -38,5 +40,6 @@
   "allowScripts": {
     "electron@33.4.11": true,
     "esbuild@0.21.5": true
-  }
+  },
+  "releaseRepo": "SCVN-Dan/asset-hub-release"
 }
