@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultRegistry, HandlerRegistry } from './index'
 import { fbxHandler } from './handlers/fbx'
-import { MockAssetSource } from './mock/mockSource'
 import type { AssetTypeHandler, TreeEntry } from './types'
 
 const blob = (path: string, extra: Partial<TreeEntry> = {}): TreeEntry => ({ path, type: 'blob', sha: 'x', ...extra })
@@ -35,18 +34,18 @@ describe('HandlerRegistry', () => {
     expect(asset).toMatchObject({ id: 'A/Hero.fbx', type: 'fbx', name: 'Hero.fbx', size: 5000, lfs: true })
   })
 
-  it('finds every FBX in the mock branches', async () => {
-    const source = new MockAssetSource()
+  it('sorts a branch into its asset types', () => {
     const registry = createDefaultRegistry()
-    const main = registry.collectAssets(await source.listTree('demo', 'main'))
-    const develop = registry.collectAssets(await source.listTree('demo', 'develop'))
-    const fbx = (list: typeof main) => list.filter((a) => a.type === 'fbx')
-    expect(fbx(main)).toHaveLength(10)
-    expect(fbx(develop)).toHaveLength(11)
-    // Textures and materials are assets of their own now.
-    expect(main.filter((a) => a.type === 'texture').length).toBeGreaterThan(0)
-    expect(main.filter((a) => a.type === 'material').length).toBeGreaterThan(0)
-    // .asset files are a hidden type (TextMeshPro fonts once a scan confirms them): no tab of their own.
-    expect(main.every((a) => ['fbx', 'texture', 'material'].includes(a.type) || registry.get(a.type)?.hidden)).toBe(true)
+    const assets = registry.collectAssets(
+      ['Assets/Hero.fbx', 'Assets/Hero.fbx.meta', 'Assets/Rock.FBX', 'Assets/T/hero_d.png', 'Assets/M/Hero.mat', 'Assets/Fonts/Title SDF.asset', 'Assets/Scripts/Hero.cs'].map((p) => blob(p))
+    )
+    const of = (type: string) => assets.filter((a) => a.type === type).map((a) => a.name)
+    expect(of('fbx')).toEqual(['Hero.fbx', 'Rock.FBX'])
+    // Textures and materials are assets of their own.
+    expect(of('texture')).toEqual(['hero_d.png'])
+    expect(of('material')).toEqual(['Hero.mat'])
+    // .meta files and scripts are not assets; .asset files are a hidden type (TextMeshPro fonts once a scan confirms them).
+    expect(assets.some((a) => a.path.endsWith('.meta') || a.path.endsWith('.cs'))).toBe(false)
+    expect(assets.every((a) => ['fbx', 'texture', 'material'].includes(a.type) || registry.get(a.type)?.hidden)).toBe(true)
   })
 })

@@ -24,9 +24,11 @@ interface Props {
   note?: string
   /** Measurements, when known: triangle count and playable-budget verdict. */
   stats?: StatsSummary
+  /** In Favourites. */
+  starred?: boolean
 }
 
-export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note, stats }: Props) {
+export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note, stats, starred }: Props) {
   const { t } = useTranslation()
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
@@ -80,6 +82,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
             ▶ {stats.clips}
           </span>
         ) : null}
+        {starred && <span className="star-badge" aria-label={t('collections.favorites')}>★</span>}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
         {hover && motion && <span className="asset-motion" style={{ backgroundImage: `url("${motion}")` }} aria-hidden="true" />}
         {generating && !thumb && <span className="thumb-spinner" aria-label={t('browse.generatingThumb')} />}

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AssetSearch } from '@core/index'
+import { parseAssetLink } from '@shared/deeplink'
 import { SearchIcon } from './Icons'
 
 interface Props {
@@ -38,7 +39,8 @@ export function SearchBox({ value, search, onChange }: Props) {
         onChange={(e) => {
           onChange(e.target.value)
           setActive(0)
-          setOpen(true)
+          // A pasted assethub:// link opens its asset and empties the box: no suggestions for Enter to pick.
+          setOpen(!parseAssetLink(e.target.value))
         }}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}

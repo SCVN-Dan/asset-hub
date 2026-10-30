@@ -194,7 +194,6 @@ const NEAR_CHUNK = 6 * 1024 * 1024
 
 export class GitHubAssetSource implements AssetSource {
   readonly id = 'github'
-  readonly isDemo = false
   private readonly snapshots = new Map<string, Snapshot>()
   /** GUID index builds in flight, per repo@commit: concurrent callers share one build and its progress. */
   private readonly guidBuilds = new Map<string, { promise: Promise<Map<string, string>>; listeners: Set<(p: IndexProgress) => void> }>()

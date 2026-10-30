@@ -56,6 +56,8 @@ interface Props {
   playClips?: boolean
   /** Bar under the preview that resizes it. */
   viewerResizer?: ReactNode
+  /** Star and collections menu for this asset. */
+  collectionActions?: ReactNode
 }
 
 type PrefabSearch =
@@ -586,7 +588,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models, viewerResizer }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models, viewerResizer, collectionActions }: Props) {
   const { t } = useTranslation()
   const budget = useBudget()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
@@ -808,6 +810,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
             </button>
           </div>
         )}
+        {collectionActions}
       </div>
 
       {stats && (

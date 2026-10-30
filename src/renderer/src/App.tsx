@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { createDefaultRegistry, type AssetSource } from '@core/index'
-import { MockAssetSource } from '@core/mock/mockSource'
 import type { AuthStatus } from '@shared/ipc'
 import { DEFAULT_EXPORT_LAYOUT, type Settings as AppSettings } from '@shared/settings'
 import { budgetFor, DEFAULT_BUDGET_PRESET } from '@core/checks/playable'
@@ -13,11 +13,34 @@ import { SignIn } from './screens/SignIn'
 
 type Screen = 'loading' | 'signin' | 'browse' | 'settings'
 
+/** After the chest opens: the white-out fades into the hub and greets the user. */
+function Welcome({ login, onDone }: { login?: string; onDone(): void }) {
+  const { t } = useTranslation()
+  useEffect(() => {
+    const timer = window.setTimeout(onDone, 3200)
+    return () => window.clearTimeout(timer)
+  }, [onDone])
+  return (
+    <div className="welcome" aria-live="polite">
+      <div className="welcome-flash" aria-hidden="true" />
+      <div className="welcome-toast" role="status">
+        <span aria-hidden="true">★</span>
+        {login ? t('signin.welcome', { login }) : t('signin.welcomeAnon')}
+      </div>
+    </div>
+  )
+}
+
 export function App() {
   const [settings, setSettings] = useState<AppSettings>()
   const [auth, setAuth] = useState<AuthStatus>()
   const [source, setSource] = useState<AssetSource>()
   const [screen, setScreen] = useState<Screen>('loading')
+  /** Set when the user just came in through the lobby: the greeting over the hub. */
+  const [welcome, setWelcome] = useState<{ login?: string }>()
+  /** Signed in from last time: the lobby opens the chest by itself, then the hub. */
+  const [autoEnter, setAutoEnter] = useState<AuthStatus>()
+  const endWelcome = useCallback(() => setWelcome(undefined), [])
   const registry = useMemo(createDefaultRegistry, [])
 
   const enterGitHub = useCallback((status: AuthStatus) => {
@@ -30,8 +53,8 @@ export function App() {
     void window.api.getSettings().then(setSettings)
     // Restores the previous sign-in; any failure falls back to the sign-in screen.
     void window.api.auth.status().then((result) => {
-      if (result.ok && result.data.signedIn) enterGitHub(result.data)
-      else setScreen('signin')
+      if (result.ok && result.data.signedIn) setAutoEnter(result.data)
+      setScreen('signin')
     })
   }, [enterGitHub])
 
@@ -62,18 +85,19 @@ export function App() {
         <SignIn
           language={settings.language}
           onLanguage={setLanguage}
-          onToken={async (token) => enterGitHub(unwrap(await window.api.auth.signInWithToken(token)))}
+          onToken={async (token) => unwrap(await window.api.auth.signInWithToken(token))}
           onGh={async () => {
             const existing = await window.api.auth.signInWithGh()
-            if (existing.ok) return enterGitHub(existing.data)
+            if (existing.ok) return existing.data
             if (existing.error.code !== 'ghNotLoggedIn') throw new RemoteError(existing.error)
             // gh is installed but logged out: log it in through the browser right here.
-            enterGitHub(unwrap(await window.api.auth.ghWebLogin()))
+            return unwrap(await window.api.auth.ghWebLogin())
           }}
-          onDemo={() => {
-            setAuth(undefined)
-            setSource(new MockAssetSource())
-            setScreen('browse')
+          autoEnter={autoEnter}
+          onEnter={(status) => {
+            setAutoEnter(undefined)
+            setWelcome({ login: status.login })
+            enterGitHub(status)
           }}
         />
       )
@@ -87,10 +111,10 @@ export function App() {
           registry={registry}
           excludedFolders={settings.excludedFolders}
           login={auth?.login}
-          initialRepo={source.isDemo ? undefined : settings.lastRepo}
-          initialBranch={source.isDemo ? undefined : settings.lastBranch}
+          initialRepo={settings.lastRepo}
+          initialBranch={settings.lastBranch}
           onOpenBranch={(lastRepo, lastBranch) => {
-            if (!source.isDemo && (lastRepo !== settings.lastRepo || lastBranch !== settings.lastBranch)) update({ lastRepo, lastBranch })
+            if (lastRepo !== settings.lastRepo || lastBranch !== settings.lastBranch) update({ lastRepo, lastBranch })
           }}
           onSettings={() => setScreen('settings')}
           budgetPreset={settings.budgetPreset ?? DEFAULT_BUDGET_PRESET}
@@ -98,7 +122,10 @@ export function App() {
           exportLayout={settings.exportLayout ?? DEFAULT_EXPORT_LAYOUT}
           onExportLayout={(exportLayout) => update({ exportLayout })}
           targetProject={settings.targetProject}
+          collections={settings.collections}
+          onCollections={(collections) => update({ collections })}
         />
+        {welcome && <Welcome login={welcome.login} onDone={endWelcome} />}
         </BudgetContext.Provider>
       ) : null
   }

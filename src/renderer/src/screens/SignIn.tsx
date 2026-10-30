@@ -1,53 +1,118 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Language } from '@shared/settings'
-import type { InstallProgress } from '@shared/ipc'
+import { LANGUAGES, type Language } from '@shared/settings'
+import type { AuthStatus, InstallProgress } from '@shared/ipc'
 import { ErrorNote } from '../components/ErrorNote'
 import { RemoteError, unwrap } from '../remoteSource'
 import { GithubIcon } from '../components/Icons'
-import { LogoMark } from '../components/Logo'
-import { LangToggle } from '../components/LangToggle'
+import type { LobbyScene } from '../viewer/lobbyScene'
 
 interface Props {
   language: Language
   onLanguage(language: Language): void
-  onToken(token: string): Promise<void>
-  onGh(): Promise<void>
-  onDemo(): void
+  onToken(token: string): Promise<AuthStatus>
+  onGh(): Promise<AuthStatus>
+  /** Signed in and the chest has opened: show the hub. */
+  onEnter(status: AuthStatus): void
+  /** Already signed in (the app was opened again): the chest opens by itself, no start button. */
+  autoEnter?: AuthStatus
 }
 
 type Busy = 'pat' | 'gh' | 'install' | undefined
 
-export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
+/** Without the 3D scene (no WebGL), a short white-out stands in for the opening. */
+const OPEN_MS_FALLBACK = 500
+
+/**
+ * Sign-in as a game lobby: the chest, one big start button, the one-time code
+ * as a room code, installing gh as a loading bar, a token as the way round.
+ * Signing in opens the chest; the camera dives into its light and the hub
+ * takes over (`onEnter`).
+ */
+export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter }: Props) {
   const { t } = useTranslation()
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState<Busy>()
   const [error, setError] = useState<unknown>()
   const [ghPrompt, setGhPrompt] = useState<{ code: string; url: string }>()
+  const [progress, setProgress] = useState<InstallProgress>()
+  const [tokenOpen, setTokenOpen] = useState(false)
+  const [opening, setOpening] = useState(false)
+  const canvas = useRef<HTMLCanvasElement>(null)
+  /** The 3D lobby once loaded; `null` when it cannot run (no WebGL), `undefined` while loading. */
+  const scene = useRef<LobbyScene | null>()
+  const chestSpace = useRef<HTMLDivElement>(null)
+  const [sceneState, setSceneState] = useState<'loading' | 'ready' | 'none'>('loading')
+  const entered = useRef(false)
   const cancelled = useRef(false)
 
-  const [progress, setProgress] = useState<InstallProgress>()
+  // three.js loads with this screen only, not with the app.
+  useEffect(() => {
+    let disposed = false
+    void import('../viewer/lobbyScene')
+      .then(({ LobbyScene }) => {
+        if (disposed || !canvas.current) return
+        scene.current = new LobbyScene(canvas.current)
+        fitChest()
+        setSceneState('ready')
+      })
+      .catch(() => {
+        scene.current = null
+        if (!disposed) setSceneState('none')
+      })
+    // The chest goes where the page leaves room for it, whatever the window size.
+    const fitChest = () => {
+      const space = chestSpace.current?.getBoundingClientRect()
+      const box = canvas.current?.getBoundingClientRect()
+      if (space && box && scene.current) scene.current.setSlot(space.top - box.top + space.height / 2, space.height)
+    }
+    const watch = new ResizeObserver(fitChest)
+    if (chestSpace.current) watch.observe(chestSpace.current)
+    if (canvas.current) watch.observe(canvas.current)
+    return () => {
+      disposed = true
+      watch.disconnect()
+      scene.current?.dispose()
+    }
+  }, [])
 
   useEffect(() => window.api.auth.onGhLoginPrompt(setGhPrompt), [])
   useEffect(() => window.api.tools.onInstallProgress(setProgress), [])
 
   const ghMissing = error instanceof RemoteError && error.error.code === 'ghNotFound'
 
-  /** Installs gh into the app folder, then continues straight into the gh sign-in. */
-  const installThenSignIn = () =>
-    run('install', async () => {
-      unwrap(await window.api.tools.installGh())
-      setProgress(undefined)
-      setBusy('gh')
-      await onGh()
-    })
+  /** The chest opens, then the hub is shown once the light has filled the screen (sooner when skipped). */
+  const open = (status: AuthStatus) => {
+    setTokenOpen(false)
+    setOpening(true)
+    // A click or any key skips the rest.
+    const enter = () => {
+      window.removeEventListener('pointerdown', enter)
+      window.removeEventListener('keydown', enter)
+      if (entered.current) return
+      entered.current = true
+      onEnter(status)
+    }
+    void (scene.current ? scene.current.open() : new Promise((r) => window.setTimeout(r, OPEN_MS_FALLBACK))).then(enter)
+    window.setTimeout(() => {
+      if (entered.current) return
+      window.addEventListener('pointerdown', enter)
+      window.addEventListener('keydown', enter)
+    }, 200)
+  }
 
-  const run = async (kind: Exclude<Busy, undefined>, action: () => Promise<void>) => {
+  // Opened again while signed in: the chest opens as soon as the scene is there.
+  useEffect(() => {
+    if (autoEnter && sceneState !== 'loading' && !opening) open(autoEnter)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEnter, sceneState])
+
+  const run = async (kind: Exclude<Busy, undefined>, action: () => Promise<AuthStatus>) => {
     setBusy(kind)
     setError(undefined)
     cancelled.current = false
     try {
-      await action()
+      open(await action())
     } catch (err) {
       if (!cancelled.current) setError(err)
     } finally {
@@ -57,131 +122,169 @@ export function SignIn({ language, onLanguage, onToken, onGh, onDemo }: Props) {
     }
   }
 
+  /** Installs gh into the app folder, then continues straight into the gh sign-in. */
+  const installThenSignIn = () =>
+    run('install', async () => {
+      unwrap(await window.api.tools.installGh())
+      setProgress(undefined)
+      setBusy('gh')
+      return onGh()
+    })
+
   const cancelGh = () => {
     cancelled.current = true
     void window.api.auth.cancelGhWebLogin()
   }
 
+  const code = ghPrompt?.code.replace(/[^A-Z0-9]/gi, '').toUpperCase() ?? ''
+  const percent = progress?.stage === 'download' && progress.total ? Math.round((progress.received / progress.total) * 100) : undefined
+  const idle = !busy && !opening && !autoEnter
+
   return (
-    <div className="signin">
-      <div className="signin-lang">
-        <LangToggle value={language} onChange={onLanguage} />
-      </div>
-      <div className="signin-col">
-        <div className="brand">
-          <LogoMark size={56} />
-          <div>
-            <div className="brand-name">Asset Hub</div>
-            <div className="muted small">{t('signin.tagline')}</div>
-          </div>
-        </div>
+    <div className="lobby" data-opening={opening || undefined} data-scene={sceneState}>
+      <canvas ref={canvas} className="lobby-canvas" aria-hidden="true" />
 
-        <div className="card">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <h1>{t('signin.title')}</h1>
-            <p className="muted">{t('signin.desc')}</p>
-          </div>
+      <main className="lobby-center">
+          {/* The 3D chest sits here, drawn by the scene behind. */}
+          <div className="lobby-chest-space" ref={chestSpace} aria-hidden="true" />
+          <h1 className="lobby-title">Asset Hub</h1>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button
-              type="button"
-              className="btn btn-primary btn-lg"
-              disabled={busy !== undefined}
-              aria-busy={busy === 'gh'}
-              onClick={() => void run('gh', onGh)}
-            >
-              <GithubIcon />
-              {busy === 'gh' ? t('signin.checking') : t('signin.github')}
-            </button>
-            <span className="muted small">{t('signin.ghCliSub')}</span>
-          </div>
-
-          {ghPrompt && busy === 'gh' && (
-            <div className="device-code" role="status">
-              <span className="muted small">{t('signin.ghCodeHint')}</span>
-              <span className="device-code-value mono">{ghPrompt.code}</span>
-              <span className="small" style={{ color: 'var(--accent-text)' }}>
-                {t('signin.ghCopied')}
-              </span>
-              <div className="field-row">
-                <button type="button" className="btn btn-primary" onClick={() => void window.api.openExternal(ghPrompt.url)}>
-                  {t('signin.ghOpen')}
+          {!autoEnter && (
+          <div className="lobby-stage">
+            {ghPrompt && busy === 'gh' ? (
+              <section className="lobby-panel" aria-live="polite">
+                <span className="lobby-caps">{t('signin.roomCode')}</span>
+                <div className="lobby-code" aria-label={ghPrompt.code}>
+                  {[...code].map((ch, i) => (
+                    <span key={i} className="lobby-code-cell" data-gap={i === 4 || undefined}>
+                      {ch}
+                    </span>
+                  ))}
+                </div>
+                <span className="small lobby-copied">{t('signin.ghCopied')}</span>
+                <div className="lobby-row">
+                  <button type="button" className="lobby-btn lobby-btn-primary" onClick={() => void window.api.openExternal(ghPrompt.url)}>
+                    {t('signin.ghOpen')}
+                  </button>
+                  <button type="button" className="lobby-btn" onClick={cancelGh}>
+                    {t('signin.cancel')}
+                  </button>
+                </div>
+                <ol className="lobby-steps">
+                  <li>
+                    <b>{t('signin.stepN', { n: 1 })}</b>
+                    {t('signin.stepShort1')}
+                  </li>
+                  <li>
+                    <b>{t('signin.stepN', { n: 2 })}</b>
+                    {t('signin.stepShort2')}
+                  </li>
+                  <li>
+                    <b>{t('signin.stepN', { n: 3 })}</b>
+                    {t('signin.stepShort3')}
+                  </li>
+                </ol>
+                <span className="small muted">{t('signin.emailHint')}</span>
+                <span className="small muted lobby-blink">{t('signin.ghWaiting')}</span>
+              </section>
+            ) : busy === 'install' ? (
+              <section className="lobby-loading" aria-live="polite">
+                <div className="lobby-loading-head">
+                  <span className="lobby-caps lobby-caps-strong">{t('signin.installing')}</span>
+                  {percent !== undefined && <span className="lobby-percent">{percent}%</span>}
+                </div>
+                <div className="lobby-bar" role="progressbar" aria-label={t('signin.installing')} aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
+                  <span style={{ width: percent !== undefined ? `${percent}%` : '100%' }} data-indeterminate={percent === undefined || undefined} />
+                </div>
+                <span className="small muted">{progress ? t(`signin.installStage.${progress.stage}`) : t('signin.installStage.start')}</span>
+              </section>
+            ) : tokenOpen && !opening ? (
+              <section className="lobby-panel lobby-panel-left">
+                <span className="lobby-caps">{t('signin.tokenTitle')}</span>
+                <form
+                  className="lobby-token"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void run('pat', () => onToken(token))
+                  }}
+                >
+                  <label htmlFor="pat">{t('signin.patLabel')}</label>
+                  <div className="lobby-row">
+                    <input id="pat" className="input mono" type="password" placeholder="github_pat_…" autoComplete="off" autoFocus value={token} onChange={(e) => setToken(e.target.value)} />
+                    <button type="submit" className="lobby-btn lobby-btn-primary" disabled={busy !== undefined || !token.trim()}>
+                      {busy === 'pat' ? t('signin.checking') : t('signin.enter')}
+                    </button>
+                  </div>
+                  <span className="small muted">{t('signin.patScope')}</span>
+                  <span className="small muted">{t('signin.sso')}</span>
+                </form>
+                {error !== undefined && <ErrorNote error={error} />}
+                <button type="button" className="lobby-link" onClick={() => setTokenOpen(false)}>
+                  ‹ {t('signin.back')}
                 </button>
-                <button type="button" className="btn" onClick={cancelGh}>
-                  {t('signin.cancel')}
-                </button>
+              </section>
+            ) : (
+              <div className="lobby-start-wrap">
+                {ghMissing && !busy ? (
+                  <section className="lobby-panel">
+                    <strong>{t('signin.ghMissingTitle')}</strong>
+                    <span className="small muted">{t('signin.ghMissingBody')}</span>
+                    <button type="button" className="lobby-btn lobby-btn-primary" onClick={() => void installThenSignIn()}>
+                      {t('signin.installGh')}
+                    </button>
+                  </section>
+                ) : (
+                  <>
+                    {error !== undefined && (
+                      <div className="lobby-error">
+                        <ErrorNote error={error} />
+                      </div>
+                    )}
+                    <button type="button" className="lobby-start" disabled={!idle} aria-busy={busy === 'gh'} onClick={() => void run('gh', onGh)}>
+                      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 4.5v15l12.5-7.5z" fill="currentColor" />
+                      </svg>
+                      {busy === 'gh' ? t('signin.connecting') : error !== undefined ? t('signin.retry') : t('signin.start')}
+                    </button>
+                    <span className="lobby-start-sub">
+                      <GithubIcon />
+                      {t('signin.startSub')}
+                    </span>
+                  </>
+                )}
               </div>
-              <ol className="steps">
-                <li>{t('signin.step1')}</li>
-                <li>{t('signin.step2')}</li>
-                <li>{t('signin.step3')}</li>
-                <li>{t('signin.step4')}</li>
-              </ol>
-              <span className="muted small">{t('signin.ghWaiting')}</span>
-            </div>
+            )}
+          </div>
           )}
+      </main>
 
-          <div className="divider">{t('signin.or')}</div>
-
-          <form
-            className="field"
-            onSubmit={(e) => {
-              e.preventDefault()
-              void run('pat', () => onToken(token))
-            }}
-          >
-            <label htmlFor="pat">{t('signin.patLabel')}</label>
-            <div className="field-row">
-              <input
-                id="pat"
-                className="input mono"
-                type="password"
-                placeholder="github_pat_…"
-                autoComplete="off"
-                value={token}
-                onChange={(e) => setToken(e.target.value)}
-              />
-              <button type="submit" className="btn" disabled={busy !== undefined || !token.trim()}>
-                {busy === 'pat' ? t('signin.checking') : t('signin.use')}
-              </button>
-            </div>
-            <span className="muted small">{t('signin.patScope')}</span>
-          </form>
-
-          {busy === 'install' && (
-            <div className="device-code" role="status">
-              <strong>{t('signin.installing')}</strong>
-              <progress
-                className="progress"
-                max={progress?.stage === 'download' && progress.total ? progress.total : undefined}
-                value={progress?.stage === 'download' && progress.total ? progress.received : undefined}
-              />
-              <span className="muted small">{progress ? t(`signin.installStage.${progress.stage}`) : t('signin.installStage.start')}</span>
-            </div>
-          )}
-
-          {ghMissing && busy === undefined ? (
-            <div className="device-code">
-              <strong>{t('signin.ghMissingTitle')}</strong>
-              <span className="small" style={{ color: 'var(--text-2)' }}>
-                {t('signin.ghMissingBody')}
-              </span>
-              <button type="button" className="btn btn-primary" onClick={() => void installThenSignIn()}>
-                {t('signin.installGh')}
-              </button>
-            </div>
-          ) : (
-            error !== undefined && <ErrorNote error={error} />
-          )}
+      <div className="lobby-top">
+        <div className="lobby-langs" role="group" aria-label={t('common.language')}>
+          {LANGUAGES.map((l) => (
+            <button key={l} type="button" className="lobby-lang" aria-pressed={language === l} onClick={() => onLanguage(l)}>
+              {l.toUpperCase()}
+            </button>
+          ))}
         </div>
-
-        <p className="muted small center" style={{ margin: 0 }}>
-          {t('signin.sso')}
-        </p>
-        <button type="button" className="btn" style={{ alignSelf: 'center' }} onClick={onDemo}>
-          {t('signin.demo')}
-        </button>
       </div>
+
+      <footer className="lobby-bottom">
+        {idle && !tokenOpen ? (
+          <button type="button" className="lobby-link" onClick={() => setTokenOpen(true)}>
+            {t('signin.tokenLink')}
+          </button>
+        ) : (
+          <span />
+        )}
+        <span className="lobby-promise">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z" />
+          </svg>
+          {t('signin.promise')}
+        </span>
+      </footer>
+
+      <div className="lobby-flash" aria-hidden="true" />
     </div>
   )
 }

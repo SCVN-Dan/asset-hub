@@ -150,9 +150,7 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
             </span>
             {auth.persisted === false && <span className="muted small">{t('settings.notPersisted')}</span>}
           </>
-        ) : (
-          <span className="muted">{t('settings.demoMode')}</span>
-        )}
+        ) : null}
         <div>
           <button type="button" className="btn" onClick={onSignOut}>
             {auth?.signedIn ? t('settings.signOut') : t('settings.signIn')}

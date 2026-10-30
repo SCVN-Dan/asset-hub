@@ -1,5 +1,6 @@
 import { BUDGET_KEYS, BUDGET_PRESETS, type BudgetPreset, type PlayableBudget } from '../core/checks/playable'
 import type { PackageLayout } from '../core/export/unitypackage'
+import { sanitizeCollections, type Collection } from './collections'
 
 export const LANGUAGES = ['en', 'vi', 'ko'] as const
 export type Language = (typeof LANGUAGES)[number]
@@ -25,6 +26,8 @@ export interface Settings {
   targetProject?: string
   /** Folder a team shares (network drive, synced folder) holding an index everyone takes in. */
   sharedIndexDir?: string
+  /** Favourites and named collections of assets (see shared/collections). */
+  collections?: Collection[]
 }
 
 export const EXPORT_LAYOUTS: readonly PackageLayout[] = ['byType', 'grouped', 'source']
@@ -56,7 +59,8 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
     ...sanitizeBudget(input.customBudget),
     ...((EXPORT_LAYOUTS as readonly unknown[]).includes(input.exportLayout) ? { exportLayout: input.exportLayout as PackageLayout } : {}),
     ...(typeof input.targetProject === 'string' && input.targetProject.trim() ? { targetProject: input.targetProject } : {}),
-    ...(typeof input.sharedIndexDir === 'string' && input.sharedIndexDir.trim() ? { sharedIndexDir: input.sharedIndexDir } : {})
+    ...(typeof input.sharedIndexDir === 'string' && input.sharedIndexDir.trim() ? { sharedIndexDir: input.sharedIndexDir } : {}),
+    ...(sanitizeCollections(input.collections) ? { collections: sanitizeCollections(input.collections) } : {})
   }
 }
 

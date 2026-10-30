@@ -64,13 +64,6 @@ export const RefreshIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
-export const InfoIcon =({ size = 16 }: IconProps) => (
-  <svg {...base(size)}>
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 11v5M12 8v.01" />
-  </svg>
-)
-
 export const SphereIcon = ({ size = 24 }: IconProps) => (
   <svg {...base(size)}>
     <circle cx="12" cy="12" r="8.5" />

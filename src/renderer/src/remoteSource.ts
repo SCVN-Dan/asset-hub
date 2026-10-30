@@ -16,7 +16,6 @@ export function unwrap<T>(result: IpcResult<T>): T {
 /** AssetSource backed by the GitHub session in the main process. */
 export class RemoteAssetSource implements AssetSource {
   readonly id = 'github'
-  readonly isDemo = false
 
   async listRepos(): Promise<RepoRef[]> {
     return unwrap(await window.api.source.listRepos())

@@ -27,7 +27,7 @@ import { Dropdown } from '../components/Dropdown'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { GearIcon, InfoIcon, RefreshIcon } from '../components/Icons'
+import { GearIcon, RefreshIcon } from '../components/Icons'
 import { LogoMark } from '../components/Logo'
 import { flyToPack } from '../motion'
 import { SearchBox } from '../components/SearchBox'
@@ -41,6 +41,8 @@ import { FX_THUMB_VERSION, motionKey } from '../viewer/particleThumb'
 import { ANIM_THUMB_VERSION, MODEL_THUMB_VERSION } from '../viewer/thumbVersions'
 import { useSharedImports } from '../useSharedIndex'
 import { Splitter, useStoredSize } from '../components/Splitter'
+import { CollectionButtons, CollectionsNav, CollectionView } from '../components/Collections'
+import { addCollection, deleteCollection, renameCollection, toggleItem, withFavorites, type Collection, type CollectionItem } from '@shared/collections'
 
 interface Props {
   source: AssetSource
@@ -61,6 +63,9 @@ interface Props {
   onExportLayout(layout: ExportOptions['layout']): void
   /** Unity project exports are compared with (settings), if any. */
   targetProject?: string
+  /** Favourites and named collections (settings). */
+  collections?: Collection[]
+  onCollections(collections: Collection[]): void
 }
 
 const ALL = 'all'
@@ -121,9 +126,16 @@ export function Browse({
   onBudgetPreset,
   exportLayout,
   onExportLayout,
-  targetProject
+  targetProject,
+  collections: storedCollections,
+  onCollections
 }: Props) {
   const { t } = useTranslation()
+  // Collections: one may be open in the grid instead of the branch's folders.
+  const collections = withFavorites(storedCollections)
+  const [openCollection, setOpenCollection] = useState<string>()
+  const shownCollection = collections.find((c) => c.id === openCollection)
+  const favorites = new Set(collections[0].items.map((i) => `${i.repo}\n${i.path}`))
   // Detail panel width and preview height, as each person drags them (kept on this machine).
   const [detailsWidth, setDetailsWidth] = useStoredSize('assethub.detailsWidth')
   const [viewerHeight, setViewerHeight] = useStoredSize('assethub.viewerHeight')
@@ -307,7 +319,7 @@ export function Browse({
   const merged = visible.length - shown.length
   const selected = visible.find((a) => a.id === selectedId)
 
-  const catalog = useCatalog(scope, repo, branch, excludedFolders, !source.isDemo)
+  const catalog = useCatalog(scope, repo, branch, excludedFolders, true)
   const [catalogRepo, setCatalogRepo] = useState('')
   const [catalogBranch, setCatalogBranch] = useState('')
   useEffect(() => {
@@ -501,7 +513,10 @@ export function Browse({
   }, [])
   const onQuery = (q: string) => {
     const link = parseAssetLink(q)
-    if (!link) return setQuery(q)
+    if (!link) {
+      setOpenCollection(undefined)
+      return setQuery(q)
+    }
     setQuery('')
     openLocation(link.repo, link.branch, link.path)
   }
@@ -558,8 +573,10 @@ export function Browse({
     card?.scrollIntoView({ block: 'nearest' })
     if (document.activeElement?.classList.contains('asset-card')) card?.focus({ preventScroll: true })
   }, [gridSelected, gridItems, limit])
+/** An asset of this branch as a collection keeps it: where it is, so it opens there again. */
+  const itemOf = (a: Asset): CollectionItem => ({ repo, branch, path: root + a.path, sha: a.sha, name: a.name, type: a.type, ...(a.size !== undefined ? { size: a.size } : {}) })
   const live = useMemo(
-    () => (source.isDemo || !repo || !branch || branchRepo !== repo ? undefined : { repo, branch, root }),
+    () => (!repo || !branch || branchRepo !== repo ? undefined : { repo, branch, root }),
     [source, repo, branch, branchRepo, root]
   )
 
@@ -597,10 +614,22 @@ export function Browse({
   }, [typeFilter, live, registry])
 
   const sharedImports = useSharedImports()
+  // Saved thumbnails and measurements of an open collection's assets, from any repo or branch (by content).
+  const collectionShas = shownCollection?.items.map((i) => i.sha).join(',') ?? ''
+  useEffect(() => {
+    if (!collectionShas) return
+    let cancelled = false
+    const keys = collectionShas.split(',')
+    void window.api.thumbs.get(keys).then((more) => !cancelled && setThumbs((prev) => ({ ...more, ...prev })), () => undefined)
+    void window.api.stats.get(keys).then((more) => !cancelled && setModelStats((prev) => ({ ...more, ...prev })), () => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [collectionShas, thumbsLoaded])
   // Thumbnails rendered earlier, keyed by the model's content hash.
   useEffect(() => {
     setThumbsLoaded(false)
-    if (source.isDemo || !allAssets.length) return
+    if (!allAssets.length) return
     let cancelled = false
     const keys = allAssets.map((a) => a.sha)
     // Both known before rendering starts, so nothing is rendered or measured twice.
@@ -740,12 +769,6 @@ export function Browse({
         </div>
       </header>
 
-      {source.isDemo && (
-        <div className="banner" role="status">
-          <InfoIcon />
-          {t('browse.demoBanner')}
-        </div>
-      )}
 
       <div
         className="browse-body"
@@ -755,24 +778,30 @@ export function Browse({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="label-caps">{t('browse.types')}</span>
             <div className="tabs" role="group" aria-label={t('browse.types')}>
-              <button type="button" className="tab" aria-pressed={typeFilter === ALL} onClick={() => setTypeFilter(ALL)}>
+              <button type="button" className="tab" aria-pressed={typeFilter === ALL} onClick={() => { setTypeFilter(ALL); setOpenCollection(undefined) }}>
                 <span className="type-gem" style={{ background: 'var(--text-2)' }} />
                 {t('assetTypes.all')} <span className="muted">{typeSource.filter((a) => !registry.get(a.type)?.hidden).length}</span>
               </button>
               {registry.all().filter((h) => !h.hidden).map((h) => (
-                <button key={h.id} type="button" className="tab" aria-pressed={typeFilter === h.id} onClick={() => setTypeFilter(h.id)}>
+                <button key={h.id} type="button" className="tab" aria-pressed={typeFilter === h.id} onClick={() => { setTypeFilter(h.id); setOpenCollection(undefined) }}>
                   <span className="type-gem" style={{ background: `var(--type-${h.id})` }} />
                   {t(h.labelKey)} <span className="muted">{typeCounts.get(h.id) ?? 0}</span>
                 </button>
               ))}
             </div>
           </div>
+          <CollectionsNav
+            collections={collections}
+            open={openCollection}
+            onOpen={setOpenCollection}
+            onCreate={(id, name) => onCollections(addCollection(collections, id, name))}
+          />
           <nav aria-label={t('browse.folders')} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span className="label-caps">{t('browse.folders')}</span>
             {/* Mount only once the branch is loaded so the initial expansion sees real folders. */}
             {inCatalog && <p className="muted small" style={{ margin: 0 }}>{t('catalog.foldersBranchOnly')}</p>}
             {!inCatalog && tree.status === 'ready' && (
-              <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={setFolder} />
+              <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={(f) => { setFolder(f); setOpenCollection(undefined) }} />
             )}
           </nav>
           {!inCatalog && (
@@ -789,7 +818,24 @@ export function Browse({
         </aside>
 
         <main className="content">
-          {!source.isDemo && <ScopeTabs scope={scope} onScope={setScope} />}
+          {shownCollection ? (
+            <CollectionView
+              collection={shownCollection}
+              registry={registry}
+              thumbs={thumbs}
+              stats={modelStats}
+              current={{ repo, branch, path: selected ? root + selected.path : undefined }}
+              onOpenItem={(item) => openLocation(item.repo, item.branch, item.path)}
+              onRename={(name) => onCollections(renameCollection(collections, shownCollection.id, name))}
+              onDelete={() => {
+                onCollections(deleteCollection(collections, shownCollection.id))
+                setOpenCollection(undefined)
+              }}
+              onClose={() => setOpenCollection(undefined)}
+            />
+          ) : (
+          <>
+          <ScopeTabs scope={scope} onScope={setScope} />
           <div className="content-head">
             <h1>{inCatalog ? t(`catalog.title.${scope}`, { repo: repo.split('/').pop() }) : folder || t('browse.allFolders')}</h1>
             <span className="muted small">
@@ -960,6 +1006,8 @@ export function Browse({
             </p>
           )}
           {!inCatalog && tree.status === 'ready' && visible.length === 0 && <p className="empty">{t('browse.noResults')}</p>}
+          </>
+          )}
           {(pack.length > 0 || exportState.status !== 'idle') && (
             <ExportBar
               items={pack}
@@ -977,6 +1025,8 @@ export function Browse({
               onDismiss={() => setExportState({ status: 'idle' })}
             />
           )}
+          {!shownCollection && (
+          <>
           {!inCatalog && tree.status === 'ready' && shown.length > 0 && (
             <>
               <div className="grid">
@@ -990,6 +1040,7 @@ export function Browse({
                     copies={mergeCopies ? copiesBySha.get(a.sha)?.length : undefined}
                     selected={a.id === selectedId || (!!selected && mergeCopies && selected.sha === a.sha)}
                     onSelect={() => setSelectedId(a.id)}
+                    starred={favorites.has(`${repo}\n${root + a.path}`)}
                     stats={modelStats[a.sha]}
                     onVisible={
                       live && thumbsLoaded && canRender(a)
@@ -1005,6 +1056,8 @@ export function Browse({
               </div>
               {limit < rankedShown.length && <div ref={sentinel} className="grid-sentinel" />}
             </>
+          )}
+          </>
           )}
         </main>
 
@@ -1040,6 +1093,16 @@ export function Browse({
           onSelectCopy={setSelectedId}
           excludedFolders={excludedFolders}
           onPrefabFiles={(path, files) => prefabFiles.current.set(path, files)}
+          collectionActions={
+            live && selected ? (
+              <CollectionButtons
+                collections={collections}
+                item={itemOf(selected)}
+                onToggle={(id) => onCollections(toggleItem(collections, id, itemOf(selected)))}
+                onCreate={(id, name) => onCollections(toggleItem(addCollection(collections, id, name), id, itemOf(selected)))}
+              />
+            ) : undefined
+          }
           viewerResizer={<Splitter axis="y" target="prev" min={160} max={() => window.innerHeight - 220} onResize={setViewerHeight} label={t('details.resizeViewer')} />}
         />
         )}
