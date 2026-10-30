@@ -1,6 +1,7 @@
 import type { CatalogAsset, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
+import type { AiToolResult } from './aiTools'
 
 export const IPC = {
   getSettings: 'settings:get',
@@ -20,6 +21,7 @@ export const IPC = {
   signOut: 'auth:sign-out',
   listRepos: 'source:list-repos',
   listBranches: 'source:list-branches',
+  watchCheck: 'source:watch-check',
   listTree: 'source:list-tree',
   openExternal: 'shell:open-external',
   resolveAsset: 'assets:resolve',
@@ -42,6 +44,8 @@ export const IPC = {
   saveStats: 'stats:save',
   exportPackage: 'export:unitypackage',
   exportProgress: 'export:progress',
+  unityEditors: 'unity:editors',
+  importToUnity: 'export:to-unity',
   showItemInFolder: 'shell:show-item',
   saveFile: 'assets:save-file',
   catalogScan: 'catalog:scan',
@@ -53,13 +57,46 @@ export const IPC = {
   catalogProgress: 'catalog:progress',
   updateCheck: 'update:check',
   updateInstall: 'update:install',
-  updateProgress: 'update:progress'
+  updateProgress: 'update:progress',
+  aiGetStatus: 'ai:status',
+  aiStatus: 'ai:status-changed',
+  aiInstall: 'ai:install',
+  aiInstallProgress: 'ai:install-progress',
+  aiConnect: 'ai:connect',
+  aiCancelConnect: 'ai:connect-cancel',
+  aiDisconnect: 'ai:disconnect',
+  aiChatSend: 'ai:chat-send',
+  aiChatStop: 'ai:chat-stop',
+  aiChatReset: 'ai:chat-reset',
+  aiChatEvent: 'ai:chat-event',
+  aiToolCall: 'ai:tool-call',
+  aiFeedback: 'ai:feedback',
+  aiToolResult: 'ai:tool-result'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
 export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed'
 
 export type InstallProgress = { stage: 'download'; received: number; total: number } | { stage: 'verify' } | { stage: 'extract' }
+
+/** The AI assistant's connection to ChatGPT (through Codex, installed by the app). */
+export interface AiStatus {
+  state: 'unsupported' | 'notInstalled' | 'installing' | 'signedOut' | 'connecting' | 'connected' | 'error'
+  /** The ChatGPT account, when connected. */
+  email?: string
+  /** Its plan, e.g. "team". */
+  plan?: string
+  /** Why the last step failed. */
+  error?: string
+}
+
+/** What the assistant's thread streams to the chat: answer text as it is written, then the end of the turn. */
+export type AiChatEvent =
+  | { type: 'delta'; itemId: string; text: string }
+  /** It is using one of the hub's tools. */
+  | { type: 'tool'; tool: string }
+  | { type: 'done'; status: 'completed' | 'interrupted' | 'failed'; error?: string }
+  | { type: 'error'; message: string }
 
 /** This version and, when the release repo has a later one, that one. */
 export interface UpdateInfo {
@@ -128,8 +165,18 @@ export interface ExportResult {
   bytes?: number
   skipped?: Array<{ path: string; reason: 'noMeta' | 'noGuid' | 'duplicateGuid' }>
   target?: TargetReport
+  /** Opened in this Unity project (Import into Unity) instead of saved. */
+  unity?: string
   /** Script components removed from prefabs (`stripScripts`). */
   scriptsRemoved?: number
+}
+
+/** A Unity editor open on this Mac, with its project. */
+export interface RunningUnity {
+  pid: number
+  projectPath: string
+  project: string
+  version?: string
 }
 
 export type ExportProgress = { stage: 'resolve' | 'download' | 'write'; done: number; total: number }
@@ -230,7 +277,8 @@ export interface AssetHubApi {
     cancelGhWebLogin(): Promise<void>
     /** Fires with the one-time code while ghWebLogin waits; returns an unsubscribe function. */
     onGhLoginPrompt(listener: (prompt: { code: string; url: string }) => void): () => void
-    signOut(): Promise<IpcResult<AuthStatus>>
+    /** Forgets the app's sign-in; `gh` also logs the account out of GitHub CLI on this Mac. */
+    signOut(options?: { gh?: boolean }): Promise<IpcResult<AuthStatus>>
   }
   tools: {
     /** Downloads and verifies GitHub CLI into the app's own folder. */
@@ -241,6 +289,8 @@ export interface AssetHubApi {
     listRepos(): Promise<IpcResult<RepoRef[]>>
     listBranches(repo: string): Promise<IpcResult<string[]>>
     listTree(repo: string, branch: string): Promise<IpcResult<TreeEntry[]>>
+    /** A watched branch: its tip commit, and the asset files added since `seen` (repo paths). */
+    watchCheck(repo: string, branch: string, seen: string): Promise<IpcResult<{ head: string; added: string[]; more: boolean }>>
   }
   assets: {
     /** Materials, textures and shaders of one asset. Repo paths throughout. */
@@ -306,8 +356,34 @@ export interface AssetHubApi {
   exporter: {
     /** Asks where to save, then builds the .unitypackage. */
     unityPackage(request: ExportRequest): Promise<IpcResult<ExportResult>>
+    /** The Unity editors open right now (several projects can be open at once). */
+    unityEditors(): Promise<RunningUnity[]>
+    /** Builds the package (compared with that editor's project) and opens it in that editor, which shows its import dialog. */
+    importToUnity(request: ExportRequest, pid: number): Promise<IpcResult<ExportResult & { unity: string }>>
     onProgress(listener: (progress: ExportProgress) => void): () => void
     showInFolder(path: string): Promise<void>
+  }
+  ai: {
+    status(): Promise<AiStatus>
+    /** Downloads the pinned Codex (about 125 MB, checked against its hashes). */
+    install(): Promise<AiStatus>
+    onInstallProgress(listener: (progress: InstallProgress) => void): () => void
+    /** Opens ChatGPT's sign-in page; the status turns `connected` once the user has signed in. */
+    connect(): Promise<AiStatus>
+    cancelConnect(): Promise<AiStatus>
+    disconnect(): Promise<AiStatus>
+    onStatus(listener: (status: AiStatus) => void): () => void
+    /** Sends a message in the current conversation (`language`: the app's, for the answer); the answer streams through onChat. */
+    chatSend(text: string, language: string): Promise<{ ok: true } | { ok: false; message: string }>
+    chatStop(): Promise<void>
+    /** Starts a new conversation. */
+    chatReset(): Promise<void>
+    onChat(listener: (event: AiChatEvent) => void): () => void
+    /** The hub runs the pet's tools: a call to act on, answered with toolResult. */
+    onToolCall(listener: (call: { callId: string; tool: string; args: unknown }) => void): () => void
+    toolResult(callId: string, result: AiToolResult): Promise<void>
+    /** A wrong answer, kept on this Mac (userData/ai-feedback) to test the pet against later. */
+    feedback(report: { messages: Array<{ role: string; text: string }>; tools: string[] }): Promise<void>
   }
   update: {
     /** Asks the release repo for its latest version; null when it cannot be reached. */

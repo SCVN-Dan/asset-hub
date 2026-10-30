@@ -225,6 +225,22 @@ export class GitHubAssetSource implements AssetSource {
     return this.client.listBranchHeads(repo)
   }
 
+  /**
+   * A watched branch: its tip, and the files added since `seen` (a commit noted earlier).
+   * Without `seen`, or when it is gone (history rewritten), nothing counts as new.
+   */
+  async addedSince(repo: string, branch: string, seen: string): Promise<{ head: string; added: Array<{ path: string; sha: string }>; more: boolean }> {
+    const head = await this.client.getBranchHead(repo, branch)
+    if (!seen || seen === head) return { head, added: [], more: false }
+    try {
+      const { files, more } = await this.client.compareCommits(repo, seen, head)
+      // Added only: a file moved or renamed is not a new asset.
+      return { head, added: files.filter((f) => f.status === 'added').map(({ path, sha }) => ({ path, sha })), more }
+    } catch {
+      return { head, added: [], more: false }
+    }
+  }
+
   async listTree(repo: string, branch: string): Promise<TreeEntry[]> {
     const commit = await this.client.getBranchHead(repo, branch)
     let entries = await this.options.cache?.get<TreeEntry[]>('tree', repo, commit)

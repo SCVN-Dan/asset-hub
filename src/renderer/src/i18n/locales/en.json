@@ -25,13 +25,11 @@
     "checking": "Checking…",
     "patLabel": "Fine-grained Personal Access Token",
     "patScope": "Required permission: Contents · Read-only",
-    "sso": "Org uses SAML SSO? Authorize the token for the organisation when GitHub asks.",
     "ghCopied": "Code copied to the clipboard — paste it on GitHub.",
     "ghWaiting": "Waiting for you to approve in the browser…",
     "cancel": "Cancel",
     "ghOpen": "Open GitHub",
     "ghMissingTitle": "GitHub CLI is not installed on this computer",
-    "ghMissingBody": "Asset Hub can download the official GitHub CLI (about 15 MB) into its own folder. No admin rights or Terminal needed.",
     "installGh": "Install automatically",
     "installing": "Installing GitHub CLI…",
     "installStage": {
@@ -41,7 +39,6 @@
       "extract": "Unpacking…"
     },
     "start": "START",
-    "startSub": "Sign in with your GitHub account",
     "connecting": "CONNECTING…",
     "retry": "TRY AGAIN",
     "roomCode": "Room code",
@@ -49,14 +46,15 @@
     "stepShort1": "Open GitHub, paste the code",
     "stepShort2": "Continue, then Authorize",
     "stepShort3": "Come back — the app goes on",
-    "emailHint": "GitHub emailed you a verification code? Enter it on GitHub — once per browser.",
     "tokenLink": "Use a token instead",
     "tokenTitle": "Sign in with a token",
     "enter": "ENTER",
     "back": "Back to the lobby",
-    "promise": "Reads repos only · token kept in this Mac’s Keychain",
     "welcome": "WELCOME, {{login}}",
-    "welcomeAnon": "WELCOME"
+    "welcomeAnon": "WELCOME",
+    "sound": "Sound",
+    "soundOn": "Sound on (click to mute)",
+    "soundOff": "Sound off (click to turn on)"
   },
   "collections": {
     "title": "Collections",
@@ -106,7 +104,8 @@
     "loadedHint": "Thumbnails ready. Cards on screen load first, then the rest in the background.",
     "unlistedShow_one": "{{count}} clip without a model hidden — show",
     "unlistedShow_other": "{{count}} clips without a model hidden — show",
-    "unlistedHide": "Hide clips without a model"
+    "unlistedHide": "Hide clips without a model",
+    "settingsAccount": "Settings and account (sign out)"
   },
   "details": {
     "label": "Asset details",
@@ -128,7 +127,6 @@
     "openGitHub": "Open on GitHub"
   },
   "settings": {
-    "exportLayoutHelp": "Used by every Export button. Unity keeps an asset it already has (same GUID) where it is.",
     "title": "Settings",
     "account": "Account",
     "signedInAs": "Signed in as {{login}}",
@@ -138,20 +136,16 @@
     },
     "notPersisted": "The system keychain is unavailable, so you will need to sign in again next time.",
     "signOut": "Sign out",
+    "signOutGh": "Also sign out of GitHub CLI on this Mac",
     "signIn": "Sign in",
-    "languageHelp": "Applies to the whole app.",
     "excluded": "Excluded folders",
-    "excludedHelp": "Comma-separated folder names hidden at any depth, e.g. third-party packs.",
     "cacheDir": "Cache folder",
-    "cacheDirHelp": "Branch listings, downloaded files and thumbnails are stored here.",
     "choose": "Choose…",
     "cacheLimit": "Cache size limit",
-    "cacheLimitHelp": "Downloaded files beyond this are removed, least recently used first. They are downloaded again when needed.",
     "cacheNoLimit": "No limit",
     "cacheClear": "Clear downloads",
     "cacheUsage": "Downloads {{downloads}} · thumbnails {{thumbs}} · other {{other}}",
     "sharedIndex": "Shared index",
-    "sharedIndexHelp": "A folder the team shares (network drive, Google Drive…). One person writes the index of every branch there; everyone else takes it in at sign-in and every 30 minutes, so searching all branches starts full, with thumbnails and numbers.",
     "sharedIndexNone": "Not shared",
     "sharedIndexStop": "Stop sharing",
     "sharedIndexThere": "In the folder: written {{when}} by {{who}} · {{repos}} repos · {{thumbs}} thumbnails",
@@ -176,6 +170,7 @@
     "ghNotFound": "GitHub CLI (gh) is not installed.",
     "ghNotLoggedIn": "gh is not logged in. Run gh auth login first.",
     "emptyToken": "Enter a token first.",
+    "readOnly": "Asset Hub only reads from GitHub; this change was not sent.",
     "unknown": "Something went wrong.",
     "openSso": "Open SSO authorization",
     "ghInstallFailed": "Could not install GitHub CLI automatically. Check the network, or sign in with a token below."
@@ -385,7 +380,6 @@
     "locations": "Where it is",
     "alsoIn_one": "Also in {{count}} other branch",
     "alsoIn_other": "Also in {{count}} other branches",
-    "foldersBranchOnly": "Folders apply to one branch.",
     "filterRepo": "Filter by repo",
     "filterBranch": "Filter by branch",
     "allRepos": "All repos ({{count}})",
@@ -696,7 +690,6 @@
   },
   "target": {
     "setting": "Target Unity project",
-    "settingHelp": "Exports are compared with this project (only read, never changed): files it already has are left out, and you see what Unity would overwrite or rename.",
     "none": "None — packages are not compared",
     "clear": "Clear",
     "notProject": "That folder is not a Unity project (it needs Assets and ProjectSettings).",
@@ -739,5 +732,92 @@
     "retry": "Failed · Retry",
     "failed": "Update failed: {{message}}",
     "hint": "Version {{version}} is available. The app restarts once it is installed; settings and cache are kept."
+  },
+  "ai": {
+    "title": "AI assistant",
+    "unsupported": "Needs a Mac with Apple silicon.",
+    "install": "Download and connect ChatGPT",
+    "downloading": "Downloading the AI component… {{percent}}%",
+    "verifying": "Checking the download…",
+    "extracting": "Installing…",
+    "connect": "Connect ChatGPT",
+    "connecting": "Sign in to ChatGPT in the browser window that opened, then come back here.",
+    "reopen": "Open the sign-in page again",
+    "cancel": "Cancel",
+    "connected": "Connected: {{email}} · {{plan}} plan",
+    "disconnect": "Disconnect ChatGPT",
+    "failed": "Could not connect: {{message}}",
+    "pet": "Show the AI pet in the corner"
+  },
+  "aiPet": {
+    "title": "Assistant",
+    "newChat": "New chat",
+    "close": "Close",
+    "placeholder": "Ask something…",
+    "send": "Send",
+    "stop": "Stop",
+    "stopped": "Stopped",
+    "thinking": "Thinking",
+    "failed": "No answer: {{message}}",
+    "tool": {
+      "name_words": "Reading the names…",
+      "search_assets": "Searching…",
+      "open_asset": "Opening…",
+      "asset_info": "Looking closer…",
+      "add_to_chest": "Adding to the chest…",
+      "add_to_collection": "Adding to the collection…",
+      "offer_choices": ""
+    },
+    "other": "Other…",
+    "choices": "Choices",
+    "report": "This answer is wrong",
+    "reported": "Reported — thanks"
+  },
+  "unity": {
+    "import": "Import into Unity",
+    "importInto": "Import into {{project}}",
+    "pick": "Choose the Unity project",
+    "noneOpen": "Open the project in Unity first; it shows up here",
+    "done": "Opened {{count}} assets ({{size}}) in Unity · {{project}}: confirm the import there."
+  },
+  "multi": {
+    "count": "{{count}} picked",
+    "chest": "Add to chest",
+    "collection": "Add to collection",
+    "clear": "Clear"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "search": "Search",
+    "move": "Move through the cards",
+    "pick": "Pick several cards / a run of cards",
+    "pickAll": "Pick every card",
+    "clear": "Clear the picks",
+    "favourite": "Add to / remove from Favourites",
+    "chest": "Add to / take out of the chest",
+    "unity": "Import into Unity (the project used last)",
+    "pet": "Open / close the AI pet",
+    "help": "Show this list"
+  },
+  "recent": {
+    "title": "Recent",
+    "viewed": "Viewed lately",
+    "exported": "Exported lately"
+  },
+  "chips": {
+    "label": "Quick filters",
+    "small": "≤ 500 KB",
+    "lowPoly": "≤ 5k tris",
+    "animated": "With animation",
+    "none": "Nothing matches these filters"
+  },
+  "watch": {
+    "title": "Watching",
+    "start": "Watch this branch: new assets get pointed out",
+    "stop": "Stop watching",
+    "new": "NEW",
+    "banner": "{{count}}{{more}} new assets since you last looked",
+    "onlyNew": "Only new assets",
+    "seen": "Mark all seen"
   }
 }

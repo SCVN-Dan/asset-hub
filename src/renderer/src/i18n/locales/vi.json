@@ -25,13 +25,11 @@
     "checking": "Đang kiểm tra…",
     "patLabel": "Fine-grained Personal Access Token",
     "patScope": "Quyền cần: Contents · Read-only",
-    "sso": "Org bật SAML SSO? Authorize token cho tổ chức khi GitHub hỏi.",
     "ghCopied": "Mã đã được copy vào clipboard — dán vào trang GitHub.",
     "ghWaiting": "Đang chờ bạn xác nhận trên trình duyệt…",
     "cancel": "Huỷ",
     "ghOpen": "Mở GitHub",
     "ghMissingTitle": "Máy này chưa có GitHub CLI",
-    "ghMissingBody": "Asset Hub có thể tải GitHub CLI chính thức (khoảng 15 MB) vào thư mục riêng của app. Không cần quyền admin hay Terminal.",
     "installGh": "Cài tự động",
     "installing": "Đang cài GitHub CLI…",
     "installStage": {
@@ -41,7 +39,6 @@
       "extract": "Đang giải nén…"
     },
     "start": "BẮT ĐẦU",
-    "startSub": "Đăng nhập bằng tài khoản GitHub",
     "connecting": "ĐANG KẾT NỐI…",
     "retry": "THỬ LẠI",
     "roomCode": "Mã vào phòng",
@@ -49,14 +46,15 @@
     "stepShort1": "Bấm Mở GitHub, dán mã",
     "stepShort2": "Continue rồi Authorize",
     "stepShort3": "Quay lại đây, app tự vào",
-    "emailHint": "GitHub gửi mã xác minh qua email? Nhập mã đó trên GitHub — mỗi trình duyệt chỉ một lần.",
     "tokenLink": "Vào bằng token",
     "tokenTitle": "Vào bằng token",
     "enter": "VÀO",
     "back": "Quay lại sảnh",
-    "promise": "Chỉ đọc repo · token lưu trong Keychain của máy",
     "welcome": "CHÀO MỪNG, {{login}}",
-    "welcomeAnon": "CHÀO MỪNG"
+    "welcomeAnon": "CHÀO MỪNG",
+    "sound": "Âm thanh",
+    "soundOn": "Đang bật âm thanh (bấm để tắt)",
+    "soundOff": "Đang tắt âm thanh (bấm để bật)"
   },
   "collections": {
     "title": "Bộ sưu tập",
@@ -101,7 +99,8 @@
     "loaded": "đã tải {{done}}/{{total}}",
     "loadedHint": "Số thumbnail đã sẵn sàng. Card trên màn hình tải trước, phần còn lại tải nền sau đó.",
     "unlistedShow_other": "Đã ẩn {{count}} clip không tìm thấy model — hiện",
-    "unlistedHide": "Ẩn clip không có model"
+    "unlistedHide": "Ẩn clip không có model",
+    "settingsAccount": "Cài đặt và tài khoản (đăng xuất)"
   },
   "details": {
     "label": "Chi tiết asset",
@@ -122,7 +121,6 @@
     "openGitHub": "Mở trên GitHub"
   },
   "settings": {
-    "exportLayoutHelp": "Áp dụng cho mọi nút Xuất. Asset đã có trong project (cùng GUID) Unity giữ nguyên chỗ cũ.",
     "title": "Cài đặt",
     "account": "Tài khoản",
     "signedInAs": "Đăng nhập: {{login}}",
@@ -132,20 +130,16 @@
     },
     "notPersisted": "Không dùng được keychain của máy, lần sau sẽ phải đăng nhập lại.",
     "signOut": "Đăng xuất",
+    "signOutGh": "Đăng xuất cả GitHub CLI trên máy này",
     "signIn": "Đăng nhập",
-    "languageHelp": "Áp dụng cho toàn app.",
     "excluded": "Thư mục loại trừ",
-    "excludedHelp": "Tên thư mục cách nhau bằng dấu phẩy, ẩn ở mọi cấp, vd. gói bên thứ ba.",
     "cacheDir": "Thư mục cache",
-    "cacheDirHelp": "Danh sách file của branch, file đã tải và thumbnail được lưu ở đây.",
     "choose": "Chọn…",
     "cacheLimit": "Giới hạn dung lượng cache",
-    "cacheLimitHelp": "Vượt mức này thì file đã tải lâu không dùng nhất sẽ bị xoá trước, cần thì tải lại.",
     "cacheNoLimit": "Không giới hạn",
     "cacheClear": "Xoá file đã tải",
     "cacheUsage": "File đã tải {{downloads}} · thumbnail {{thumbs}} · khác {{other}}",
     "sharedIndex": "Chỉ mục dùng chung",
-    "sharedIndexHelp": "Thư mục cả team cùng dùng (ổ mạng, Google Drive…). Một người ghi chỉ mục mọi branch vào đó; những người khác tự nhập khi đăng nhập và mỗi 30 phút — tìm trên mọi branch có sẵn kết quả, thumbnail và thông số ngay.",
     "sharedIndexNone": "Chưa dùng chung",
     "sharedIndexStop": "Ngừng dùng chung",
     "sharedIndexThere": "Trong thư mục: ghi lúc {{when}} bởi {{who}} · {{repos}} repo · {{thumbs}} thumbnail",
@@ -170,6 +164,7 @@
     "ghNotFound": "Chưa cài GitHub CLI (gh).",
     "ghNotLoggedIn": "gh chưa đăng nhập. Chạy gh auth login trước.",
     "emptyToken": "Hãy nhập token.",
+    "readOnly": "Asset Hub chỉ đọc từ GitHub; thay đổi này không được gửi đi.",
     "unknown": "Đã có lỗi xảy ra.",
     "openSso": "Mở trang SSO authorization",
     "ghInstallFailed": "Không cài được GitHub CLI tự động. Kiểm tra mạng, hoặc đăng nhập bằng token bên dưới."
@@ -368,7 +363,6 @@
     "locations": "Nằm ở đâu",
     "alsoIn_one": "Cũng có ở {{count}} branch khác",
     "alsoIn_other": "Cũng có ở {{count}} branch khác",
-    "foldersBranchOnly": "Thư mục chỉ áp dụng cho một branch.",
     "filterRepo": "Lọc theo repo",
     "filterBranch": "Lọc theo branch",
     "allRepos": "Mọi repo ({{count}})",
@@ -671,7 +665,6 @@
   },
   "target": {
     "setting": "Project Unity đích",
-    "settingHelp": "Gói xuất được so với project này (chỉ đọc, không sửa gì): file đã có sẽ bị bỏ khỏi gói, và bạn biết trước Unity sẽ ghi đè hay đổi tên file nào.",
     "none": "Chưa chọn — gói không được so sánh",
     "clear": "Bỏ chọn",
     "notProject": "Thư mục này không phải project Unity (cần có Assets và ProjectSettings).",
@@ -705,5 +698,92 @@
     "retry": "Lỗi · Thử lại",
     "failed": "Cập nhật lỗi: {{message}}",
     "hint": "Đã có bản {{version}}. Cài xong app tự khởi động lại; cài đặt và cache được giữ nguyên."
+  },
+  "ai": {
+    "title": "Trợ lý AI",
+    "unsupported": "Cần Mac chip Apple.",
+    "install": "Tải và kết nối ChatGPT",
+    "downloading": "Đang tải thành phần AI… {{percent}}%",
+    "verifying": "Đang kiểm tra file tải về…",
+    "extracting": "Đang cài…",
+    "connect": "Kết nối ChatGPT",
+    "connecting": "Đăng nhập ChatGPT trong cửa sổ trình duyệt vừa mở, xong quay lại đây.",
+    "reopen": "Mở lại trang đăng nhập",
+    "cancel": "Huỷ",
+    "connected": "Đã kết nối: {{email}} · gói {{plan}}",
+    "disconnect": "Ngắt kết nối ChatGPT",
+    "failed": "Không kết nối được: {{message}}",
+    "pet": "Hiện pet AI ở góc màn hình"
+  },
+  "aiPet": {
+    "title": "Trợ lý",
+    "newChat": "Cuộc trò chuyện mới",
+    "close": "Đóng",
+    "placeholder": "Hỏi nhanh…",
+    "send": "Gửi",
+    "stop": "Dừng",
+    "stopped": "Đã dừng",
+    "thinking": "Đang nghĩ",
+    "failed": "Không trả lời được: {{message}}",
+    "tool": {
+      "name_words": "Đang xem tên file…",
+      "search_assets": "Đang tìm…",
+      "open_asset": "Đang mở…",
+      "asset_info": "Đang xem kỹ…",
+      "add_to_chest": "Đang thêm vào rương…",
+      "add_to_collection": "Đang thêm vào bộ sưu tập…",
+      "offer_choices": ""
+    },
+    "other": "Khác…",
+    "choices": "Lựa chọn",
+    "report": "Câu trả lời này sai",
+    "reported": "Đã ghi lại, cảm ơn bạn"
+  },
+  "unity": {
+    "import": "Nhập vào Unity",
+    "importInto": "Nhập vào {{project}}",
+    "pick": "Chọn project Unity",
+    "noneOpen": "Mở project trong Unity trước; nó sẽ hiện ở đây",
+    "done": "Đã mở {{count}} asset ({{size}}) trong Unity · {{project}}: bấm Import bên Unity để xác nhận."
+  },
+  "multi": {
+    "count": "Đã chọn {{count}}",
+    "chest": "Thêm vào rương",
+    "collection": "Thêm vào bộ sưu tập",
+    "clear": "Bỏ chọn"
+  },
+  "shortcuts": {
+    "title": "Phím tắt",
+    "search": "Tìm kiếm",
+    "move": "Di chuyển giữa các thẻ",
+    "pick": "Chọn nhiều thẻ / một dải thẻ",
+    "pickAll": "Chọn tất cả thẻ",
+    "clear": "Bỏ chọn",
+    "favourite": "Thêm/bỏ Yêu thích",
+    "chest": "Thêm vào/bỏ khỏi rương",
+    "unity": "Nhập vào Unity (project dùng lần trước)",
+    "pet": "Mở/đóng pet AI",
+    "help": "Hiện bảng này"
+  },
+  "recent": {
+    "title": "Gần đây",
+    "viewed": "Đã xem gần đây",
+    "exported": "Đã xuất gần đây"
+  },
+  "chips": {
+    "label": "Lọc nhanh",
+    "small": "≤ 500 KB",
+    "lowPoly": "≤ 5k tris",
+    "animated": "Có animation",
+    "none": "Không có asset nào khớp bộ lọc"
+  },
+  "watch": {
+    "title": "Đang theo dõi",
+    "start": "Theo dõi branch này: báo khi có asset mới",
+    "stop": "Bỏ theo dõi",
+    "new": "MỚI",
+    "banner": "{{count}}{{more}} asset mới từ lần xem trước",
+    "onlyNew": "Chỉ hiện asset mới",
+    "seen": "Đã xem hết"
   }
 }

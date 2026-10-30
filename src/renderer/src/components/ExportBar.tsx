@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type DependencyReport } from '@core/index'
-import type { ExportProgress, ExportResult, TargetReport } from '@shared/ipc'
+import type { ExportProgress, ExportResult, RunningUnity, TargetReport } from '@shared/ipc'
 import type { BudgetPreset } from '@core/checks/playable'
 import { Dropdown } from './Dropdown'
 import { ErrorNote } from './ErrorNote'
 import { LogoMark } from './Logo'
 import { leaveSlot } from '../motion'
+import { UnityButton } from './UnityButton'
 
 export interface PackItem {
   asset: Asset
@@ -44,6 +45,8 @@ interface Props {
   state: ExportState
   onOptions(options: ExportOptions): void
   onExport(): void
+  /** Opens the chest's package in this Unity editor instead of saving it. */
+  onImportToUnity(editor: RunningUnity): void
   onRemove(path: string): void
   onClear(): void
   onDismiss(): void
@@ -125,7 +128,7 @@ function TargetSummary({ report }: { report: TargetReport }) {
   )
 }
 
-export function ExportBar({ items, capacity, options, state, onOptions, onExport, onRemove, onClear, onDismiss }: Props) {
+export function ExportBar({ items, capacity, options, state, onOptions, onExport, onImportToUnity, onRemove, onClear, onDismiss }: Props) {
   const { t } = useTranslation()
   const sum = summarize(items, options.skipByName)
   const running = state.status === 'running'
@@ -203,6 +206,7 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
             <button type="button" className="btn" onClick={onClear} disabled={running}>
               {t('export.clear')}
             </button>
+            <UnityButton disabled={running} onImport={onImportToUnity} />
             <button type="button" className="btn btn-primary" onClick={onExport} disabled={running}>
               {running ? t('export.exporting') : t('export.export', { count: items.length })}
             </button>
@@ -219,8 +223,14 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
       {state.status === 'done' && state.result.path && (
         <div className="export-status done" role="status">
           <span className="small">
-            {t('export.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes) })}{' '}
-            <span className="mono">{state.result.path.split(/[\\/]/).pop()}</span>
+            {state.result.unity ? (
+              t('unity.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes), project: state.result.unity })
+            ) : (
+              <>
+                {t('export.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes) })}{' '}
+                <span className="mono">{state.result.path.split(/[\\/]/).pop()}</span>
+              </>
+            )}
           </span>
           {state.result.scriptsRemoved !== undefined && <span className="small muted">{t('export.scriptsRemoved', { count: state.result.scriptsRemoved })}</span>}
           {state.result.target && <TargetSummary report={state.result.target} />}
@@ -228,9 +238,11 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
             <span className="small muted">{t('export.skipped', { count: state.result.skipped.length, list: state.result.skipped.map((s) => s.path.split('/').pop()).join(', ') })}</span>
           )}
           <div className="export-actions">
-            <button type="button" className="btn" onClick={() => void window.api.exporter.showInFolder(state.result.path!)}>
-              {t('export.showInFolder')}
-            </button>
+            {!state.result.unity && (
+              <button type="button" className="btn" onClick={() => void window.api.exporter.showInFolder(state.result.path!)}>
+                {t('export.showInFolder')}
+              </button>
+            )}
             <button type="button" className="btn" onClick={onDismiss}>
               {t('export.dismiss')}
             </button>

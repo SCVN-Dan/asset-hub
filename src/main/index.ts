@@ -4,6 +4,7 @@ import { IPC } from '@shared/ipc'
 import { DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXCLUDED_FOLDERS } from '@shared/settings'
 import { registerGitHubIpc } from './github'
 import { checkForUpdate, installUpdate } from './updater'
+import { registerAiIpc } from './ai'
 import { THUMB_SCHEME, type CacheJanitor } from './caches'
 import { SettingsStore } from './settingsStore'
 import { isUnityProject } from './targetProject'
@@ -150,6 +151,8 @@ app.whenReady().then(() => {
     return url ?? null
   })
   ipcMain.handle(IPC.isUnityProject, (_event, path: unknown) => (typeof path === 'string' && path ? isUnityProject(path) : false))
+  // Codex keeps its ChatGPT sign-in and settings here, apart from any Codex the user runs themselves.
+  registerAiIpc({ toolsDir: join(userData, 'tools'), codexHome: join(userData, 'codex') })
   ipcMain.handle(IPC.updateCheck, () => checkForUpdate().catch(() => null))
   ipcMain.handle(IPC.updateInstall, async (event, version: unknown) => {
     try {

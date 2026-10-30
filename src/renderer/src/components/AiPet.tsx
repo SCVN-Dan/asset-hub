@@ -1,0 +1,183 @@
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { AiStatus } from '@shared/ipc'
+import { reportAnswer, resetChat, sendChat, stopChat, useAiChat, type ChatMessage } from '../aiChat'
+import { LogoMark } from './Logo'
+
+/** **bold** and `code` inside a line; everything else stays plain text (never HTML). */
+function inline(text: string): ReactNode[] {
+  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, i) =>
+    part.startsWith('**') && part.endsWith('**') && part.length > 4 ? (
+      <strong key={i}>{part.slice(2, -2)}</strong>
+    ) : part.startsWith('`') && part.endsWith('`') && part.length > 2 ? (
+      <code key={i}>{part.slice(1, -1)}</code>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    )
+  )
+}
+
+/** A short answer: lines, with "- " lines as bullets. */
+function Answer({ text }: { text: string }) {
+  const lines = text.split('\n').filter((l) => l.trim())
+  return (
+    <>
+      {lines.map((line, i) =>
+        /^\s*[-*•]\s+/.test(line) ? (
+          <span key={i} className="ai-bullet">
+            {inline(line.replace(/^\s*[-*•]\s+/, ''))}
+          </span>
+        ) : (
+          <span key={i} className="ai-line">
+            {inline(line)}
+          </span>
+        )
+      )}
+    </>
+  )
+}
+
+function Choices({ choices, onPick, onOther }: { choices: NonNullable<ChatMessage['choices']>; onPick(text: string): void; onOther(): void }) {
+  const { t } = useTranslation()
+  return (
+    <div className="ai-choices" role="group" aria-label={t('aiPet.choices')}>
+      {choices.options.map((o) => (
+        <button key={o} type="button" className="ai-choice" onClick={() => onPick(o)}>
+          {o}
+        </button>
+      ))}
+      {choices.other && (
+        <button type="button" className="ai-choice ai-choice-other" onClick={onOther}>
+          {t('aiPet.other')}
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The AI assistant as a small pet in the hub's corner: the chest, which opens a
+ * chat bubble for short exchanges. Shown once ChatGPT is connected, unless
+ * turned off in Settings.
+ */
+export function AiPet({ language, enabled }: { language: string; enabled: boolean }) {
+  const { t } = useTranslation()
+  const { messages, busy, activity } = useAiChat()
+  const [status, setStatus] = useState<AiStatus>()
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState('')
+  const log = useRef<HTMLDivElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    void window.api.ai.status().then(setStatus)
+    return window.api.ai.onStatus(setStatus)
+  }, [])
+  // To the newest line, including reply buttons, which appear when the answer is done (busy turns false).
+  useEffect(() => {
+    log.current?.scrollTo({ top: log.current.scrollHeight })
+  }, [messages, open, busy])
+  useEffect(() => {
+    if (open) input.current?.focus()
+  }, [open])
+  // ⌘J opens and closes the bubble from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault()
+        setOpen((o) => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  if (!enabled || status?.state !== 'connected') return null
+
+  const send = () => {
+    if (!draft.trim() || busy) return
+    void sendChat(draft, language)
+    setDraft('')
+  }
+
+  return (
+    <div className="ai-pet" data-busy={busy || undefined} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+      {open && (
+        <div className="ai-pet-bubble" role="dialog" aria-label={t('aiPet.title')}>
+          <div className="ai-pet-head">
+            <strong>{t('aiPet.title')}</strong>
+            <span style={{ flex: 1 }} />
+            {messages.length > 0 && (
+              <button type="button" className="ai-pet-icon" title={t('aiPet.newChat')} aria-label={t('aiPet.newChat')} onClick={() => void resetChat()}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            )}
+            <button type="button" className="ai-pet-icon" title={t('aiPet.close')} aria-label={t('aiPet.close')} onClick={() => setOpen(false)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+          {messages.length > 0 && (
+            <div className="ai-pet-log" ref={log} aria-live="polite">
+              {messages.map((m, i) => (
+                <Fragment key={m.id}>
+                  <div className={`ai-msg ai-msg-${m.role}`} data-state={m.state}>
+                    {m.role === 'user' ? (
+                      m.text
+                    ) : m.text ? (
+                      <Answer text={m.text} />
+                    ) : m.state === 'pending' ? (
+                      <span className="ai-working">
+                        <span className="ai-typing" aria-label={t('aiPet.thinking')}>
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                        {activity && <span className="ai-note">{t(`aiPet.tool.${activity}`, { defaultValue: '' })}</span>}
+                      </span>
+                    ) : null}
+                    {m.state === 'stopped' && <span className="ai-note">{t('aiPet.stopped')}</span>}
+                    {m.state === 'failed' && <span className="ai-note warn-text">{t('aiPet.failed', { message: m.error ?? '' })}</span>}
+                    {m.role === 'assistant' && m.text && !(busy && i === messages.length - 1) && (
+                      <button type="button" className="ai-report" aria-pressed={!!m.reported} disabled={m.reported} title={m.reported ? t('aiPet.reported') : t('aiPet.report')} aria-label={m.reported ? t('aiPet.reported') : t('aiPet.report')} onClick={() => void reportAnswer(m.id)}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill={m.reported ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+                          <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                  {/* Reply buttons: only under the latest answer, once it is written. */}
+                  {i === messages.length - 1 && !busy && m.choices && <Choices choices={m.choices} onPick={(text) => void sendChat(text, language)} onOther={() => input.current?.focus()} />}
+                </Fragment>
+              ))}
+            </div>
+          )}
+          <form
+            className="ai-pet-input"
+            onSubmit={(e) => {
+              e.preventDefault()
+              send()
+            }}
+          >
+            <input ref={input} className="input" value={draft} placeholder={t('aiPet.placeholder')} maxLength={2000} onChange={(e) => setDraft(e.target.value)} />
+            {busy ? (
+              <button type="button" className="btn" onClick={stopChat}>
+                {t('aiPet.stop')}
+              </button>
+            ) : (
+              <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
+                {t('aiPet.send')}
+              </button>
+            )}
+          </form>
+        </div>
+      )}
+      <button type="button" className="ai-pet-avatar" aria-expanded={open} aria-label={t('aiPet.title')} title={t('aiPet.title')} onClick={() => setOpen(!open)}>
+        <LogoMark size={36} />
+      </button>
+    </div>
+  )
+}

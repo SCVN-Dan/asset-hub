@@ -45,6 +45,30 @@ const MAX_RETRIES = 4
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Asset Hub only ever reads from GitHub, though the token it holds could write.
+ * Every request passes here first: GET and HEAD, GraphQL queries (never
+ * mutations) and Git LFS downloads go through; anything else is refused before
+ * it leaves the machine, whatever asked for it.
+ */
+export function assertReadOnly(url: string, method = 'GET', body?: string): void {
+  const verb = method.toUpperCase()
+  if (verb === 'GET' || verb === 'HEAD') return
+  if (verb === 'POST' && body !== undefined) {
+    let payload: { query?: unknown; operation?: unknown }
+    try {
+      payload = JSON.parse(body)
+    } catch {
+      payload = {}
+    }
+    const path = new URL(url).pathname
+    // A GraphQL document is a query when it starts with `query` or a bare selection set.
+    if (path === '/graphql' && typeof payload.query === 'string' && /^\s*(query\b|\{)/.test(payload.query)) return
+    if (path.endsWith('/info/lfs/objects/batch') && payload.operation === 'download') return
+  }
+  throw new SourceError('readOnly', `Asset Hub is read-only: ${verb} ${url} was not sent`)
+}
+
 /** Gateway timeouts, cut-off JSON and dropped connections are worth retrying. */
 function isTransient(err: unknown): boolean {
   if (err instanceof SyntaxError) return true
@@ -117,6 +141,13 @@ export class GitHubClient {
   async getBranchHead(repo: string, branch: string): Promise<string> {
     const { data } = await this.request<{ object: { sha: string } }>(`/repos/${repoPath(repo)}/git/ref/heads/${refPath(branch)}`)
     return data.object.sha
+  }
+
+  /** Files changed from `base` to `head` (GitHub lists up to 300; `more` when there were more). */
+  async compareCommits(repo: string, base: string, head: string): Promise<{ files: Array<{ path: string; status: string; sha: string }>; more: boolean }> {
+    const { data } = await this.request<{ files?: Array<{ filename: string; status: string; sha: string }> }>(`/repos/${repoPath(repo)}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}?per_page=300`)
+    const files = (data.files ?? []).map((f) => ({ path: f.filename, status: f.status, sha: f.sha }))
+    return { files, more: files.length >= 300 }
   }
 
   /** Full recursive tree of a commit. `truncated` is set when GitHub cut the listing short. */
@@ -253,6 +284,7 @@ export class GitHubClient {
     url: string,
     init: { method?: string; body?: string; headers?: Record<string, string>; auth?: string | null } = {}
   ): Promise<Awaited<ReturnType<FetchLike>>> {
+    assertReadOnly(url, init.method, init.body)
     const auth = init.auth === undefined ? `Bearer ${this.token}` : init.auth
     let res: Awaited<ReturnType<FetchLike>>
     try {

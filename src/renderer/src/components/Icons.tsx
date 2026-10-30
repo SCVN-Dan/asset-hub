@@ -52,12 +52,6 @@ export const GearIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
-export const GithubIcon = ({ size = 18 }: IconProps) => (
-  <svg {...base(size)}>
-    <path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5a3 3 0 0 0-.8-2.3c2.8-.3 5.8-1.4 5.8-6.2a4.8 4.8 0 0 0-1.3-3.3 4.5 4.5 0 0 0-.1-3.3s-1-.3-3.4 1.3a11.6 11.6 0 0 0-6.2 0C6.6 2.1 5.6 2.4 5.6 2.4a4.5 4.5 0 0 0-.1 3.3A4.8 4.8 0 0 0 4.2 9c0 4.8 3 5.9 5.8 6.2a3 3 0 0 0-.8 2.3V21" />
-  </svg>
-)
-
 export const RefreshIcon = ({ size = 16 }: IconProps) => (
   <svg {...base(size)}>
     <path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4" />

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SourceError } from '../errors'
 import type { TreeEntry } from '../types'
-import { GitHubClient, nextLink, type FetchLike } from './client'
+import { assertReadOnly, GitHubClient, nextLink, type FetchLike } from './client'
 import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
 import { createDefaultRegistry } from '../index'
 import { GitHubAssetSource, type CommitCache } from './source'
@@ -451,5 +451,28 @@ describe('findPrefabMaterials', () => {
     const all = await src.findPrefabMaterials('o/r', 'main', 'p/Assets/Game/Models/Fish/Fish.fbx', 'p/', 'all', [])
     expect(prefabReads().at(-1)).toEqual(['far'])
     expect(all).toMatchObject({ scanned: 2, remaining: 0 })
+  })
+})
+
+describe('assertReadOnly', () => {
+  const graphql = (query: string) => JSON.stringify({ query, variables: {} })
+  it('lets reads through: GET, HEAD, GraphQL queries, LFS downloads', () => {
+    expect(() => assertReadOnly('https://api.github.com/repos/a/b')).not.toThrow()
+    expect(() => assertReadOnly('https://api.github.com/repos/a/b', 'head')).not.toThrow()
+    expect(() => assertReadOnly('https://api.github.com/graphql', 'POST', graphql('query($owner: String!) { repository { id } }'))).not.toThrow()
+    expect(() => assertReadOnly('https://api.github.com/graphql', 'POST', graphql('{ viewer { login } }'))).not.toThrow()
+    expect(() => assertReadOnly('https://github.com/a/b.git/info/lfs/objects/batch', 'POST', JSON.stringify({ operation: 'download', objects: [] }))).not.toThrow()
+  })
+  it('refuses anything that could change GitHub', () => {
+    for (const [url, method, body] of [
+      ['https://api.github.com/repos/a/b/contents/x', 'PUT', '{}'],
+      ['https://api.github.com/repos/a/b', 'PATCH', '{}'],
+      ['https://api.github.com/repos/a/b/git/refs/heads/x', 'DELETE', undefined],
+      ['https://api.github.com/repos/a/b/issues', 'POST', '{"title":"x"}'],
+      ['https://api.github.com/graphql', 'POST', graphql('mutation { createRef(input: {}) { ref { id } } }')],
+      ['https://api.github.com/graphql', 'POST', graphql('  mutation X { deleteRef(input: {}) { clientMutationId } }')],
+      ['https://github.com/a/b.git/info/lfs/objects/batch', 'POST', JSON.stringify({ operation: 'upload', objects: [] })]
+    ] as const)
+      expect(() => assertReadOnly(url, method, body)).toThrow(/read-only/)
   })
 })

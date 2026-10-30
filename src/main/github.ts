@@ -1,14 +1,15 @@
-import { writeFile } from 'fs/promises'
+import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, shell } from 'electron'
 import { createDefaultRegistry, SourceError, type FactKind, type RepoRef } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
 import { IPC, type AuthMethod, type CatalogStatus, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
-import { AuthError, AuthStore, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
+import { AuthError, AuthStore, ghLogout, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { exportUnityPackage } from './exporter'
 import { isUnityProject } from './targetProject'
 import { installGh, readInstalledGh } from './ghInstaller'
+import { listRunningUnity, openInProcess } from './unityEditors'
 import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
 import { CacheJanitor, FileBlobCache, FileCommitCache, StatsStore, THUMB_SCHEME, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
@@ -200,8 +201,11 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   )
   // Never leave a gh process waiting in the background after the app quits.
   app.on('before-quit', () => pending?.cancel())
-  ipcMain.handle(IPC.signOut, () =>
+  ipcMain.handle(IPC.signOut, (_e, options: unknown) =>
     wrap(async () => {
+      const was = session?.status
+      // Signed in through gh: gh itself is logged out too when asked, or START would sign straight back in.
+      if (was?.method === 'gh' && (options as { gh?: unknown } | undefined)?.gh === true) await ghLogout(was.login)
       session?.catalog.stop()
       session = undefined
       store.clear()
@@ -211,6 +215,13 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
 
   ipcMain.handle(IPC.listRepos, () => wrap(() => requireSession().listRepos()))
   ipcMain.handle(IPC.listBranches, (_e, repo: string) => wrap(() => requireSession().listBranches(String(repo))))
+  ipcMain.handle(IPC.watchCheck, (_e, repo: unknown, branch: unknown, seen: unknown) =>
+    wrap(async () => {
+      const r = await requireSession().addedSince(String(repo), String(branch), typeof seen === 'string' ? seen : '')
+      // Only files the hub lists as assets count as news (not scripts, .meta, scenes…).
+      return { head: r.head, added: r.added.filter((f) => registry.classify({ path: f.path, type: 'blob', sha: f.sha })).map((f) => f.path), more: r.more }
+    })
+  )
   ipcMain.handle(IPC.listTree, (_e, repo: string, branch: string) =>
     wrapForeground(async () => {
       const src = requireSession()
@@ -272,24 +283,27 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       requireSession().findByNames(String(repo), String(branch), Array.isArray(names) ? names.map(String) : [], String(nearPath), String(root))
     )
   )
+  /** An export request from the renderer, every field checked. */
+  const exportRequest = (raw: ExportRequest): ExportRequest => ({
+    repo: String(raw.repo),
+    branch: String(raw.branch),
+    root: String(raw.root),
+    paths: Array.isArray(raw.paths) ? raw.paths.map(String) : [],
+    layout: raw.layout === 'grouped' || raw.layout === 'byType' ? raw.layout : 'source',
+    skipByName: raw.skipByName === true,
+    extraFiles: Array.isArray(raw.extraFiles) ? raw.extraFiles.map(String) : [],
+    previews: Object.fromEntries(
+      Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
+    ),
+    suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_'),
+    reuseExisting: raw.reuseExisting !== false,
+    stripScripts: raw.stripScripts === true
+  })
+
   ipcMain.handle(IPC.exportPackage, (event, raw: ExportRequest) =>
     wrapForeground(async () => {
       const src = requireSession()
-      const req: ExportRequest = {
-        repo: String(raw.repo),
-        branch: String(raw.branch),
-        root: String(raw.root),
-        paths: Array.isArray(raw.paths) ? raw.paths.map(String) : [],
-        layout: raw.layout === 'grouped' || raw.layout === 'byType' ? raw.layout : 'source',
-        skipByName: raw.skipByName === true,
-        extraFiles: Array.isArray(raw.extraFiles) ? raw.extraFiles.map(String) : [],
-        previews: Object.fromEntries(
-          Object.entries(raw.previews && typeof raw.previews === 'object' ? raw.previews : {}).filter(([, v]) => v instanceof Uint8Array)
-        ),
-        suggestedName: String(raw.suggestedName || 'assets').replace(/[\\/:*?"<>|]/g, '_'),
-        reuseExisting: raw.reuseExisting !== false,
-        stripScripts: raw.stripScripts === true
-      }
+      const req = exportRequest(raw)
       // Compared only with a folder that is really a Unity project (read, never written).
       if (typeof raw.targetProject === 'string' && raw.targetProject && (await isUnityProject(raw.targetProject))) req.targetProject = raw.targetProject
       if (!req.paths.length) return { canceled: true }
@@ -305,6 +319,27 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
         if (!event.sender.isDestroyed()) event.sender.send(IPC.exportProgress, progress)
       })
       return { canceled: false, ...result }
+    })
+  )
+  ipcMain.handle(IPC.unityEditors, () => listRunningUnity().catch(() => []))
+  // Straight into an open Unity editor: the package goes to a temporary folder, compared with that
+  // editor's own project (what it already has is left out), then opened in that editor — Unity shows
+  // its import dialog, as when a package is double-clicked, but in the chosen one of several editors.
+  ipcMain.handle(IPC.importToUnity, (event, raw: ExportRequest, pid: unknown) =>
+    wrapForeground(async () => {
+      const src = requireSession()
+      const editor = (await listRunningUnity()).find((e) => e.pid === Number(pid))
+      if (!editor) throw new Error('That Unity editor is no longer open')
+      const req = { ...exportRequest(raw), targetProject: editor.projectPath }
+      if (!req.paths.length) return { canceled: true, unity: editor.project }
+      const dir = join(app.getPath('temp'), 'asset-hub-packages')
+      await mkdir(dir, { recursive: true })
+      const file = join(dir, `${req.suggestedName}.unitypackage`)
+      const result = await exportUnityPackage(src, req, file, (progress) => {
+        if (!event.sender.isDestroyed()) event.sender.send(IPC.exportProgress, progress)
+      })
+      await openInProcess(editor.pid, file)
+      return { canceled: false, ...result, unity: editor.project }
     })
   )
   /** Files this app wrote, the only ones "Show in Finder" may reveal besides packages. */

@@ -124,6 +124,22 @@ export function ghWebLogin(onPrompt: (prompt: GhLoginPrompt) => void): { done: P
   return { done, cancel: () => child.kill() }
 }
 
+/**
+ * Logs the account out of gh on this Mac (`gh auth logout`), so the next sign-in
+ * goes through the browser again and may pick another account. Not being
+ * logged in is fine; gh older than 2.40 has no --user and logs out the active account.
+ */
+export async function ghLogout(login?: string): Promise<void> {
+  const gh = findGh()
+  if (!gh) return
+  const run = (args: string[]) =>
+    new Promise<string | undefined>((resolve) =>
+      execFile(gh, ['auth', 'logout', '--hostname', 'github.com', ...args], { timeout: 15_000 }, (err, _out, stderr) => resolve(err ? stderr || err.message : undefined))
+    )
+  const failed = login ? await run(['--user', login]) : await run([])
+  if (failed && /unknown flag/i.test(failed)) await run([])
+}
+
 /** Token of the account logged in with `gh auth login`. */
 export function readGhToken(): Promise<string> {
   const gh = findGh()

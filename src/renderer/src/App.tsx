@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { displayName } from '@shared/displayName'
 import { createDefaultRegistry, type AssetSource } from '@core/index'
 import type { AuthStatus } from '@shared/ipc'
 import { DEFAULT_EXPORT_LAYOUT, type Settings as AppSettings } from '@shared/settings'
@@ -9,6 +10,7 @@ import i18n from './i18n'
 import { RemoteAssetSource, RemoteError, unwrap } from './remoteSource'
 import { Browse } from './screens/Browse'
 import { Settings } from './screens/Settings'
+import { AiPet } from './components/AiPet'
 import { SignIn } from './screens/SignIn'
 
 type Screen = 'loading' | 'signin' | 'browse' | 'settings'
@@ -25,7 +27,7 @@ function Welcome({ login, onDone }: { login?: string; onDone(): void }) {
       <div className="welcome-flash" aria-hidden="true" />
       <div className="welcome-toast" role="status">
         <span aria-hidden="true">★</span>
-        {login ? t('signin.welcome', { login }) : t('signin.welcomeAnon')}
+        {login ? t('signin.welcome', { login: displayName(login) }) : t('signin.welcomeAnon')}
       </div>
     </div>
   )
@@ -72,8 +74,8 @@ export function App() {
 
   const setLanguage = (language: AppSettings['language']) => update({ language })
 
-  const signOut = async () => {
-    await window.api.auth.signOut()
+  const signOut = async (gh = false) => {
+    await window.api.auth.signOut({ gh })
     setAuth(undefined)
     setSource(undefined)
     setScreen('signin')
@@ -102,7 +104,7 @@ export function App() {
         />
       )
     case 'settings':
-      return <Settings settings={settings} auth={auth} onChange={update} onSignOut={() => void signOut()} onBack={() => setScreen('browse')} />
+      return <Settings settings={settings} auth={auth} onChange={update} onSignOut={(gh) => void signOut(gh)} onBack={() => setScreen('browse')} />
     case 'browse':
       return source ? (
         <BudgetContext.Provider value={(settings.budgetPreset ?? DEFAULT_BUDGET_PRESET) === 'off' ? undefined : budgetFor(settings.budgetPreset, settings.customBudget)}>
@@ -116,7 +118,11 @@ export function App() {
           onOpenBranch={(lastRepo, lastBranch) => {
             if (lastRepo !== settings.lastRepo || lastBranch !== settings.lastBranch) update({ lastRepo, lastBranch })
           }}
-          onSettings={() => setScreen('settings')}
+          onSettings={() => {
+            // The greeting belongs to arriving from the lobby: leaving the hub ends it, or coming back would flash it again.
+            setWelcome(undefined)
+            setScreen('settings')
+          }}
           budgetPreset={settings.budgetPreset ?? DEFAULT_BUDGET_PRESET}
           onBudgetPreset={(budgetPreset) => update({ budgetPreset })}
           exportLayout={settings.exportLayout ?? DEFAULT_EXPORT_LAYOUT}
@@ -124,7 +130,12 @@ export function App() {
           targetProject={settings.targetProject}
           collections={settings.collections}
           onCollections={(collections) => update({ collections })}
+          recent={settings.recent}
+          onRecent={(recent) => update({ recent })}
+          watched={settings.watched ?? []}
+          onWatched={(watched) => update({ watched })}
         />
+        <AiPet language={settings.language} enabled={settings.aiPet !== false} />
         {welcome && <Welcome login={welcome.login} onDone={endWelcome} />}
         </BudgetContext.Provider>
       ) : null

@@ -25,7 +25,7 @@ const api: AssetHubApi = {
       ipcRenderer.on(IPC.ghLoginPrompt, handler)
       return () => ipcRenderer.removeListener(IPC.ghLoginPrompt, handler)
     },
-    signOut: () => ipcRenderer.invoke(IPC.signOut)
+    signOut: (options) => ipcRenderer.invoke(IPC.signOut, options)
   },
   tools: {
     installGh: () => ipcRenderer.invoke(IPC.installGh),
@@ -38,7 +38,8 @@ const api: AssetHubApi = {
   source: {
     listRepos: () => ipcRenderer.invoke(IPC.listRepos),
     listBranches: (repo) => ipcRenderer.invoke(IPC.listBranches, repo),
-    listTree: (repo, branch) => ipcRenderer.invoke(IPC.listTree, repo, branch)
+    listTree: (repo, branch) => ipcRenderer.invoke(IPC.listTree, repo, branch),
+    watchCheck: (repo, branch, seen) => ipcRenderer.invoke(IPC.watchCheck, repo, branch, seen)
   },
   assets: {
     resolve: (repo, branch, path, root, mode) => ipcRenderer.invoke(IPC.resolveAsset, repo, branch, path, root, mode),
@@ -101,12 +102,46 @@ const api: AssetHubApi = {
   },
   exporter: {
     unityPackage: (request) => ipcRenderer.invoke(IPC.exportPackage, request),
+    unityEditors: () => ipcRenderer.invoke(IPC.unityEditors),
+    importToUnity: (request, pid) => ipcRenderer.invoke(IPC.importToUnity, request, pid),
     onProgress: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
       ipcRenderer.on(IPC.exportProgress, handler)
       return () => ipcRenderer.removeListener(IPC.exportProgress, handler)
     },
     showInFolder: (path) => ipcRenderer.invoke(IPC.showItemInFolder, path)
+  },
+  ai: {
+    status: () => ipcRenderer.invoke(IPC.aiGetStatus),
+    install: () => ipcRenderer.invoke(IPC.aiInstall),
+    onInstallProgress: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, progress: Parameters<typeof listener>[0]) => listener(progress)
+      ipcRenderer.on(IPC.aiInstallProgress, handler)
+      return () => ipcRenderer.removeListener(IPC.aiInstallProgress, handler)
+    },
+    connect: () => ipcRenderer.invoke(IPC.aiConnect),
+    cancelConnect: () => ipcRenderer.invoke(IPC.aiCancelConnect),
+    disconnect: () => ipcRenderer.invoke(IPC.aiDisconnect),
+    onStatus: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
+      ipcRenderer.on(IPC.aiStatus, handler)
+      return () => ipcRenderer.removeListener(IPC.aiStatus, handler)
+    },
+    chatSend: (text, language) => ipcRenderer.invoke(IPC.aiChatSend, text, language),
+    chatStop: () => ipcRenderer.invoke(IPC.aiChatStop),
+    chatReset: () => ipcRenderer.invoke(IPC.aiChatReset),
+    onChat: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, event: Parameters<typeof listener>[0]) => listener(event)
+      ipcRenderer.on(IPC.aiChatEvent, handler)
+      return () => ipcRenderer.removeListener(IPC.aiChatEvent, handler)
+    },
+    onToolCall: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, call: Parameters<typeof listener>[0]) => listener(call)
+      ipcRenderer.on(IPC.aiToolCall, handler)
+      return () => ipcRenderer.removeListener(IPC.aiToolCall, handler)
+    },
+    toolResult: (callId, result) => ipcRenderer.invoke(IPC.aiToolResult, callId, result),
+    feedback: (report) => ipcRenderer.invoke(IPC.aiFeedback, report)
   },
   update: {
     check: () => ipcRenderer.invoke(IPC.updateCheck),

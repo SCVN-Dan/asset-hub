@@ -76,3 +76,19 @@ describe('AssetSearch extra names', () => {
     expect(search.search('tree').assets.map((a) => a.name)).toEqual(['Tree.fbx'])
   })
 })
+
+describe('alternatives', () => {
+  const farm = new AssetSearch([
+    asset('Assets/SweepSell/fbx_tractor_lv1.fbx'),
+    asset('Assets/Chicken/ChickenHarvester.prefab'),
+    asset('Assets/Props/Barn.fbx'),
+    asset('Assets/Props/Tractor_Wheel.fbx')
+  ])
+  it('"a | b" finds what matches any of them, without needing every word', () => {
+    expect(names(farm.search('combine | tractor | harvester').assets).sort()).toEqual(['ChickenHarvester.prefab', 'Tractor_Wheel.fbx', 'fbx_tractor_lv1.fbx'])
+    expect(farm.search('combine tractor').assets).toEqual([])
+  })
+  it('keeps each alternative\'s own rules (all its words) and empty parts out', () => {
+    expect(names(farm.search('tractor wheel | barn |').assets).sort()).toEqual(['Barn.fbx', 'Tractor_Wheel.fbx'])
+  })
+})

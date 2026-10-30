@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { RunningUnity } from '@shared/ipc'
+import { UnityButton } from './UnityButton'
 import { formatBytes, shortPath, type CatalogAsset, type CatalogLocation } from '@core/index'
 import type { CatalogStatus } from '@shared/ipc'
 import type { SearchScope } from '../useCatalog'
@@ -157,10 +159,11 @@ interface DetailsProps {
   onOpen(repo: string, branch: string, path: string): void
   /** Exports the file as found on its main branch, without opening that branch. */
   onExport(asset: CatalogAsset): void
+  onImportToUnity(asset: CatalogAsset, editor: RunningUnity): void
 }
 
 /** Right panel for a result found in other branches / repos. */
-export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpen, onExport }: DetailsProps) {
+export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpen, onExport, onImportToUnity }: DetailsProps) {
   const { t } = useTranslation()
   if (!asset) {
     return (
@@ -188,6 +191,7 @@ export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpe
               {t('export.exportOne')}
             </button>
           )}
+          {delivery !== 'file' && <UnityButton disabled={exporting} onImport={(editor) => onImportToUnity(asset, editor)} />}
           <button type="button" className="btn" onClick={() => void window.api.openExternal(githubUrl(first.repo, first.branches[0], first.path))}>
             {t('details.openGitHub')}
           </button>

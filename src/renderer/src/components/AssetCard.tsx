@@ -17,7 +17,10 @@ interface Props {
   /** Identical files (same content) elsewhere in the project, shown as one card. */
   copies?: number
   selected: boolean
-  onSelect(): void
+  /** Click; `toggle` (Cmd/Ctrl) and `range` (Shift) pick several cards. */
+  onSelect(how: { toggle: boolean; range: boolean }): void
+  /** Picked among several (Cmd/Ctrl- or Shift-click). */
+  picked?: boolean
   /** Called when the card enters or leaves the screen, to render thumbnails lazily. */
   onVisible?(visible: boolean): void
   /** Extra line under the size, e.g. where the file is in other branches. */
@@ -26,9 +29,11 @@ interface Props {
   stats?: StatsSummary
   /** In Favourites. */
   starred?: boolean
+  /** Added to a watched branch since it was last marked seen. */
+  fresh?: boolean
 }
 
-export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, onVisible, note, stats, starred }: Props) {
+export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, picked, onVisible, note, stats, starred, fresh }: Props) {
   const { t } = useTranslation()
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
@@ -62,7 +67,8 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       className="asset-card"
       data-asset-id={asset.id}
       aria-pressed={selected}
-      onClick={onSelect}
+      data-picked={picked || undefined}
+      onClick={(e) => onSelect({ toggle: e.metaKey || e.ctrlKey, range: e.shiftKey })}
       onMouseEnter={startMotion}
       onMouseLeave={() => setHover(false)}
       onFocus={startMotion}
@@ -83,6 +89,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
           </span>
         ) : null}
         {starred && <span className="star-badge" aria-label={t('collections.favorites')}>★</span>}
+        {fresh && <span className="new-badge">{t('watch.new')}</span>}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
         {hover && motion && <span className="asset-motion" style={{ backgroundImage: `url("${motion}")` }} aria-hidden="true" />}
         {generating && !thumb && <span className="thumb-spinner" aria-label={t('browse.generatingThumb')} />}

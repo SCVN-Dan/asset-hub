@@ -46,6 +46,39 @@ function glowTexture(inner = 'rgba(255,255,255,1)', outer = 'rgba(255,255,255,0)
   return tex
 }
 
+/** A cartoon "bling": a four-pointed star with long thin points and a small bright core. */
+function blingTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = c.height = 128
+  const g = c.getContext('2d')!
+  const star = (long: number, waist: number) => {
+    // Points up, right, down, left; the sides curve in towards the middle, as drawn sparkles do.
+    g.beginPath()
+    g.moveTo(64, 64 - long)
+    g.quadraticCurveTo(64 + waist, 64 - waist, 64 + long, 64)
+    g.quadraticCurveTo(64 + waist, 64 + waist, 64, 64 + long)
+    g.quadraticCurveTo(64 - waist, 64 + waist, 64 - long, 64)
+    g.quadraticCurveTo(64 - waist, 64 - waist, 64, 64 - long)
+    g.fill()
+  }
+  const halo = g.createRadialGradient(64, 64, 0, 64, 64, 30)
+  halo.addColorStop(0, 'rgba(255,255,255,0.55)')
+  halo.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = halo
+  g.fillRect(0, 0, 128, 128)
+  g.fillStyle = '#fff'
+  star(62, 7)
+  // A smaller star turned 45°, so it reads as a glint from any size.
+  g.translate(64, 64)
+  g.rotate(Math.PI / 4)
+  g.translate(-64, -64)
+  g.globalAlpha = 0.7
+  star(26, 4)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
 /** The light's sides: smooth, bright at the rim and fading as it rises, softer towards each side's edges (no streaks to alias). */
 function beamTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
@@ -89,6 +122,12 @@ export class LobbyScene {
   private readonly gems: Array<{ mesh: THREE.Mesh; base: THREE.Vector3; phase: number }> = []
   private readonly sparks: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>
   private readonly sparkVel: Float32Array
+  /** Blings (four-pointed sparkles) on the gold inside, showing through the lifted lid while START is hovered. */
+  private readonly glints: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>
+  private readonly glintPhase: Float32Array
+  /** 0…1, eased towards `hoverTarget`: how much the chest is reacting to the hovered START button. */
+  private hover = 0
+  private hoverTarget = 0
   private readonly resize: ResizeObserver
   private readonly disposables: Array<{ dispose(): void }> = []
   private frame = 0
@@ -199,6 +238,20 @@ export class LobbyScene {
     this.sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({ size: 0.16, map: glowTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }))
     this.chest.add(this.sparks)
 
+    const GLINTS = 18
+    const glintPos = new Float32Array(GLINTS * 3)
+    this.glintPhase = new Float32Array(GLINTS)
+    for (let i = 0; i < GLINTS; i++) {
+      // On the gold just under the rim (chest 2.5 wide, 1.25 high, 1.65 deep): seen through the gap under the lid.
+      glintPos.set([(Math.random() * 2 - 1) * 0.95, 1.2 + Math.random() * 0.12, (Math.random() * 2 - 1) * 0.5], i * 3)
+      this.glintPhase[i] = Math.random() * Math.PI * 2
+    }
+    const glintGeo = new THREE.BufferGeometry()
+    glintGeo.setAttribute('position', new THREE.BufferAttribute(glintPos, 3))
+    glintGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(GLINTS * 3), 3))
+    this.glints = new THREE.Points(glintGeo, new THREE.PointsMaterial({ size: 0.56, map: blingTexture(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }))
+    this.chest.add(this.glints)
+
     this.disposables.push(beamTex)
     this.resize = new ResizeObserver(() => this.fit())
     this.resize.observe(canvas)
@@ -219,6 +272,11 @@ export class LobbyScene {
     this.path = new THREE.QuadraticBezierCurve3(from, control, this.pathEnd.clone())
     const end = this.still ? 0.4 : T.end
     return new Promise((resolve) => window.setTimeout(resolve, end * 1000))
+  }
+
+  /** START is hovered or focused: the chest wobbles, peeks open and glints, as if eager to be opened. */
+  setHover(on: boolean): void {
+    this.hoverTarget = on ? 1 : 0
   }
 
   /** Frames the chest into this band of the canvas, over the title and the button. */
@@ -521,6 +579,24 @@ export class LobbyScene {
     }
     this.pedestalGlow.material.opacity = 0.55 + Math.sin(idle * 2) * 0.2
     this.chest.position.y = Math.sin(idle * 1.6) * 0.05
+
+    // Hovering START: a little rattle and hop, the lid lifting off its rim with light and blings inside.
+    this.hover += ((t < 0 && !this.still ? this.hoverTarget : 0) - this.hover) * 0.12
+    const hv = this.hover
+    if (t < 0) {
+      this.chest.rotation.z = Math.sin(now * 10) * 0.025 * hv
+      this.chest.position.y += Math.abs(Math.sin(now * 5)) * 0.07 * hv
+      this.lid.rotation.x = -0.24 * hv * (0.65 + 0.35 * Math.sin(now * 5))
+      this.inner.material.opacity = 0.4 * hv
+      this.chestLight.intensity = 1.8 * hv
+    }
+    const glow = this.glints.geometry.getAttribute('color') as THREE.BufferAttribute
+    for (let i = 0; i < this.glintPhase.length; i++) {
+      // Short, separate twinkles rather than a steady shine.
+      const b = hv * Math.max(0, Math.sin(now * 3.2 + this.glintPhase[i])) ** 8
+      glow.setXYZ(i, b, b * 0.92, b * 0.7)
+    }
+    glow.needsUpdate = true
 
     // Idle camera: a slow sway; the view shifted so the chest sits above the title.
     const w = this.canvas.clientWidth || 1

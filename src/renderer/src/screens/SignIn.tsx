@@ -4,8 +4,9 @@ import { LANGUAGES, type Language } from '@shared/settings'
 import type { AuthStatus, InstallProgress } from '@shared/ipc'
 import { ErrorNote } from '../components/ErrorNote'
 import { RemoteError, unwrap } from '../remoteSource'
-import { GithubIcon } from '../components/Icons'
 import type { LobbyScene } from '../viewer/lobbyScene'
+import { VersionBadge } from '../components/VersionBadge'
+import { isMuted, playChestOpen, playClick, setMuted } from '../lobbySound'
 
 interface Props {
   language: Language
@@ -38,6 +39,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
   const [progress, setProgress] = useState<InstallProgress>()
   const [tokenOpen, setTokenOpen] = useState(false)
   const [opening, setOpening] = useState(false)
+  const [muted, setMutedState] = useState(isMuted)
   const canvas = useRef<HTMLCanvasElement>(null)
   /** The 3D lobby once loaded; `null` when it cannot run (no WebGL), `undefined` while loading. */
   const scene = useRef<LobbyScene | null>()
@@ -85,6 +87,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
   const open = (status: AuthStatus) => {
     setTokenOpen(false)
     setOpening(true)
+    playChestOpen()
     // A click or any key skips the rest.
     const enter = () => {
       window.removeEventListener('pointerdown', enter)
@@ -184,7 +187,6 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
                     {t('signin.stepShort3')}
                   </li>
                 </ol>
-                <span className="small muted">{t('signin.emailHint')}</span>
                 <span className="small muted lobby-blink">{t('signin.ghWaiting')}</span>
               </section>
             ) : busy === 'install' ? (
@@ -216,7 +218,6 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
                     </button>
                   </div>
                   <span className="small muted">{t('signin.patScope')}</span>
-                  <span className="small muted">{t('signin.sso')}</span>
                 </form>
                 {error !== undefined && <ErrorNote error={error} />}
                 <button type="button" className="lobby-link" onClick={() => setTokenOpen(false)}>
@@ -228,7 +229,6 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
                 {ghMissing && !busy ? (
                   <section className="lobby-panel">
                     <strong>{t('signin.ghMissingTitle')}</strong>
-                    <span className="small muted">{t('signin.ghMissingBody')}</span>
                     <button type="button" className="lobby-btn lobby-btn-primary" onClick={() => void installThenSignIn()}>
                       {t('signin.installGh')}
                     </button>
@@ -240,16 +240,27 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
                         <ErrorNote error={error} />
                       </div>
                     )}
-                    <button type="button" className="lobby-start" disabled={!idle} aria-busy={busy === 'gh'} onClick={() => void run('gh', onGh)}>
+                    <button
+                      type="button"
+                      className="lobby-start"
+                      disabled={!idle}
+                      aria-busy={busy === 'gh'}
+                      // The chest answers the button: it rattles and glints while START is under the pointer or focused.
+                      onPointerEnter={() => scene.current?.setHover(true)}
+                      onPointerLeave={() => scene.current?.setHover(false)}
+                      onFocus={() => scene.current?.setHover(true)}
+                      onBlur={() => scene.current?.setHover(false)}
+                      onClick={() => {
+                        playClick()
+                        scene.current?.setHover(false)
+                        void run('gh', onGh)
+                      }}
+                    >
                       <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M7 4.5v15l12.5-7.5z" fill="currentColor" />
                       </svg>
                       {busy === 'gh' ? t('signin.connecting') : error !== undefined ? t('signin.retry') : t('signin.start')}
                     </button>
-                    <span className="lobby-start-sub">
-                      <GithubIcon />
-                      {t('signin.startSub')}
-                    </span>
                   </>
                 )}
               </div>
@@ -259,6 +270,23 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
       </main>
 
       <div className="lobby-top">
+        <button
+          type="button"
+          className="lobby-sound"
+          aria-pressed={!muted}
+          aria-label={t('signin.sound')}
+          title={muted ? t('signin.soundOff') : t('signin.soundOn')}
+          onClick={() => {
+            setMuted(!muted)
+            setMutedState(!muted)
+            if (muted) playClick()
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 9v6h4l5 4V5L8 9z" fill="currentColor" />
+            {muted ? <path d="M17 9l5 6M22 9l-5 6" /> : <path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" />}
+          </svg>
+        </button>
         <div className="lobby-langs" role="group" aria-label={t('common.language')}>
           {LANGUAGES.map((l) => (
             <button key={l} type="button" className="lobby-lang" aria-pressed={language === l} onClick={() => onLanguage(l)}>
@@ -269,18 +297,13 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
       </div>
 
       <footer className="lobby-bottom">
-        {idle && !tokenOpen ? (
+        {idle && !tokenOpen && (
           <button type="button" className="lobby-link" onClick={() => setTokenOpen(true)}>
             {t('signin.tokenLink')}
           </button>
-        ) : (
-          <span />
         )}
-        <span className="lobby-promise">
-          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M6 11V8a6 6 0 0 1 12 0v3M5 11h14v10H5z" />
-          </svg>
-          {t('signin.promise')}
+        <span className="lobby-version">
+          <VersionBadge />
         </span>
       </footer>
 

@@ -7,6 +7,7 @@ export type SourceErrorCode =
   | 'rateLimited'
   | 'network'
   | 'truncated'
+  | 'readOnly'
   | 'unknown'
 
 export interface SourceErrorDetail {

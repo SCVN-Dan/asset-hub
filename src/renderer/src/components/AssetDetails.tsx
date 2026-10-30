@@ -1,5 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { RunningUnity } from '@shared/ipc'
+import { UnityButton } from './UnityButton'
 import { checkPlayableBudget, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
 import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, fontCoverage, missingChars, particleTotals, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
@@ -40,6 +42,8 @@ interface Props {
   exporting: boolean
   onTogglePack(): void
   onExport(): void
+  /** Opens the package in this Unity editor instead of saving it. */
+  onImportToUnity(editor: RunningUnity): void
   /** Byte-identical copies of this file, including itself. */
   copies?: Asset[]
   onSelectCopy(id: string): void
@@ -588,7 +592,7 @@ function TextureRow({ tex }: { tex: TextureRef }) {
   )
 }
 
-export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models, viewerResizer, collectionActions }: Props) {
+export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, exporting, onTogglePack, onExport, onImportToUnity, copies, onSelectCopy, excludedFolders, onPrefabFiles, onOpenLocation, onViewerLoading, onModelStats, playClips, models, viewerResizer, collectionActions }: Props) {
   const { t } = useTranslation()
   const budget = useBudget()
   const [deps, setDeps] = useState<Deps>({ status: 'idle' })
@@ -808,6 +812,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
             <button type="button" className="btn" aria-pressed={inPack} onClick={onTogglePack} disabled={exporting}>
               {inPack ? t('export.inPack') : t('export.addToPack')}
             </button>
+            <UnityButton disabled={exporting} onImport={onImportToUnity} />
           </div>
         )}
         {collectionActions}

@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { HandlerRegistry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
-import { FAVORITES, inCollection, type Collection, type CollectionItem } from '@shared/collections'
+import { FAVORITES, inCollection, RECENT_EXPORTED, RECENT_VIEWED, type Collection, type CollectionItem } from '@shared/collections'
 import { AssetCard } from './AssetCard'
 
 /** Favourites goes by its translated name; the others by the name they were given. */
 export function useCollectionName() {
   const { t } = useTranslation()
-  return (c: Collection) => (c.id === FAVORITES ? t('collections.favorites') : c.name || t('collections.untitled'))
+  return (c: Collection) =>
+    c.id === FAVORITES ? t('collections.favorites') : c.id === RECENT_VIEWED ? t('recent.viewed') : c.id === RECENT_EXPORTED ? t('recent.exported') : c.name || t('collections.untitled')
 }
 
 const newId = () => `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
@@ -29,6 +30,26 @@ function NameInput({ initial = '', placeholder, onDone }: { initial?: string; pl
       }}
       onBlur={() => onDone(name.trim() || undefined)}
     />
+  )
+}
+
+/** Sidebar: recently viewed and exported assets, opened in the grid like a collection. */
+export function RecentNav({ lists, open, onOpen }: { lists: Collection[]; open?: string; onOpen(id: string | undefined): void }) {
+  const { t } = useTranslation()
+  const nameOf = useCollectionName()
+  if (!lists.some((l) => l.items.length)) return null
+  return (
+    <nav aria-label={t('recent.title')} className="collections-nav">
+      <span className="label-caps">{t('recent.title')}</span>
+      <div className="tabs" role="group" aria-label={t('recent.title')}>
+        {lists.map((c) => (
+          <button key={c.id} type="button" className="tab" aria-pressed={open === c.id} disabled={!c.items.length} onClick={() => onOpen(open === c.id ? undefined : c.id)}>
+            <span aria-hidden="true">{c.id === RECENT_VIEWED ? '◷' : '⇪'}</span>
+            <span className="collection-label">{nameOf(c)}</span> <span className="muted">{c.items.length}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
   )
 }
 
@@ -92,7 +113,8 @@ export function CollectionView({ collection, registry, thumbs, stats, current, o
     setRenaming(false)
     setConfirm(false)
   }, [collection.id])
-  const own = collection.id !== FAVORITES
+  // Favourites and the recent lists are the app's: they cannot be renamed or deleted.
+  const own = collection.id !== FAVORITES && !collection.id.startsWith('recent:')
   return (
     <>
       <div className="content-head">

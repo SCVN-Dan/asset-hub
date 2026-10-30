@@ -185,6 +185,9 @@ export class AssetSearch {
   }
 
   private run(query: string): SearchResult {
+    // "harvester | tractor | combine": any of the alternatives, each asset at its best match.
+    const alternatives = query.split('|').map((q) => q.trim()).filter(Boolean)
+    if (alternatives.length > 1) return this.any(alternatives)
     const terms = parseQuery(query)
     if (!terms.length) return { assets: this.items.map((i) => i.asset), related: [], typos: [], scores: new Map() }
     const related = new Map<string, number>()
@@ -216,6 +219,34 @@ export class AssetSearch {
       typos: [...typos],
       scores: new Map(scored.map((s) => [s.asset.id, s.score]))
     }
+  }
+
+  private any(alternatives: readonly string[]): SearchResult {
+    const best = new Map<string, { asset: Asset; score: number }>()
+    const related = new Set<string>()
+    const typos = new Set<string>()
+    for (const alternative of alternatives) {
+      const r = this.run(alternative)
+      for (const asset of r.assets) {
+        const score = r.scores.get(asset.id) ?? 0
+        if ((best.get(asset.id)?.score ?? -1) < score) best.set(asset.id, { asset, score })
+      }
+      r.related.forEach((w) => related.add(w))
+      r.typos.forEach((w) => typos.add(w))
+    }
+    const scored = [...best.values()].sort((a, b) => b.score - a.score || a.asset.name.localeCompare(b.asset.name))
+    return { assets: scored.map((s) => s.asset), related: [...related], typos: [...typos], scores: new Map(scored.map((s) => [s.asset.id, s.score])) }
+  }
+
+  /**
+   * The words the names are made of, as spelled in them, most used first; numbers and
+   * one-letter parts left out. What the AI pet picks real search words from.
+   */
+  words(): Array<{ word: string; count: number }> {
+    return [...this.vocabulary]
+      .filter(([w]) => !/\d/.test(w))
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([w, count]) => ({ word: this.spelling.get(w) ?? w, count }))
   }
 
   /** Keywords for the last word being typed: groups first, then words used in names. */
