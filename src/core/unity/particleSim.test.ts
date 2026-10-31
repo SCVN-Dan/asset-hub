@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evalGradient, evalMinMax, evalMinMaxColor, parseParticleSim, readMinMax, readMinMaxColor } from './particleSim'
+import { evalGradient, evalMinMax, evalMinMaxColor, parseParticleSim, readMinMax, readMinMaxColor, streamTexcoords } from './particleSim'
 
 const curveYaml = `    startSize:
       serializedVersion: 2
@@ -158,5 +158,51 @@ ${curveYaml}    maxNumParticles: 50
     expect(evalMinMax(sim.trail!.lifetime, 0, 0)).toBe(0.3)
     expect(evalMinMax(sim.trail!.width, 0, 0)).toBe(0.2)
     expect(parseParticleSim(ps.replace('    mode: 0\n    ratio', '    mode: 1\n    ratio')).trail).toBeUndefined()
+  })
+})
+
+describe('custom data and vertex streams', () => {
+  const curve = (key: string, from: number, to: number) => `    ${key}:
+      serializedVersion: 2
+      minMaxState: 1
+      scalar: 1
+      minScalar: 0
+      maxCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: ${from}
+          inSlope: 0
+          outSlope: 0
+        - serializedVersion: 3
+          time: 1
+          value: ${to}
+          inSlope: 0
+          outSlope: 0
+`
+  const ps = `ParticleSystem:
+  lengthInSec: 1
+  CustomDataModule:
+    enabled: 1
+    mode0: 1
+    vectorComponentCount0: 2
+${curve('vector0_0', 0, 1)}${curve('vector0_1', 2, 2)}    mode1: 0
+`
+
+  it('reads Custom1 curves and the renderer streams', () => {
+    const sim = parseParticleSim(ps, 'ParticleSystemRenderer:\n  m_VertexStreams: 000103040522\n')
+    expect(sim.custom1).toHaveLength(2)
+    expect(evalMinMax(sim.custom1![0], 0.5, 0)).toBeCloseTo(0.5, 1)
+    expect(evalMinMax(sim.custom1![1], 0.5, 0)).toBeCloseTo(2)
+    expect(sim.custom2).toBeUndefined()
+    expect(sim.streams).toEqual([0, 1, 3, 4, 5, 34])
+  })
+
+  it('packs streams into TEXCOORDs one after another', () => {
+    // UV, UV2 fill TEXCOORD0; Custom1.xyzw is TEXCOORD1.
+    expect(streamTexcoords([0, 1, 3, 4, 5, 34]).map((s) => `${s.stream}.${s.component}`)).toEqual(['4.0', '4.1', '5.0', '5.1', '34.0', '34.1', '34.2', '34.3'])
+    // UV then Center (3): Center runs on from TEXCOORD0.zw into TEXCOORD1.x.
+    expect(streamTexcoords([0, 3, 4, 10]).map((s) => s.stream)).toEqual([4, 4, 10, 10, 10])
   })
 })

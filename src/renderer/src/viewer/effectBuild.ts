@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
-import { meshForFileId, modelImportScale, parseMaterialLook, shaderBlend, shaderTextureProps, type BuiltinMesh, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
+import { meshForFileId, modelImportScale, parseMaterialLook, parseTextureMeta, shaderBlend, shaderTextureProps, type BuiltinMesh, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { mainTexture } from './particleThumb'
 import { EffectPlayer, EmitterPlayer, type EmitterLook } from './particlePlayer'
+import { portedLook } from './shaderPorts'
 import { fetchTextureFile } from './textures'
 import { unwrap } from '../remoteSource'
 
@@ -111,16 +112,53 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
     }
     return p
   }
+  const matTexts = new Map<string, Promise<string | undefined>>()
+  const loadMatText = (path: string) => {
+    let p = matTexts.get(path)
+    if (!p) {
+      p = window.api.assets.readFile(live.repo, live.branch, path, background).then((r) => (r.ok ? new TextDecoder().decode(r.data) : undefined))
+      matTexts.set(path, p)
+    }
+    return p
+  }
   const loadLook = (path: string) => {
     let p = looks.get(path)
     if (!p) {
-      p = window.api.assets.readFile(live.repo, live.branch, path, background).then((r) => (r.ok ? parseMaterialLook(new TextDecoder().decode(r.data)) : undefined))
+      p = loadMatText(path).then((text) => (text ? parseMaterialLook(text) : undefined))
       looks.set(path, p)
     }
     return p
   }
+  /** A texture for a ported shader: wrapped and decoded as Unity imports it (scrolling and noise maps repeat; data maps are not sRGB). */
+  const loadPortTexture = (path: string) => {
+    let p = textures.get(`${path}#port`)
+    if (!p) {
+      p = Promise.all([
+        fetchTextureFile(live, path, background),
+        window.api.assets.readFile(live.repo, live.branch, `${path}.meta`, background).then((r) => (r.ok ? parseTextureMeta(new TextDecoder().decode(r.data)) : undefined))
+      ]).then(async ([file, meta]) => {
+        if (!file) return undefined
+        try {
+          const tex = await new THREE.TextureLoader().loadAsync(file.url)
+          const wrap = (w: number | undefined) => (w === 1 ? THREE.ClampToEdgeWrapping : w === 2 || w === 3 ? THREE.MirroredRepeatWrapping : THREE.RepeatWrapping)
+          tex.wrapS = wrap(meta?.wrapU)
+          tex.wrapT = wrap(meta?.wrapV)
+          tex.colorSpace = meta?.sRGB === false ? THREE.NoColorSpace : THREE.SRGBColorSpace
+          const img = tex.image as { width?: number; height?: number } | undefined
+          maxSide = Math.max(maxSide, img?.width ?? 0, img?.height ?? 0)
+          return tex
+        } catch {
+          return undefined
+        } finally {
+          URL.revokeObjectURL(file.url)
+        }
+      })
+      textures.set(`${path}#port`, p)
+    }
+    return p
+  }
 
-  const shaders = new Map<string, Promise<{ blend?: EmitterLook['blend']; textures: string[] } | undefined>>()
+  const shaders = new Map<string, Promise<{ blend?: EmitterLook['blend']; textures: string[]; text: string } | undefined>>()
   /** What a project shader tells: the blend its code fixes, if it does, and the texture slots it reads. */
   const loadShader = (path: string) => {
     let p = shaders.get(path)
@@ -128,7 +166,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
       p = window.api.assets.readFile(live.repo, live.branch, path, background).then((r) => {
         if (!r.ok) return undefined
         const text = new TextDecoder().decode(r.data)
-        return { blend: /\.shader$/i.test(path) ? shaderBlend(text) : undefined, textures: shaderTextureProps(path, text) }
+        return { blend: /\.shader$/i.test(path) ? shaderBlend(text) : undefined, textures: shaderTextureProps(path, text), text }
       })
       shaders.set(path, p)
     }
@@ -177,7 +215,10 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
     const blend = fixed ?? look?.blend ?? blendFromShader(shader?.label)
     const custom = !!shader && shader.kind !== 'builtin' && (blend === 'alpha' || blend === 'premultiply')
     const texture = texPath ? await loadTexture(texPath, custom) : undefined
-    return { texture, blend, tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1] }
+    // A shader we have a port of draws exactly; the rest above stays for mesh particles, which it does not cover.
+    const matText = info && material?.path ? await loadMatText(material.path) : undefined
+    const ported = info && material && matText ? await portedLook(material, info.text, matText, { texture: loadPortTexture, text: loadMatText }).catch(() => undefined) : undefined
+    return { texture, blend, tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1], ...(ported ? { custom: ported } : {}) }
   }
 
   const players = await Promise.all(

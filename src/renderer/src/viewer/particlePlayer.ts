@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { evalMinMax, evalMinMaxColor, type MaterialLook, type ParticleEmitter, type ParticleSim, type ParticleShape, type SubEmitterType } from '@core/index'
+import { DEFAULT_STREAMS, evalMinMax, evalMinMaxColor, streamTexcoords, type MaterialLook, type ParticleEmitter, type ParticleSim, type ParticleShape, type SubEmitterType } from '@core/index'
 
 // Plays Unity particle systems in three.js, close to what Unity shows: the
 // main module, emission (rate and bursts), shapes, gravity, velocity / force /
@@ -17,6 +17,17 @@ export interface EmitterLook {
   mesh?: THREE.BufferGeometry
   /** The trails' own material, when the system draws trails. */
   trail?: Omit<EmitterLook, 'mesh' | 'trail'>
+  /** A shader ported from Unity (viewer/shaderPorts): drawn by its own fragment shader instead of texture × tint. */
+  custom?: CustomLook
+}
+
+export interface CustomLook {
+  /** Reads `vUv` and `vColor` and the uniforms below, plus `uTime` (seconds since the effect started). */
+  fragmentShader: string
+  uniforms: Record<string, THREE.IUniform>
+  /** three.js blend factors (Unity's `Blend [src] [dst]`). */
+  blendSrc: THREE.BlendingSrcFactor
+  blendDst: THREE.BlendingDstFactor
 }
 
 const VERT = /* glsl */ `
@@ -33,9 +44,19 @@ uniform vec2 uTiles;
 uniform float uLength;
 uniform float uVelScale;
 uniform float uSizeScale;
+// Vertex streams for ported shaders: TEXCOORD0 and TEXCOORD1 per particle; uUvMap says which components are the vertex's UV (1 u, 2 v).
+attribute vec4 iS0;
+attribute vec4 iS1;
+uniform vec4 uUvMap0;
+uniform vec4 uUvMap1;
+varying vec4 vTex0;
+varying vec4 vTex1;
 varying vec2 vUv;
 varying vec2 vCorner;
 varying vec4 vColor;
+vec4 withUv(vec4 values, vec4 map, vec2 uv) {
+  return mix(mix(values, vec4(uv.x), vec4(equal(map, vec4(1.0)))), vec4(uv.y), vec4(equal(map, vec4(2.0))));
+}
 void main() {
   float size = iSRF.x * uSizeScale;
   // Height apart from width when the system sizes per axis (a long thin ray).
@@ -49,6 +70,8 @@ void main() {
   float fy = floor(frame / uTiles.x);
   vec2 uv = corner + 0.5;
   vUv = vec2((fx + uv.x) / uTiles.x, 1.0 - (fy + 1.0 - uv.y) / uTiles.y);
+  vTex0 = withUv(iS0, uUvMap0, vUv);
+  vTex1 = withUv(iS1, uUvMap1, vUv);
   float c = cos(rot);
   float s = sin(rot);
   vec2 q = corner * vec2(size, sizeY);
@@ -119,6 +142,8 @@ attribute vec4 iColorB;
 attribute vec2 iU;
 varying vec2 vUv;
 varying vec4 vColor;
+varying vec4 vTex0;
+varying vec4 vTex1;
 void main() {
   float along = corner.x + 0.5;
   vec4 a = modelViewMatrix * vec4(iA, 1.0);
@@ -130,6 +155,9 @@ void main() {
   p.xy += side * corner.y * mix(iWidth.x, iWidth.y, along);
   vColor = mix(iColorA, iColorB, along);
   vUv = vec2(mix(iU.x, iU.y, along), corner.y + 0.5);
+  // Trails carry no per-particle streams: the UV, and zeros.
+  vTex0 = vec4(vUv, 0.0, 0.0);
+  vTex1 = vec4(0.0);
   gl_Position = projectionMatrix * p;
 }
 `
@@ -275,6 +303,22 @@ const wander = (x: number, y: number, z: number, t: number) => [
 ]
 
 function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit<EmitterLook, 'mesh' | 'trail'>, extra: Record<string, THREE.IUniform> = {}): THREE.ShaderMaterial {
+  const custom = look.custom
+  if (custom) {
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader: custom.fragmentShader,
+      // Each emitter keeps its own clock; values (textures too) are shared, as they never change.
+      uniforms: { ...Object.fromEntries(Object.entries(custom.uniforms).map(([k, u]) => [k, { value: u.value }])), uTime: { value: 0 }, ...extra },
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.CustomBlending,
+      blendSrc: custom.blendSrc,
+      blendDst: custom.blendDst
+    })
+    return material
+  }
   const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
@@ -314,7 +358,7 @@ export class EmitterPlayer {
   private readonly sim: ParticleSim
   private readonly max: number
   private readonly shapeRot?: THREE.Quaternion
-  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute; rotXY: THREE.InstancedBufferAttribute; sizeY: THREE.InstancedBufferAttribute }
+  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute; rotXY: THREE.InstancedBufferAttribute; sizeY: THREE.InstancedBufferAttribute; streams?: { s0: THREE.InstancedBufferAttribute; s1: THREE.InstancedBufferAttribute; layout: Array<{ stream: number; component: number }> } }
   private readonly meshes?: THREE.InstancedMesh
   private readonly meshAlpha?: THREE.InstancedBufferAttribute
   private readonly trail?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; attrs: Record<'a' | 'b' | 'width' | 'colorA' | 'colorB' | 'u', THREE.InstancedBufferAttribute>; hist: Float32Array; histTime: Float32Array; histCount: Uint8Array; has: Uint8Array }
@@ -416,6 +460,19 @@ export class EmitterPlayer {
       geometry.setAttribute('iColor', q.color)
       geometry.setAttribute('iSRF', q.srf)
       geometry.instanceCount = 0
+      // Ported shaders read the renderer's vertex streams (custom data, randoms…), in Unity's TEXCOORD layout.
+      const layout = look.custom ? streamTexcoords(this.sim.streams ?? DEFAULT_STREAMS).slice(0, 8) : undefined
+      const streams = layout && { s0: attr(4), s1: attr(4), layout }
+      if (streams) {
+        // A TEXCOORD component no stream fills reads as the GPU's default, (0, 0, 0, 1).
+        for (let i = 0; i < n; i++) {
+          if (layout.length <= 3) (streams.s0.array as Float32Array)[i * 4 + 3] = 1
+          if (layout.length <= 7) (streams.s1.array as Float32Array)[i * 4 + 3] = 1
+        }
+        geometry.setAttribute('iS0', streams.s0)
+        geometry.setAttribute('iS1', streams.s1)
+      }
+      const uvMap = [0, 0, 0, 0, 0, 0, 0, 0].map((_, j) => (layout?.[j] && layout[j].stream >= 4 && layout[j].stream <= 7 ? layout[j].component + 1 : 0))
       // Billboards aligned to the system's axes, not the camera, are drawn as quads in its space.
       const oriented = emitter.renderMode === 'billboard' && (this.sim.alignment === 'local' || this.sim.alignment === 'world')
       const mode = oriented ? 4 : { billboard: 0, mesh: 0, none: 0, stretched: 1, horizontal: 2, vertical: 3 }[emitter.renderMode]
@@ -426,9 +483,11 @@ export class EmitterPlayer {
         uLength: { value: this.sim.lengthScale },
         uVelScale: { value: this.sim.velocityScale },
         // Unity scales particles with their transforms (hierarchy scaling): kept up to date in update().
-        uSizeScale: { value: 1 }
+        uSizeScale: { value: 1 },
+        uUvMap0: { value: new THREE.Vector4(...uvMap.slice(0, 4)) },
+        uUvMap1: { value: new THREE.Vector4(...uvMap.slice(4)) }
       })
-      this.quads = { ...q, material }
+      this.quads = { ...q, material, streams }
       const m = new THREE.Mesh(geometry, material)
       m.frustumCulled = false
       m.userData.particles = true
@@ -495,6 +554,7 @@ export class EmitterPlayer {
 
   update(dt: number): void {
     this.step(dt * this.sim.simulationSpeed)
+    for (const m of [this.quads?.material, this.trail?.material]) if (m?.uniforms.uTime) m.uniforms.uTime.value = this.time
     if (this.quads && this.mesh.parent) {
       const s = this.mesh.parent.getWorldScale(scratch)
       this.quads.material.uniforms.uSizeScale.value = (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3
@@ -816,6 +876,15 @@ export class EmitterPlayer {
       srf[i * 3 + 2] = frame
       ;(qd.rotXY.array as Float32Array).set(this.rotXY.subarray(i * 2, i * 2 + 2), i * 2)
       ;(qd.sizeY.array as Float32Array)[i] = sizeY
+      if (qd.streams) {
+        const s0 = qd.streams.s0.array as Float32Array
+        const s1 = qd.streams.s1.array as Float32Array
+        qd.streams.layout.forEach(({ stream, component }, j) => {
+          const v = this.streamValue(i, stream, component, t, size, angle, frame)
+          if (j < 4) s0[i * 4 + j] = v
+          else s1[i * 4 + j - 4] = v
+        })
+      }
     }
     if (this.meshes) {
       this.meshes.count = this.count
@@ -824,9 +893,43 @@ export class EmitterPlayer {
       if (this.meshAlpha) this.meshAlpha.needsUpdate = true
     } else if (this.quads) {
       this.quads.geometry.instanceCount = this.count
-      for (const a of [this.quads.pos, this.quads.vel, this.quads.color, this.quads.srf, this.quads.rotXY, this.quads.sizeY]) a.needsUpdate = true
+      for (const a of [this.quads.pos, this.quads.vel, this.quads.color, this.quads.srf, this.quads.rotXY, this.quads.sizeY, this.quads.streams?.s0, this.quads.streams?.s1]) if (a) a.needsUpdate = true
     }
     if (this.trail) this.uploadTrails(c)
+  }
+
+  /** One component of a vertex stream for particle `i` (ParticleSystemVertexStream numbers); UVs are filled in by the shader. */
+  private streamValue(i: number, stream: number, component: number, t: number, size: number, angle: number, frame: number): number {
+    const r = (k: number) => this.rand[i * 4 + (k % 4)]
+    if (stream >= 31 && stream <= 38) {
+      const curves = stream <= 34 ? this.sim.custom1 : this.sim.custom2
+      const curve = curves?.[component]
+      // Custom data a curve does not set is 0, as in Unity.
+      return curve ? evalMinMax(curve, t, r(component)) : 0
+    }
+    if (stream >= 23 && stream <= 30) return r(component)
+    switch (stream) {
+      case 9:
+        return frame
+      case 10:
+        return this.pos[i * 3 + component]
+      case 12:
+      case 13:
+      case 14:
+        return size
+      case 15:
+        return angle
+      case 19:
+        return this.vel[i * 3 + component]
+      case 20:
+        return Math.hypot(this.vel[i * 3], this.vel[i * 3 + 1], this.vel[i * 3 + 2])
+      case 21:
+        return t
+      case 22:
+        return 1 / this.life[i]
+      default:
+        return 0
+    }
   }
 
   private uploadTrails(c: number[]): void {

@@ -101,6 +101,25 @@ export interface ParticleSim {
   maxScreenSize: number
   /** Which way billboards face: the camera, or the world's / the system's own axes (a ring lying on the ground). */
   alignment: 'view' | 'world' | 'local' | 'facing' | 'velocity'
+  /** Custom Data module, vector mode: up to 4 curves over each particle's lifetime (Custom1, Custom2). */
+  custom1?: MinMax[]
+  custom2?: MinMax[]
+  /** The renderer's vertex streams (ParticleSystemVertexStream numbers), in order; absent: Unity's default set. */
+  streams?: number[]
+}
+
+/** Components of each ParticleSystemVertexStream (index = Unity's enum value); Position, Normal, Tangent and Color have their own semantics. */
+const STREAM_SIZES = [0, 0, 0, 0, 2, 2, 2, 2, 1, 1, 3, 1, 1, 2, 3, 1, 3, 1, 3, 3, 1, 1, 1, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 1, 2, 3]
+/** Unity's streams when the renderer lists none: Position, Normal, Color, UV. */
+export const DEFAULT_STREAMS = [0, 1, 3, 4]
+
+/**
+ * What lands in each TEXCOORD component, in order (TEXCOORD0.xyzw, TEXCOORD1.xyzw…):
+ * Unity packs the streams one after another, a stream running on into the next
+ * TEXCOORD when it does not fit (`TEXCOORD0.zw|x`).
+ */
+export function streamTexcoords(streams: readonly number[]): Array<{ stream: number; component: number }> {
+  return streams.flatMap((stream) => Array.from({ length: STREAM_SIZES[stream] ?? 0 }, (_, component) => ({ stream, component })))
 }
 
 const ALIGNMENTS: ParticleSim['alignment'][] = ['view', 'world', 'local', 'facing', 'velocity']
@@ -319,6 +338,16 @@ export function parseParticleSim(ps: string, renderer?: string): ParticleSim {
     }
   if (on(noise))
     sim.noise = { strength: readMinMax(noise, 4, 'strength', 1), frequency: yamlNum(noise, 4, 'frequency') ?? 0.5, scrollSpeed: yamlNum(noise, 4, 'scrollSpeed') ?? 0 }
+  const custom = yamlBlock(ps, 2, 'CustomDataModule')
+  if (on(custom))
+    for (const k of [0, 1] as const) {
+      // Mode 1 is Vector (curves); 0 off, 2 Color.
+      if (yamlNum(custom, 4, `mode${k}`) !== 1) continue
+      const count = yamlNum(custom, 4, `vectorComponentCount${k}`) ?? 4
+      sim[k ? 'custom2' : 'custom1'] = Array.from({ length: count }, (_, c) => readMinMax(custom, 4, `vector${k}_${c}`))
+    }
+  const streams = renderer && /m_VertexStreams: ([0-9a-f]+)/.exec(renderer)?.[1]
+  if (streams) sim.streams = streams.match(/../g)!.map((h) => parseInt(h, 16))
   return sim
 }
 

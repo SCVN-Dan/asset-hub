@@ -9,7 +9,8 @@ export const BUILTIN_SHADER_GUIDS = new Set(['0000000000000000f000000000000000',
 export const KNOWN_PACKAGE_SHADERS: Record<string, string> = {
   '933532a4fcc9baf4fa0491de14d08ed7': 'Universal Render Pipeline/Lit',
   '650dd9526735d5b46b79224bc6e94025': 'Universal Render Pipeline/Unlit',
-  '8d2bb70cbf9db8d4da26e15b26e74248': 'Universal Render Pipeline/Simple Lit'
+  '8d2bb70cbf9db8d4da26e15b26e74248': 'Universal Render Pipeline/Simple Lit',
+  '0406db5a14f94604a8c57ccfbc9f3b46': 'Universal Render Pipeline/Particles/Unlit'
 }
 
 /** Built-in shaders by fileID (they share one GUID). */
@@ -222,6 +223,109 @@ export function parseMaterialLook(matText: string): MaterialLook {
   }
 }
 
+/** Everything a material sets, for previews that reproduce one shader exactly (see renderer viewer/shaderPorts). */
+export interface MaterialProps {
+  /** Shader keywords the material turns on (`GLOW_ON`…). */
+  keywords: string[]
+  floats: Record<string, number>
+  colors: Record<string, Rgba>
+  /** Tiling and offset of each texture slot, [scale x, scale y, offset x, offset y]. */
+  st: Record<string, [number, number, number, number]>
+  /** What each filled slot points at: an asset's GUID and the object in it (2800000 a texture file, else e.g. a texture saved inside a .mat). */
+  refs: Record<string, { fileID: string; guid?: string }>
+}
+
+export function parseMaterialProps(matText: string): MaterialProps {
+  const text = matText.replace(/\r\n/g, '\n')
+  // Keywords are a string (m_ShaderKeywords) or a list (m_ValidKeywords), depending on the Unity version.
+  const line = /m_ShaderKeywords: *(.*)$/m.exec(text)?.[1] ?? ''
+  const list = /m_ValidKeywords:((?:\s*\n\s*- \w+)*)/.exec(text)?.[1] ?? ''
+  const keywords = [...new Set([...line.split(/\s+/), ...list.split(/\n\s*- /).map((k) => k.trim())].filter((k) => /^\w+$/.test(k)))]
+  const floats: Record<string, number> = {}
+  for (const [k, v] of [...propertyList(text, 'm_Ints'), ...propertyList(text, 'm_Floats')]) {
+    const n = Number(v)
+    if (Number.isFinite(n)) floats[k] = n
+  }
+  const colors: Record<string, Rgba> = {}
+  for (const [k, v] of propertyList(text, 'm_Colors')) {
+    const c = parseRgba(v)
+    if (c) colors[k] = c
+  }
+  const st: MaterialProps['st'] = {}
+  const refs: MaterialProps['refs'] = {}
+  const start = text.indexOf('m_TexEnvs:')
+  if (start !== -1) {
+    const rest = text.slice(start)
+    const end = rest.slice(1).search(/\n {4}m_\w+:/)
+    // A long reference wraps onto the next line (`guid: …,\n type: 2}`).
+    for (const m of (end === -1 ? rest : rest.slice(0, end + 1)).matchAll(/- (\w+):\s*\n\s*m_Texture: \{fileID: (-?\d+)(?:, guid: (\w+))?[^}]*\}\s*\n\s*m_Scale: \{x: ([-\d.eE]+), y: ([-\d.eE]+)\}\s*\n\s*m_Offset: \{x: ([-\d.eE]+), y: ([-\d.eE]+)\}/g)) {
+      st[m[1]] = [Number(m[4]), Number(m[5]), Number(m[6]), Number(m[7])]
+      if (m[2] !== '0') refs[m[1]] = { fileID: m[2], ...(m[3] ? { guid: m[3] } : {}) }
+    }
+  }
+  return { keywords, floats, colors, st, refs }
+}
+
+/** A texture saved inside another asset (a gradient a tool wrote into a .mat), decoded to RGBA. */
+export interface EmbeddedTexture {
+  width: number
+  height: number
+  rgba: Uint8Array<ArrayBuffer>
+  /** Colour data meant as linear (m_ColorSpace 0), not sRGB. */
+  linear: boolean
+  clamp: boolean
+  /** Point filtering (no blending between pixels). */
+  point: boolean
+}
+
+/** Texture formats with their bytes per pixel and how to read RGBA from them: Alpha8, RGB24, RGBA32, ARGB32. */
+const EMBEDDED_FORMATS: Record<number, { size: number; rgba: (p: Uint8Array, i: number) => [number, number, number, number] }> = {
+  1: { size: 1, rgba: (p, i) => [255, 255, 255, p[i]] },
+  3: { size: 3, rgba: (p, i) => [p[i], p[i + 1], p[i + 2], 255] },
+  4: { size: 4, rgba: (p, i) => [p[i], p[i + 1], p[i + 2], p[i + 3]] },
+  5: { size: 4, rgba: (p, i) => [p[i + 1], p[i + 2], p[i + 3], p[i]] }
+}
+
+/** The Texture2D object `fileID` inside a YAML asset, when its pixels are stored there uncompressed. */
+export function parseEmbeddedTexture(assetText: string, fileID: string): EmbeddedTexture | undefined {
+  const text = assetText.replace(/\r\n/g, '\n')
+  const start = text.indexOf(`--- !u!28 &${fileID}\n`)
+  if (start === -1) return undefined
+  const next = text.indexOf('\n--- ', start + 1)
+  const block = text.slice(start, next === -1 ? undefined : next)
+  const num = (key: string) => Number(new RegExp(`^\\s*${key}: (-?\\d+)`, 'm').exec(block)?.[1])
+  const width = num('m_Width')
+  const height = num('m_Height')
+  const format = EMBEDDED_FORMATS[num('m_TextureFormat')]
+  const hex = /_typelessdata: ([0-9a-f]+)/.exec(block)?.[1]
+  if (!format || !hex || !(width > 0) || !(height > 0) || hex.length < width * height * format.size * 2) return undefined
+  const bytes = Uint8Array.from(hex.match(/../g)!.map((h) => parseInt(h, 16)))
+  const rgba = new Uint8Array(width * height * 4)
+  for (let i = 0; i < width * height; i++) rgba.set(format.rgba(bytes, i * format.size), i * 4)
+  return { width, height, rgba, linear: num('m_ColorSpace') === 0, clamp: num('m_WrapU') === 1, point: num('m_FilterMode') === 0 }
+}
+
+/** The name a shader file gives itself (`Shader "AllIn1Vfx/AllIn1Vfx"`). */
+export function shaderName(shaderText: string): string | undefined {
+  return /^\s*Shader\s+"([^"]+)"/m.exec(shaderText)?.[1]
+}
+
+/** Default values from a shader's Properties block, for properties a material does not store. */
+export function shaderDefaults(shaderText: string): Pick<MaterialProps, 'floats' | 'colors'> {
+  const floats: Record<string, number> = {}
+  const colors: Record<string, Rgba> = {}
+  const block = /Properties\s*\{([\s\S]*?)\n\s*\}\s*\n/.exec(shaderText)?.[1] ?? ''
+  for (const m of block.matchAll(/^\s*(?:\[[^\]]*\]\s*)*(_\w+)\s*\(\s*"[^"]*"\s*,\s*([^)]*\)?)\s*\)\s*=\s*([^\n/]+)/gm)) {
+    const [, name, type, value] = m
+    const v = value.trim()
+    if (/^(Color|Vector)/i.test(type)) {
+      const n = /\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(v)
+      if (n) colors[name] = { r: Number(n[1]), g: Number(n[2]), b: Number(n[3]), a: Number(n[4]) }
+    } else if (Number.isFinite(Number(v))) floats[name] = Number(v)
+  }
+  return { floats, colors }
+}
+
 const IMAGE_EXT = /\.(png|jpe?g|tga|psd|tiff?|exr|bmp|gif|hdr)$/i
 
 /** File-name references to textures inside an FBX (binary or ASCII), e.g. from absolute paths on the artist's machine. */
@@ -264,6 +368,9 @@ export interface TextureImport {
   alphaIsTransparency?: boolean
   /** Where alpha comes from: the file's own channel, none (opaque), or made from the colour's grey level. */
   alphaSource?: 'none' | 'input' | 'gray'
+  /** Wrap mode across and down: 0 Repeat (also -1, the default), 1 Clamp, 2 Mirror, 3 Mirror once. */
+  wrapU?: number
+  wrapV?: number
   /** Per-platform overrides that are switched on. */
   overrides: Array<{ target: string; maxTextureSize?: number; compression?: number }>
 }
@@ -298,6 +405,8 @@ export function parseTextureMeta(metaText: string): TextureImport {
     sRGB: flag(head, 'sRGBTexture'),
     mipmaps: flag(head, 'enableMipMap'),
     alphaIsTransparency: flag(head, 'alphaIsTransparency'),
+    wrapU: num(head, 'wrapU'),
+    wrapV: num(head, 'wrapV'),
     ...(ALPHA_SOURCES[num(head, 'alphaUsage') ?? -1] ? { alphaSource: ALPHA_SOURCES[num(head, 'alphaUsage')!] } : {}),
     overrides: platforms.filter((p) => p.overridden && p.target !== 'DefaultTexturePlatform').map(({ target, maxTextureSize, compression }) => ({ target, maxTextureSize, compression }))
   }

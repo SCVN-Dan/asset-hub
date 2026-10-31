@@ -8,8 +8,14 @@ What changed in each release of Asset Hub. `npm run release` publishes the secti
 - **Send feedback:** the 💬 button next to Settings sends a bug report, an idea or anything else to the team, optionally with the repo, branch and asset you are on. It becomes an issue in the private `supercent-io/asset-hub-feedback` repo; offline or without access it is kept and sent the next time the app opens.
 - **Usage statistics:** each session (GitHub name, active time, version, language, repos opened, asset types viewed, how many searches, exports, imports into Unity, AI chats and errors — never search text or file contents) is sent as a comment on the user's `usage: <login>` issue in the same repo. It can be turned off in Settings › Usage statistics. `npm run usage` builds an HTML report from it (`--demo` for made-up data).
 
+- **Effects made with AllIn1Vfx and VFX_Klaus look as in Unity:** both shaders are ported to the preview, line by line. AllIn1Vfx turns its features on per material with keywords (shapes, distortion, colour ramps, glow, fades, masks, HSV…), so each effect gets exactly the ones it uses; screen-space ones (soft particles, screen distortion) are left out. On hb_creative_xp_hero (main) they draw 281 of the 323 effects that use custom shaders. Effect cards are drawn again once.
+- Particles carry the **Custom Data** module and the renderer's **vertex streams** to these shaders, in Unity's TEXCOORD layout, so dissolves and fades run over each particle's life.
+- Textures saved inside a material (AllIn1Vfx gradients) and Unity's Default-Particle dot are read.
+- `scripts/vfx-sheet.mjs` renders many effects onto one page to compare before and after a change; `scripts/ai-eval/` runs the assistant on 30 real requests per language (Vietnamese, English, Korean: 89/90 found on the first ask, 15 s on average).
+
 ### Changed
 - Languages are listed English, 한국어, Tiếng Việt.
+- URP's Particles/Unlit shader is shown by name.
 
 ## [0.1.3] — 2026-10-31
 
