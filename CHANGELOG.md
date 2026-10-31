@@ -2,7 +2,7 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
-## Unreleased
+## [0.1.4] — 2026-10-31
 
 ### Added
 - **Send feedback:** the 💬 button next to Settings sends a bug report, an idea or anything else to the team, optionally with the repo, branch and asset you are on. It becomes an issue in the private `supercent-io/asset-hub-feedback` repo; offline or without access it is kept and sent the next time the app opens.
