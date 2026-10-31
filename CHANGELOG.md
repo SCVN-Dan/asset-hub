@@ -2,7 +2,7 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
-## [Unreleased]
+## [0.1.2] — 2026-10-31
 
 ### Added
 - **Watch a branch:** the 👁 next to the branch picker follows it. On opening the app, every 30 minutes and on coming back to it, the app asks GitHub (read only) which asset files were added since you last marked it seen: the sidebar's **Watching** list shows the count per branch, new cards carry a **NEW** badge, and a banner offers "Only new assets" and "Mark all seen". Moved or renamed files do not count as new.
