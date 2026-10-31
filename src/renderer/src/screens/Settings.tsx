@@ -296,6 +296,15 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
       <CacheSetting settings={settings} onChange={onChange} />
 
       {auth?.signedIn && <SharedIndexSetting settings={settings} onChange={onChange} />}
+
+      <section className="setting">
+        <h2>{t('settings.usage')}</h2>
+        <label className="check">
+          <input type="checkbox" checked={settings.usageStats !== false} onChange={(e) => onChange({ usageStats: e.target.checked })} />
+          {t('settings.usageStats')}
+        </label>
+        <span className="muted small">{t('settings.usageNote')}</span>
+      </section>
     </div>
   )
 }

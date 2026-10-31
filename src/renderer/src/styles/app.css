@@ -195,6 +195,9 @@ button { cursor: pointer; }
 .shortcut-card dl { margin: 0; display: grid; gap: 8px; }
 .shortcut-card dl > div { display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 12px; }
 .shortcut-card dt, .shortcut-card dd { margin: 0; }
+.feedback-card { width: min(480px, calc(100vw - 32px)); }
+.feedback-kinds { display: flex; gap: 6px; }
+.feedback-body { height: auto; padding: 10px 12px; resize: vertical; font: inherit; line-height: 1.5; }
 .shortcut-card kbd { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--panel-2); font: 600 12px var(--mono); }
 .multi-bar .link-btn { white-space: nowrap; }
 /* Several cards picked: a tick in the corner, and the bar acting on all of them. */

@@ -28,7 +28,8 @@ import { Dropdown } from '../components/Dropdown'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { BellIcon, FilterIcon, GearIcon, RefreshIcon } from '../components/Icons'
+import { BellIcon, FilterIcon, GearIcon, MessageIcon, RefreshIcon } from '../components/Icons'
+import { FeedbackDialog } from '../components/FeedbackDialog'
 import { LogoMark } from '../components/Logo'
 import { VersionBadge } from '../components/VersionBadge'
 import { flyToPack } from '../motion'
@@ -814,11 +815,21 @@ export function Browse({
   useEffect(() => {
     if (!viewedKey) return
     const timer = window.setTimeout(() => {
-      if (inCatalog && catalogSelected) remember('viewed', [catalogItem(catalogSelected)])
-      else if (!inCatalog && selected) remember('viewed', [itemOf(selected)])
+      const item = inCatalog && catalogSelected ? catalogItem(catalogSelected) : !inCatalog && selected ? itemOf(selected) : undefined
+      if (!item) return
+      remember('viewed', [item])
+      window.api.usage.track({ kind: 'view', type: item.type })
     }, 1500)
     return () => window.clearTimeout(timer)
   }, [viewedKey])
+
+  // A search counts once it has settled (only that one happened, never what was typed).
+  useEffect(() => {
+    if (!query.trim()) return
+    const timer = window.setTimeout(() => window.api.usage.track({ kind: 'search' }), 1500)
+    return () => window.clearTimeout(timer)
+  }, [query])
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
 
   // Keyboard shortcuts (`?` lists them). Single keys only act when nothing is being typed.
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -1140,6 +1151,9 @@ export function Browse({
         {/* Search and Settings move together: when the bar wraps, Settings stays at the right end. */}
         <div className="topbar-end">
           <SearchBox value={query} search={inCatalog ? catalogSearch : searcher} onChange={onQuery} />
+          <button type="button" className="btn icon-btn" aria-label={t('feedback.title')} title={t('feedback.title')} onClick={() => setFeedbackOpen(true)}>
+            <MessageIcon />
+          </button>
           <button type="button" className="btn topbar-settings" aria-label={t('common.settings')} title={t('browse.settingsAccount')} onClick={onSettings}>
             <GearIcon />
             {login && <span className="small" title={login}>{displayName(login)}</span>}
@@ -1536,6 +1550,12 @@ export function Browse({
         )}
       </div>
       {shortcutsOpen && <ShortcutHelp onClose={() => setShortcutsOpen(false)} />}
+      {feedbackOpen && (
+        <FeedbackDialog
+          context={repo ? { repo, branch, asset: inCatalog ? catalogSelected?.locations[0]?.path : selected && root + selected.path } : undefined}
+          onClose={() => setFeedbackOpen(false)}
+        />
+      )}
     </div>
   )
 }

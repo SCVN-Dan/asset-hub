@@ -20,6 +20,7 @@ interface Session {
   catalog: CatalogService
   sharedIndex: SharedIndexService
   status: AuthStatus
+  token: string
   /** Repo list kept for a few minutes, for catalog scans. */
   repos?: { at: number; list: Promise<RepoRef[]> }
 }
@@ -58,7 +59,7 @@ const electronFetch: FetchLike = (url, init) => net.fetch(url, init)
 /** Checks for a newer shared index this often while signed in. */
 const SHARED_INDEX_CHECK_MS = 30 * 60_000
 
-export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; cacheLimit: () => number; sharedIndexDir: () => string | undefined; toolsDir: string }): { janitor: CacheJanitor; sharedIndexChanged(): void } {
+export function registerGitHubIpc(options: { authFile: string; cacheDir: () => string; cacheLimit: () => number; sharedIndexDir: () => string | undefined; toolsDir: string }): { janitor: CacheJanitor; sharedIndexChanged(): void; account(): { login: string; token: string } | undefined } {
   const store = new AuthStore(options.authFile)
   const janitor = new CacheJanitor(options.cacheDir, options.cacheLimit)
   const cache = new FileCommitCache(options.cacheDir, janitor.noteWrite)
@@ -110,7 +111,7 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       user.login,
       (status) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.sharedIndexProgress, status))
     )
-    session = { source, catalog, sharedIndex, status: { signedIn: true, login: user.login, method, persisted } }
+    session = { source, catalog, sharedIndex, status: { signedIn: true, login: user.login, method, persisted }, token: token.trim() }
     // A teammate's index makes searching across branches instant: taken in right away when newer.
     void sharedIndex.check()
     return session.status
@@ -421,5 +422,9 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.sharedIndexExport, () => wrap(() => requireShared().exportNow().then(() => requireShared().status())))
   setInterval(() => void session?.sharedIndex.check(), SHARED_INDEX_CHECK_MS)
 
-  return { janitor, sharedIndexChanged: () => void session?.sharedIndex.check() }
+  return {
+    janitor,
+    sharedIndexChanged: () => void session?.sharedIndex.check(),
+    account: () => (session?.status.login ? { login: session.status.login, token: session.token } : undefined)
+  }
 }

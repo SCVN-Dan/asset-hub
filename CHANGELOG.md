@@ -2,6 +2,15 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## Unreleased
+
+### Added
+- **Send feedback:** the 💬 button next to Settings sends a bug report, an idea or anything else to the team, optionally with the repo, branch and asset you are on. It becomes an issue in the private `supercent-io/asset-hub-feedback` repo; offline or without access it is kept and sent the next time the app opens.
+- **Usage statistics:** each session (GitHub name, active time, version, language, repos opened, asset types viewed, how many searches, exports, imports into Unity, AI chats and errors — never search text or file contents) is sent as a comment on the user's `usage: <login>` issue in the same repo. It can be turned off in Settings › Usage statistics. `npm run usage` builds an HTML report from it (`--demo` for made-up data).
+
+### Changed
+- Languages are listed English, 한국어, Tiếng Việt.
+
 ## [0.1.3] — 2026-10-31
 
 ### Fixed

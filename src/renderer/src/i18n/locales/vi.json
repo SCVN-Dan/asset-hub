@@ -155,7 +155,10 @@
     "sharedIndexExporting": "Đang ghi…",
     "sharedIndexImported": "Đã nhập {{commits}} danh sách branch, {{facts}} dữ kiện, {{stats}} thông số, {{thumbs}} thumbnail.",
     "sharedIndexExported": "Đã ghi {{commits}} danh sách branch, {{facts}} dữ kiện, {{stats}} thông số và {{thumbs}} thumbnail mới.",
-    "sharedIndexFailed": "Lỗi chỉ mục dùng chung: {{error}}"
+    "sharedIndexFailed": "Lỗi chỉ mục dùng chung: {{error}}",
+    "usage": "Thống kê sử dụng",
+    "usageStats": "Gửi thống kê sử dụng cho team",
+    "usageNote": "Tên GitHub, thời gian dùng app và số lần thao tác (branch đã mở, loại asset đã xem, tìm kiếm, xuất, lỗi). Không bao giờ gửi nội dung tìm kiếm hay file. Giúp team biết cần cải thiện gì."
   },
   "errors": {
     "unauthorized": "GitHub từ chối token. Kiểm tra token còn hợp lệ và chưa hết hạn.",
@@ -812,5 +815,29 @@
     "link": "Link",
     "watch": "Theo dõi",
     "watching": "Đang theo dõi"
+  },
+  "feedback": {
+    "title": "Gửi phản hồi",
+    "kind": "Loại",
+    "kinds": {
+      "bug": "Lỗi",
+      "idea": "Ý tưởng",
+      "other": "Khác"
+    },
+    "titlePlaceholder": "Vài chữ tóm tắt…",
+    "bodyPlaceholder": {
+      "bug": "Chuyện gì đã xảy ra, và bạn mong đợi điều gì? Các bước để lặp lại lỗi sẽ giúp rất nhiều.",
+      "idea": "Bạn muốn app làm được gì, và để làm gì?",
+      "other": "Bất cứ điều gì bạn muốn nói về Asset Hub."
+    },
+    "withContext": "Kèm vị trí hiện tại: {{where}}",
+    "note": "Gửi cho team kèm tên GitHub và phiên bản app của bạn.",
+    "cancel": "Huỷ",
+    "send": "Gửi",
+    "sending": "Đang gửi…",
+    "sent": "Cảm ơn bạn! Phản hồi đã tới team.",
+    "queued": "Đã lưu. Hiện chưa gửi được, app sẽ tự gửi lần mở sau.",
+    "open": "Mở trên GitHub",
+    "close": "Đóng"
   }
 }

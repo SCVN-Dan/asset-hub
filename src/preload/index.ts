@@ -151,6 +151,12 @@ const api: AssetHubApi = {
       ipcRenderer.on(IPC.updateProgress, handler)
       return () => ipcRenderer.removeListener(IPC.updateProgress, handler)
     }
+  },
+  usage: {
+    track: (event) => ipcRenderer.send(IPC.usageTrack, event)
+  },
+  feedback: {
+    send: (report) => ipcRenderer.invoke(IPC.feedbackSend, report)
   }
 }
 

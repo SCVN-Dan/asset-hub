@@ -5,7 +5,8 @@ import { DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXCLUDED_FOLDERS } from '@shared/settin
 import { registerGitHubIpc } from './github'
 import { checkForUpdate, installUpdate } from './updater'
 import { registerAiIpc } from './ai'
-import { THUMB_SCHEME, type CacheJanitor } from './caches'
+import { registerUsage } from './usage'
+import { THUMB_SCHEME } from './caches'
 import { SettingsStore } from './settingsStore'
 import { isUnityProject } from './targetProject'
 import { LINK_SCHEME } from '@shared/deeplink'
@@ -66,7 +67,7 @@ app.commandLine.appendSwitch('disk-cache-size', String(64 * 1024 * 1024))
 protocol.registerSchemesAsPrivileged([{ scheme: THUMB_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }])
 
 /** The cache folder's size limit and the shared index, once set up. */
-let github: { janitor: CacheJanitor; sharedIndexChanged(): void } | undefined
+let github: ReturnType<typeof registerGitHubIpc> | undefined
 
 // assethub:// links open an asset in the app. Under `npm run dev` the protocol points at the dev
 // Electron with the app's path; macOS only hands links to a packaged app (Phase 10).
@@ -129,6 +130,8 @@ app.whenReady().then(() => {
     excludedFolders: DEFAULT_EXCLUDED_FOLDERS
   })
   if (settings.get().cacheDir.toLowerCase() === join(userData, 'cache').toLowerCase()) settings.set({ cacheDir })
+  // First: it counts what the IPC handlers registered after it do.
+  registerUsage({ dir: join(userData, 'usage'), account: () => github?.account(), language: () => settings.get().language, enabled: () => settings.get().usageStats !== false })
 
   ipcMain.handle(IPC.getSettings, () => settings.get())
   ipcMain.handle(IPC.setSettings, (_event, patch: unknown) => {

@@ -2,6 +2,7 @@ import type { CatalogAsset, CatalogLocation, DependencyReport, FactKind, PrefabM
 import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
 import type { AiToolResult } from './aiTools'
+import type { FeedbackReport, FeedbackResult, UsageEvent } from './usage'
 
 export const IPC = {
   getSettings: 'settings:get',
@@ -71,7 +72,9 @@ export const IPC = {
   aiChatEvent: 'ai:chat-event',
   aiToolCall: 'ai:tool-call',
   aiFeedback: 'ai:feedback',
-  aiToolResult: 'ai:tool-result'
+  aiToolResult: 'ai:tool-result',
+  usageTrack: 'usage:track',
+  feedbackSend: 'feedback:send'
 } as const
 
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
@@ -396,5 +399,13 @@ export interface AssetHubApi {
     /** Downloads, verifies and installs `version`, then restarts the app (resolves only on failure). */
     install(version: string): Promise<{ ok: false; message: string } | { ok: true }>
     onProgress(listener: (progress: InstallProgress) => void): () => void
+  }
+  usage: {
+    /** Counted in this session's usage notes (fire and forget). */
+    track(event: UsageEvent): void
+  }
+  feedback: {
+    /** Opens an issue in the feedback repo; offline or without access it is kept and sent later. */
+    send(report: FeedbackReport): Promise<FeedbackResult>
   }
 }

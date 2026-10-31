@@ -2,7 +2,7 @@ import { BUDGET_KEYS, BUDGET_PRESETS, type BudgetPreset, type PlayableBudget } f
 import type { PackageLayout } from '../core/export/unitypackage'
 import { RECENT_LIMIT, sanitizeCollections, sanitizeItems, type Collection, type RecentLists } from './collections'
 
-export const LANGUAGES = ['en', 'vi', 'ko'] as const
+export const LANGUAGES = ['en', 'ko', 'vi'] as const
 export type Language = (typeof LANGUAGES)[number]
 /** In English, for telling the AI assistant which language to answer in. */
 export interface WatchedBranch {
@@ -43,6 +43,8 @@ export interface Settings {
   recent?: RecentLists
   /** Branches the user follows: new assets since `seen` (a commit) are pointed out. */
   watched?: WatchedBranch[]
+  /** Usage notes sent to the team's feedback repo (absent: on). */
+  usageStats?: boolean
 }
 
 export const EXPORT_LAYOUTS: readonly PackageLayout[] = ['byType', 'grouped', 'source']
@@ -77,6 +79,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
     ...(typeof input.sharedIndexDir === 'string' && input.sharedIndexDir.trim() ? { sharedIndexDir: input.sharedIndexDir } : {}),
     ...(sanitizeCollections(input.collections) ? { collections: sanitizeCollections(input.collections) } : {}),
     ...(typeof input.aiPet === 'boolean' ? { aiPet: input.aiPet } : {}),
+    ...(typeof input.usageStats === 'boolean' ? { usageStats: input.usageStats } : {}),
     ...(input.recent && typeof input.recent === 'object'
       ? {
           recent: {

@@ -155,7 +155,10 @@
     "sharedIndexExporting": "기록 중…",
     "sharedIndexImported": "브랜치 목록 {{commits}}개, 정보 {{facts}}개, 수치 {{stats}}개, 썸네일 {{thumbs}}개를 가져왔습니다.",
     "sharedIndexExported": "브랜치 목록 {{commits}}개, 정보 {{facts}}개, 수치 {{stats}}개, 새 썸네일 {{thumbs}}개를 기록했습니다.",
-    "sharedIndexFailed": "공유 인덱스 오류: {{error}}"
+    "sharedIndexFailed": "공유 인덱스 오류: {{error}}",
+    "usage": "사용 통계",
+    "usageStats": "팀에 사용 통계 보내기",
+    "usageNote": "GitHub 이름, 앱 사용 시간, 작업 횟수(연 브랜치, 본 에셋 유형, 검색, 내보내기, 오류)를 보냅니다. 검색어나 파일 내용은 절대 보내지 않습니다. 개선 방향을 정하는 데 도움이 됩니다."
   },
   "errors": {
     "unauthorized": "GitHub가 토큰을 거부했습니다. 토큰이 유효하고 만료되지 않았는지 확인하세요.",
@@ -803,5 +806,29 @@
     "link": "링크",
     "watch": "지켜보기",
     "watching": "지켜보는 중"
+  },
+  "feedback": {
+    "title": "피드백 보내기",
+    "kind": "유형",
+    "kinds": {
+      "bug": "버그",
+      "idea": "아이디어",
+      "other": "기타"
+    },
+    "titlePlaceholder": "간단한 요약…",
+    "bodyPlaceholder": {
+      "bug": "무슨 일이 있었고, 무엇을 기대했나요? 재현 단계를 적어 주시면 큰 도움이 됩니다.",
+      "idea": "앱이 무엇을 할 수 있으면 좋을까요? 어떤 용도인가요?",
+      "other": "Asset Hub에 대해 하고 싶은 말을 자유롭게 적어 주세요."
+    },
+    "withContext": "현재 위치 포함: {{where}}",
+    "note": "GitHub 이름과 앱 버전이 함께 팀에 전송됩니다.",
+    "cancel": "취소",
+    "send": "보내기",
+    "sending": "보내는 중…",
+    "sent": "감사합니다! 피드백이 팀에 전달되었습니다.",
+    "queued": "저장되었습니다. 지금은 보낼 수 없어 다음에 앱을 열 때 자동으로 전송됩니다.",
+    "open": "GitHub에서 열기",
+    "close": "닫기"
   }
 }
