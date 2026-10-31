@@ -141,7 +141,6 @@ button { cursor: pointer; }
 .icon-btn-more { width: auto; }
 /* An icon with one short word, so it is never a guess. */
 .icon-btn.labeled { width: auto; padding: 0 11px; gap: 6px; font-size: 13px; font-weight: 600; }
-.icon-btn-sm.labeled { width: auto; padding: 0 8px; gap: 5px; font-size: 12px; }
 .unity-button { align-items: stretch; }
 .unity-button > .btn { height: 36px; }
 .unity-more { display: inline-grid; place-items: center; width: 28px; }
@@ -157,6 +156,8 @@ button { cursor: pointer; }
 .section-chevron[data-open] { transform: rotate(90deg); }
 .pack-export { width: auto; padding: 0 14px; gap: 6px; }
 .icon-btn-sm { display: inline-grid; place-items: center; width: 30px; padding: 0; }
+/* With a word beside it, icon and word sit on one line (the grid above would stack them). */
+.icon-btn-sm.labeled { display: inline-flex; align-items: center; width: auto; padding: 0 8px; gap: 5px; font-size: 12px; white-space: nowrap; }
 .action-sep { width: 1px; height: 22px; margin: 0 4px; background: var(--border); }
 .icon-btn { display: inline-grid; grid-auto-flow: column; align-items: center; justify-content: center; gap: 4px; min-width: 36px; height: 36px; padding: 0 9px; }
 .icon-btn[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }

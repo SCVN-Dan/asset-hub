@@ -2,6 +2,11 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.3] — 2026-10-31
+
+### Fixed
+- The Path / GitHub / Link buttons under an asset's details showed their icon above the word, spilling out of the button; icon and word now sit on one line.
+
 ## [0.1.2] — 2026-10-31
 
 ### Added
