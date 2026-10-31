@@ -10,7 +10,7 @@ import { formatDuration } from '../viewer/audio'
 import { useBudget } from '../budget'
 import { DownloadButton } from './DownloadButton'
 import { ErrorNote } from './ErrorNote'
-import { CubeIcon } from './Icons'
+import { CubeIcon, ExportIcon } from './Icons'
 import { CopyLinkButton } from './CopyLinkButton'
 
 /** Branch chips shown before "+N more". */
@@ -187,11 +187,12 @@ export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpe
             {t('catalog.open', { branch: first.branches[0] })}
           </button>
           {delivery !== 'file' && (
-            <button type="button" className="btn" disabled={exporting} onClick={() => onExport(asset)}>
-              {t('export.exportOne')}
+            <button type="button" className="btn icon-btn labeled" title={t('export.exportOne')} aria-label={t('export.exportOne')} disabled={exporting} onClick={() => onExport(asset)}>
+              <ExportIcon />
+              <span>{t('actions.export')}</span>
             </button>
           )}
-          {delivery !== 'file' && <UnityButton disabled={exporting} onImport={(editor) => onImportToUnity(asset, editor)} />}
+          {delivery !== 'file' && <UnityButton compact disabled={exporting} onImport={(editor) => onImportToUnity(asset, editor)} />}
           <button type="button" className="btn" onClick={() => void window.api.openExternal(githubUrl(first.repo, first.branches[0], first.path))}>
             {t('details.openGitHub')}
           </button>

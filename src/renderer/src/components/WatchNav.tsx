@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { WatchedBranch } from '@shared/settings'
+import { BellIcon } from './Icons'
+import { SideGroup } from './Section'
 
 /** Sidebar: the branches followed (👁 next to the branch picker), each with how many assets came in since last seen. */
 export function WatchNav({
@@ -18,8 +20,7 @@ export function WatchNav({
   const { t } = useTranslation()
   if (!watched.length) return null
   return (
-    <nav aria-label={t('watch.title')} className="collections-nav">
-      <span className="label-caps">{t('watch.title')}</span>
+    <SideGroup id="watch" title={t('watch.title')} className="collections-nav" folded={watched.length}>
       <div className="tabs" role="group" aria-label={t('watch.title')}>
         {watched.map((w) => {
           const n = news[`${w.repo}\n${w.branch}`]
@@ -27,7 +28,9 @@ export function WatchNav({
           return (
             <div key={`${w.repo}\n${w.branch}`} className="watch-row">
               <button type="button" className="tab" aria-pressed={current.repo === w.repo && current.branch === w.branch} title={`${w.repo} · ${w.branch}`} onClick={() => onOpen(w.repo, w.branch)}>
-                <span aria-hidden="true">👁</span>
+                <span className="nav-icon">
+                  <BellIcon size={14} filled={count > 0} />
+                </span>
                 <span className="collection-label">
                   {w.repo.split('/').pop()} <span className="muted">· {w.branch}</span>
                 </span>
@@ -40,6 +43,6 @@ export function WatchNav({
           )
         })}
       </div>
-    </nav>
+    </SideGroup>
   )
 }

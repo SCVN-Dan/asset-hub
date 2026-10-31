@@ -2,6 +2,7 @@ import { writeFile } from 'fs/promises'
 import { promisify } from 'util'
 import { gzip } from 'zlib'
 import type { GitHubAssetSource } from '@core/github/source'
+import type { ShaderRef } from '@core/deps/types'
 import { planPackage, unityPackageTar, type PackageFile, type PackagePlan } from '@core/export/unitypackage'
 import { isYamlAsset, planAgainstTarget, remapGuids, shaderKind, shaderName, urpMismatch, urpVersion, type ProjectShader, type TargetIndex } from '@core/export/target'
 import type { ExportProgress, ExportRequest, ExportResult, TargetReport } from '@shared/ipc'
@@ -24,12 +25,15 @@ export async function exportUnityPackage(
   const byName = new Set<string>()
   // Scripts from packages (GUID → the requested assets using them): the target project must have them.
   const packageScripts = new Map<string, Set<string>>()
+  // The shaders materials use, as the dependency reports know them (name, kind), by GUID.
+  const shaders = new Map<string, ShaderRef>()
   for (let i = 0; i < req.paths.length; i++) {
     onProgress({ stage: 'resolve', done: i, total: req.paths.length })
     const report = await source.resolve(req.repo, req.branch, req.paths[i], req.root)
     report.files.forEach((f) => files.add(f))
     for (const tex of report.embeddedTextures) if (tex.path && tex.matchedBy === 'name') byName.add(tex.path)
     for (const g of report.packageScripts ?? []) packageScripts.set(g, (packageScripts.get(g) ?? new Set()).add(req.paths[i]))
+    for (const m of report.materials) if (m.shader) shaders.set(m.shader.guid, m.shader)
   }
   req.extraFiles.forEach((f) => files.add(f))
   const assets = [...files].filter((f) => !f.endsWith('.meta') && !(req.skipByName && byName.has(f)))
@@ -73,7 +77,7 @@ export async function exportUnityPackage(
   onProgress({ stage: 'write', done: 0, total: 1 })
   let plan = planPackage(packed, req.root, req.layout, req.repo)
   let onTarget: TargetReport | undefined
-  if (req.targetProject) ({ plan, report: onTarget } = await againstTarget(source, req, plan, packageScripts))
+  if (req.targetProject) ({ plan, report: onTarget } = await againstTarget(source, req, plan, packageScripts, shaders))
   // Off the main thread: a big package would otherwise freeze the window while compressing.
   const bytes = await gzipAsync(unityPackageTar(plan))
   await writeFile(target, bytes)
@@ -103,7 +107,8 @@ async function againstTarget(
   source: GitHubAssetSource,
   req: ExportRequest,
   plan: PackagePlan,
-  packageScripts: ReadonlyMap<string, ReadonlySet<string>>
+  packageScripts: ReadonlyMap<string, ReadonlySet<string>>,
+  shaders: ReadonlyMap<string, ShaderRef>
 ): Promise<{ plan: PackagePlan; report: TargetReport }> {
   const root = req.targetProject!
   const project = await scanProject(root)
@@ -144,7 +149,7 @@ async function againstTarget(
   const mapper = mapping && shaderMapper(mapping.rules, index.shaders!, new Map(candidates.flatMap((c) => (c.shader ? [[c.guid, c.shader.name] as const] : []))))
   const { decisions, remap } = planAgainstTarget(candidates, index, req.reuseExisting !== false)
   const report: TargetReport = {
-    project: root, same: 0, reused: [], overwrite: [], renamed: [], shaderByName: [], shaderKept: [], shaderClash: [], shaderMapped: [], missingScripts: [],
+    project: root, same: 0, reused: [], overwrite: [], renamed: [], shaderByName: [], shaderKept: [], shaderClash: [], shaderMapped: [], missingScripts: [], missingShaders: [],
     mappingErrors: [...(mapping?.errors ?? []), ...(mapper?.errors ?? [])]
   }
   const entries: PackagePlan['entries'] = []
@@ -172,6 +177,7 @@ async function againstTarget(
     entries.push({ ...e, file })
   }
   report.missingScripts = await missingScripts(root, packageScripts, project.byGuid)
+  report.missingShaders = missingShaders(entries, shaders, project.byGuid, [...project.sizes.keys(), ...(await packageFiles(root, /shader$/i)).keys()])
   const sourceUrp = urpVersion(await source.readFile(req.repo, req.branch, `${req.root}Packages/packages-lock.json`).then((b) => dec.decode(b), () => undefined))
   const targetUrp = urpVersion(await readProjectText(root, 'Packages/packages-lock.json'))
   if (sourceUrp && urpMismatch(sourceUrp, targetUrp)) report.urp = { source: sourceUrp, ...(targetUrp ? { target: targetUrp } : {}) }
@@ -192,6 +198,34 @@ async function projectShaders(root: string, files: ReadonlyArray<readonly [strin
   )
   for (const f of found) if (f && !shaders.has(f.name)) shaders.set(f.name, f.shader)
   return shaders
+}
+
+/**
+ * Project shaders a packed material needs that neither the package nor the target project has
+ * (e.g. a Toony Colors Pro .tcp2shader, whose importer lives in the source project): Unity would
+ * show those materials magenta. Built-in and package shaders are left to the URP check.
+ */
+function missingShaders(entries: PackagePlan['entries'], shaders: ReadonlyMap<string, ShaderRef>, own: ReadonlyMap<string, string>, projectFiles: readonly string[]): TargetReport['missingShaders'] {
+  // A packed shader of a custom importer (.tcp2shader…) only works where that importer is: a project
+  // with no file of that kind at all most likely lacks the plugin, so it counts as missing too.
+  const kinds = new Set(projectFiles.map((p) => /\.([a-z0-9]+)$/i.exec(p)?.[1]?.toLowerCase()))
+  const unreadable = new Map<string, string>()
+  for (const e of entries) {
+    const ext = /\.([a-z0-9]+shader)$/i.exec(e.file.path)?.[1]?.toLowerCase()
+    if (ext && ext !== 'shader' && !kinds.has(ext)) unreadable.set(e.guid, ext)
+  }
+  const packed = new Set(entries.filter((e) => !unreadable.has(e.guid)).map((e) => e.guid))
+  const users = new Map<string, string[]>()
+  for (const e of entries) {
+    if (!/\.mat$/i.test(e.file.path) || !isYamlAsset(e.file.asset)) continue
+    const guid = /^\s*m_Shader: \{fileID: -?\d+, guid: ([0-9a-f]{32})/m.exec(dec.decode(e.file.asset))?.[1]
+    if (!guid || /^0{16}[ef]0{15}$/.test(guid) || packed.has(guid) || own.has(guid)) continue
+    const kind = shaders.get(guid)?.kind
+    if (kind === 'builtin' || kind === 'package') continue
+    users.set(guid, [...(users.get(guid) ?? []), e.file.path.split('/').pop()!.replace(/\.mat$/i, '')])
+  }
+  const name = (guid: string) => shaders.get(guid)?.label ?? shaders.get(guid)?.path?.split('/').pop() ?? entries.find((e) => e.guid === guid)?.file.path.split('/').pop() ?? guid.slice(0, 8)
+  return [...users].map(([guid, mats]) => ({ path: unreadable.has(guid) && !name(guid).toLowerCase().endsWith(`.${unreadable.get(guid)}`) ? `${name(guid)} (.${unreadable.get(guid)})` : name(guid), existing: mats.join(', ') }))
 }
 
 /**

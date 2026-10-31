@@ -93,3 +93,110 @@ export const ImageIcon = ({ size = 24 }: IconProps) => (
     <path d="m20.5 16-5-5-8.5 8.5" />
   </svg>
 )
+
+// Actions and places, one family: same grid, stroke and caps as above. `filled` marks an "on" state.
+type ToggleIconProps = IconProps & { filled?: boolean }
+
+/** Export a .unitypackage: a package with an arrow coming out of it, down to the disk. */
+export const ExportIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 3v10m-4-4 4 4 4-4" />
+    <path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14" />
+  </svg>
+)
+
+/** The chest (the app's export list), as in the logo: a domed lid over a box with a clasp. */
+export const ChestIcon = ({ size = 16, filled }: ToggleIconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 10.5a8 4.5 0 0 1 16 0" fill={filled ? 'currentColor' : 'none'} fillOpacity={filled ? 0.25 : 0} />
+    <path d="M4 10.5h16V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z" />
+    <path d="M10.5 10.5v3h3v-3M4 14h6.5M13.5 14H20" />
+  </svg>
+)
+
+export const StarIcon = ({ size = 16, filled }: ToggleIconProps) => (
+  <svg {...base(size)}>
+    <path d="m12 3.5 2.6 5.3 5.9.9-4.25 4.1 1 5.8L12 16.9l-5.25 2.7 1-5.8L3.5 9.7l5.9-.9z" fill={filled ? 'currentColor' : 'none'} />
+  </svg>
+)
+
+/** A collection: cards stacked. */
+export const CollectionIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="4" y="8" width="13" height="12" rx="1.5" />
+    <path d="M7 5h11.5A1.5 1.5 0 0 1 20 6.5V17" />
+  </svg>
+)
+
+/** Watching a branch: a bell that rings when assets are added. */
+export const BellIcon = ({ size = 16, filled }: ToggleIconProps) => (
+  <svg {...base(size)}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill={filled ? 'currentColor' : 'none'} />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </svg>
+)
+
+/** Viewed lately. */
+export const ClockIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+)
+
+/** Exported lately: a package with an arrow going out. */
+export const ShippedIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 14V4m-4 4 4-4 4 4" />
+    <path d="M4 14v4.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V14" />
+  </svg>
+)
+
+export const FilterIcon = ({ size = 14 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 5h16l-6 7.5V19l-4-2v-4.5z" />
+  </svg>
+)
+
+export const ChevronDownIcon = ({ size = 12 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="m6 9 6 6 6-6" />
+  </svg>
+)
+
+export const CopyIcon = ({ size = 14 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="8" y="8" width="12" height="12" rx="1.5" />
+    <path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8" />
+  </svg>
+)
+
+/** Opens elsewhere (GitHub in the browser). */
+export const ExternalIcon = ({ size = 14 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M14 4h6v6M20 4l-9 9" />
+    <path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" />
+  </svg>
+)
+
+/** An assethub:// link to share. */
+export const LinkIcon = ({ size = 14 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" />
+    <path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" />
+  </svg>
+)
+
+export const CheckIcon = ({ size = 14 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+)
+
+/** Unity: the cube with its three arms, as Unity's own mark draws it — for sending a package straight to the editor. */
+export const UnityIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M12 2.6 20.4 7.4v5.1M20.4 15v1.6L12 21.4l-4.6-2.6M5.3 17.6l-1.7-1V7.4L8.2 4.8" />
+    <path d="M12 12v5.4M12 12l4.7-2.7M12 12 7.3 9.3" />
+  </svg>
+)

@@ -2,13 +2,14 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { useTranslation } from 'react-i18next'
 import type { RunningUnity } from '@shared/ipc'
 import { UnityButton } from './UnityButton'
+import { Section } from './Section'
 import { checkPlayableBudget, summarizeStats, summaryIssues, type ModelStats, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
 import { formatBytes, shortPath, type Asset, type AssetTypeHandler, type CatalogLocation, importedTextureSize, effectiveAudioImport, fontCoverage, missingChars, particleTotals, type DependencyReport, type AnimClipInfo, type MaterialLook, type MaterialRef, type SpriteBorder, type PartRef, type PrefabMaterialsResult, type TextureRef } from '@core/index'
 import { RemoteError, unwrap } from '../remoteSource'
 import { githubUrl, LocationList } from './CatalogPanel'
 import { ErrorNote } from './ErrorNote'
-import { CubeIcon } from './Icons'
+import { CheckIcon, ChestIcon, CopyIcon, CubeIcon, ExportIcon, ExternalIcon } from './Icons'
 import type { LiveContext } from './ModelViewer'
 import type { ImageInfo } from './ImageViewer'
 import { AudioViewer } from './AudioViewer'
@@ -327,8 +328,7 @@ function ParticleSection({ report }: { report: DependencyReport }) {
       .filter(Boolean)
       .join(' · ')
   return (
-    <section className="section">
-      <span className="label-caps">{t('particles.title')}</span>
+    <Section id="particles" defaultOpen={false} title={t('particles.title')} summary={t('particles.summary', { count: report.particles?.length ?? 0 })}>
       <dl className="stat-grid">
         {cells.map(([k, v]) => (
           <div key={k}>
@@ -361,7 +361,7 @@ function ParticleSection({ report }: { report: DependencyReport }) {
           ))}
         </ul>
       )}
-    </section>
+    </Section>
   )
 }
 
@@ -505,13 +505,14 @@ function AnimSection({ info }: { info: AnimClipInfo }) {
 function statCells(stats: ModelStats): Array<[string, string | number]> {
   const textureBytes = stats.textures.reduce((s, x) => s + x.bytes, 0)
   const cells: Array<[string, string | number | false]> = [
-    ['triangles', stats.triangles.toLocaleString()],
-    ['vertices', stats.vertices.toLocaleString()],
+    // Nothing to show for what is not there (an effect has no triangles of its own).
+    ['triangles', stats.triangles > 0 && stats.triangles.toLocaleString()],
+    ['vertices', stats.vertices > 0 && stats.vertices.toLocaleString()],
     ['meshes', stats.meshes > 1 && stats.meshes],
     ['materials', stats.materials > 0 && stats.materials],
     ['bones', stats.bones > 0 && stats.bones],
     ['clips', stats.animations.length > 0 && stats.animations.length],
-    ['file', formatBytes(stats.fileBytes)],
+    ['file', stats.fileBytes > 0 && formatBytes(stats.fileBytes)],
     ['textures', textureBytes > 0 && formatBytes(textureBytes)]
   ]
   return cells.filter((c): c is [string, string | number] => c[1] !== false)
@@ -805,22 +806,24 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         <h2>{asset.name}</h2>
         {live && handler?.delivery === 'file' && <DownloadButton repo={live.repo} branch={live.branch} path={live.root + asset.path} />}
         {live && handler?.resolveDependencies && handler.delivery !== 'file' && (
-          <div className="field-row">
-            <button type="button" className="btn btn-primary" onClick={onExport} disabled={exporting}>
-              {t('export.exportOne')}
+          <div className="action-row">
+            <button type="button" className="btn btn-primary icon-btn labeled" title={t('export.exportOne')} aria-label={t('export.exportOne')} onClick={onExport} disabled={exporting}>
+              <ExportIcon />
+              <span>{t('actions.export')}</span>
             </button>
-            <button type="button" className="btn" aria-pressed={inPack} onClick={onTogglePack} disabled={exporting}>
-              {inPack ? t('export.inPack') : t('export.addToPack')}
+            <button type="button" className="btn icon-btn labeled" aria-pressed={inPack} title={inPack ? t('export.inPack') : t('export.addToPack')} aria-label={inPack ? t('export.inPack') : t('export.addToPack')} onClick={onTogglePack} disabled={exporting}>
+              <ChestIcon filled={inPack} />
+              <span>{inPack ? t('actions.inChest') : t('actions.chest')}</span>
             </button>
-            <UnityButton disabled={exporting} onImport={onImportToUnity} />
+            <UnityButton compact disabled={exporting} onImport={onImportToUnity} />
+            {collectionActions}
           </div>
         )}
-        {collectionActions}
+        {!(live && handler?.resolveDependencies && handler.delivery !== 'file') && collectionActions}
       </div>
 
-      {stats && (
-        <section className="section">
-          <span className="label-caps">{t('stats.title')}</span>
+      {stats && (statCells(stats).length > 0 || issues.length > 0) && (
+        <Section id="stats" title={t('stats.title')} summary={issues.length > 0 ? <span className="warn-text">{t('details.issues', { count: issues.length })}</span> : undefined}>
           <dl className="stat-grid">
             {statCells(stats).map(([key, value]) => (
               <div key={key}>
@@ -841,7 +844,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               ))}
             </ul>
           )}
-        </section>
+        </Section>
       )}
 
       {imageInfo && <TextureSection info={imageInfo} />}
@@ -855,8 +858,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
 
       {/* A texture is just itself: nothing to list. */}
       {handler?.resolveDependencies && handler.usesGuids !== false && (
-        <section className="section">
-          <span className="label-caps">{t('details.deps')}</span>
+        <Section id="deps" defaultOpen={false} title={t('details.deps')} summary={report ? <>{t('details.depsSummary', { count: report.files.filter((f) => !f.endsWith('.meta')).length })}{report.warnings.length > 0 && <span className="warn-text"> · {t('details.warnings', { count: report.warnings.length })}</span>}</> : undefined}>
           {!live && <p className="note">{t('deps.needsRepo')}</p>}
           {deps.status === 'loading' && (
             <div className="note">
@@ -936,12 +938,11 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               )}
             </>
           )}
-        </section>
+        </Section>
       )}
 
       {live && report && handler?.materialsFromPrefabs && (
-        <section className="section">
-          <span className="label-caps">{t('prefab.title')}</span>
+        <Section id="prefabUses" defaultOpen={false} title={t('prefab.title')}>
           {prefab.status === 'known' && (
             <>
               <p className="muted small" style={{ margin: 0 }}>
@@ -1020,12 +1021,11 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               )}
             </>
           )}
-        </section>
+        </Section>
       )}
 
       {copies && copies.length > 1 && (
-        <section className="section">
-          <span className="label-caps">{t('details.copies', { count: copies.length })}</span>
+        <Section id="copies" defaultOpen={false} title={t('details.copies', { count: copies.length })}>
           <ul className="copy-list">
             {copies.map((c) => (
               <li key={c.id}>
@@ -1035,7 +1035,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               </li>
             ))}
           </ul>
-        </section>
+        </Section>
       )}
 
       {elsewhere.length > 0 && (
@@ -1049,15 +1049,17 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
         <span className="mono small" title={asset.path}>
           {shortPath(asset.path)}
         </span>
-        <button type="button" className="btn btn-small" onClick={copyPath}>
-          {copied ? t('details.copied') : t('details.copyPath')}
+        <button type="button" className="btn btn-small icon-btn-sm labeled" title={copied ? t('details.copied') : t('details.copyPath')} aria-label={copied ? t('details.copied') : t('details.copyPath')} onClick={copyPath}>
+          {copied ? <CheckIcon /> : <CopyIcon />}
+          <span>{copied ? t('actions.copied') : t('actions.copyPath')}</span>
         </button>
         {live && (
-          <button type="button" className="btn btn-small" onClick={() => void window.api.openExternal(githubUrl(live.repo, live.branch, live.root + asset.path))}>
-            {t('details.openGitHub')}
+          <button type="button" className="btn btn-small icon-btn-sm labeled" title={t('details.openGitHub')} aria-label={t('details.openGitHub')} onClick={() => void window.api.openExternal(githubUrl(live.repo, live.branch, live.root + asset.path))}>
+            <ExternalIcon />
+            <span>GitHub</span>
           </button>
         )}
-        {live && <CopyLinkButton className="btn btn-small" link={{ repo: live.repo, branch: live.branch, path: live.root + asset.path }} />}
+        {live && <CopyLinkButton iconOnly className="btn btn-small icon-btn-sm labeled" link={{ repo: live.repo, branch: live.branch, path: live.root + asset.path }} />}
       </div>
     </aside>
   )

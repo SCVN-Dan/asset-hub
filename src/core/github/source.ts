@@ -66,7 +66,8 @@ const trace = (line: string) => {
 const KIND_PATTERN: Record<GuidKind, RegExp> = {
   material: /\.mat\.meta$/i,
   texture: /\.(png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture)\.meta$/i,
-  shader: /\.(shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i,
+  // Any extension ending in "shader" too: custom shader importers (Toony Colors Pro's .tcp2shader…).
+  shader: /\.(shader|shadergraph|shadersubgraph|[a-z0-9]+shader|hlsl|cginc)\.meta$/i,
   any: /\.meta$/i,
   model: /\.(fbx|obj|blend|dae|3ds|max|ma|mb|asset)\.meta$/i,
   prefab: /\.(prefab|fbx|obj|blend)\.meta$/i,
@@ -161,7 +162,10 @@ class LazyGuids {
 
 /** .meta files worth indexing: anything a model, material or shader can reference. */
 // Models are left out: their .meta files are large and nothing a material uses points at them.
-const INDEXED = /\.(mat|png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture|shader|shadergraph|shadersubgraph|hlsl|cginc)\.meta$/i
+const INDEXED = /\.(mat|png|jpe?g|tga|psd|psb|tiff?|exr|bmp|gif|hdr|cubemap|rendertexture|shader|shadergraph|shadersubgraph|[a-z0-9]+shader|hlsl|cginc)\.meta$/i
+/** Marks a commit's stored GUID index as built with the current INDEXED; older ones are rebuilt (cheaply: read .meta files are kept by SHA). */
+const INDEX_FORMAT_KEY = '#format'
+const INDEX_FORMAT = '2'
 const INDEX_CONCURRENCY = 6
 const INDEX_BATCH = 120
 /** Meta blob SHA → GUID ('' when the file has none), shared by every commit and branch of a repo. */
@@ -374,7 +378,7 @@ export class GitHubAssetSource implements AssetSource {
 
   /** A context that looks GUIDs up on demand; undefined when the full index is cached and cheaper. */
   private async quickContext(repo: string, snap: Snapshot, root: string, nearPath: string): Promise<DepContext | undefined> {
-    if (await this.options.cache?.get('guids', repo, snap.commit)) return undefined
+    if ((await this.options.cache?.get<Record<string, string>>('guids', repo, snap.commit))?.[INDEX_FORMAT_KEY] === INDEX_FORMAT) return undefined
     if (!snap.lazy) {
       const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
       snap.lazy = new LazyGuids(
@@ -798,8 +802,9 @@ export class GitHubAssetSource implements AssetSource {
 
   private async buildGuidIndex(repo: string, snap: Snapshot, onProgress?: (p: IndexProgress) => void): Promise<Map<string, string>> {
     const cached = await this.options.cache?.get<Record<string, string>>('guids', repo, snap.commit)
-    if (cached) {
-      snap.guids = new Map(Object.entries(cached))
+    if (cached?.[INDEX_FORMAT_KEY] === INDEX_FORMAT) {
+      const { [INDEX_FORMAT_KEY]: _format, ...index } = cached
+      snap.guids = new Map(Object.entries(index))
       return snap.guids
     }
     const metas = snap.entries.filter((e) => e.type === 'blob' && INDEXED.test(e.path))
@@ -851,7 +856,7 @@ export class GitHubAssetSource implements AssetSource {
     }
     if (todo.length) await this.options.cache?.set(SHA_KIND, repo, SHA_KEY, bySha)
     // A commit's index is stored only when every .meta was read, so a failed read is retried next time.
-    if (metas.every((m) => m.sha in bySha)) await this.options.cache?.set('guids', repo, snap.commit, Object.fromEntries(guids))
+    if (metas.every((m) => m.sha in bySha)) await this.options.cache?.set('guids', repo, snap.commit, { ...Object.fromEntries(guids), [INDEX_FORMAT_KEY]: INDEX_FORMAT })
     snap.guids = guids
     return guids
   }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type AssetTypeHandler } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import { StatsLine } from './CatalogPanel'
-import { AnimIcon, FontIcon, AudioIcon, CubeIcon, ImageIcon, SphereIcon } from './Icons'
+import { AnimIcon, AudioIcon, CubeIcon, FontIcon, ImageIcon, SphereIcon, StarIcon } from './Icons'
 import { WeightBar } from './WeightBar'
 import { motionKey } from '../viewer/particleThumb'
 
@@ -88,7 +88,11 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
             ▶ {stats.clips}
           </span>
         ) : null}
-        {starred && <span className="star-badge" aria-label={t('collections.favorites')}>★</span>}
+        {starred && (
+          <span className="star-badge" aria-label={t('collections.favorites')}>
+            <StarIcon size={13} filled />
+          </span>
+        )}
         {fresh && <span className="new-badge">{t('watch.new')}</span>}
         {copies && copies > 1 ? <span className="copies-badge" title={t('browse.copiesTitle', { count: copies })}>×{copies}</span> : null}
         {hover && motion && <span className="asset-motion" style={{ backgroundImage: `url("${motion}")` }} aria-hidden="true" />}

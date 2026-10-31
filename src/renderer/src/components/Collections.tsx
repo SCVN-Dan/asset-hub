@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { SideGroup } from './Section'
+import { ChevronDownIcon, ClockIcon, CollectionIcon, ShippedIcon, StarIcon } from './Icons'
 import type { HandlerRegistry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import { FAVORITES, inCollection, RECENT_EXPORTED, RECENT_VIEWED, type Collection, type CollectionItem } from '@shared/collections'
@@ -39,17 +41,16 @@ export function RecentNav({ lists, open, onOpen }: { lists: Collection[]; open?:
   const nameOf = useCollectionName()
   if (!lists.some((l) => l.items.length)) return null
   return (
-    <nav aria-label={t('recent.title')} className="collections-nav">
-      <span className="label-caps">{t('recent.title')}</span>
+    <SideGroup id="recent" title={t('recent.title')} className="collections-nav" folded={lists.reduce((n, l) => n + l.items.length, 0)}>
       <div className="tabs" role="group" aria-label={t('recent.title')}>
         {lists.map((c) => (
           <button key={c.id} type="button" className="tab" aria-pressed={open === c.id} disabled={!c.items.length} onClick={() => onOpen(open === c.id ? undefined : c.id)}>
-            <span aria-hidden="true">{c.id === RECENT_VIEWED ? '◷' : '⇪'}</span>
+            <span className="nav-icon">{c.id === RECENT_VIEWED ? <ClockIcon size={14} /> : <ShippedIcon size={14} />}</span>
             <span className="collection-label">{nameOf(c)}</span> <span className="muted">{c.items.length}</span>
           </button>
         ))}
       </div>
-    </nav>
+    </SideGroup>
   )
 }
 
@@ -59,12 +60,11 @@ export function CollectionsNav({ collections, open, onOpen, onCreate }: { collec
   const nameOf = useCollectionName()
   const [adding, setAdding] = useState(false)
   return (
-    <nav aria-label={t('collections.title')} className="collections-nav">
-      <span className="label-caps">{t('collections.title')}</span>
+    <SideGroup id="collections" title={t('collections.title')} className="collections-nav" folded={collections.length}>
       <div className="tabs" role="group" aria-label={t('collections.title')}>
         {collections.map((c) => (
           <button key={c.id} type="button" className="tab" aria-pressed={open === c.id} onClick={() => onOpen(open === c.id ? undefined : c.id)}>
-            <span aria-hidden="true">{c.id === FAVORITES ? '★' : '▤'}</span>
+            <span className="nav-icon">{c.id === FAVORITES ? <StarIcon size={14} /> : <CollectionIcon size={14} />}</span>
             <span className="collection-label">{nameOf(c)}</span> <span className="muted">{c.items.length}</span>
           </button>
         ))}
@@ -86,7 +86,7 @@ export function CollectionsNav({ collections, open, onOpen, onCreate }: { collec
           {t('collections.new')}
         </button>
       )}
-    </nav>
+    </SideGroup>
   )
 }
 
@@ -202,12 +202,14 @@ export function CollectionButtons({ collections, item, onToggle, onCreate }: { c
 
   return (
     <div className="collection-buttons" ref={root}>
-      <button type="button" className="btn star-btn" aria-pressed={starred} title={starred ? t('collections.unstar') : t('collections.star')} aria-label={starred ? t('collections.unstar') : t('collections.star')} onClick={() => onToggle(FAVORITES)}>
-        {starred ? '★' : '☆'}
+      <button type="button" className="btn icon-btn star-btn" aria-pressed={starred} title={starred ? t('collections.unstar') : t('collections.star')} aria-label={starred ? t('collections.unstar') : t('collections.star')} onClick={() => onToggle(FAVORITES)}>
+        <StarIcon filled={starred} />
       </button>
-      <button type="button" className="btn" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
-        {t('collections.title')}
-        {inNamed > 0 && <span className="muted"> · {inNamed}</span>} ▾
+      <button type="button" className="btn icon-btn icon-btn-more labeled" aria-expanded={open} aria-haspopup="true" title={t('collections.addTo')} aria-label={t('collections.addTo')} onClick={() => setOpen((o) => !o)}>
+        <CollectionIcon />
+        <span>{t('actions.collection')}</span>
+        {inNamed > 0 && <span className="icon-count">{inNamed}</span>}
+        <ChevronDownIcon size={10} />
       </button>
       {open && (
         <div className="collection-pop" role="menu">

@@ -71,7 +71,8 @@
     "empty": "Chưa có asset nào. Mở một asset rồi bấm ☆ hoặc \"Bộ sưu tập\" trong panel chi tiết để thêm vào.",
     "star": "Thêm vào Yêu thích",
     "unstar": "Bỏ khỏi Yêu thích",
-    "none": "Chưa có bộ sưu tập nào."
+    "none": "Chưa có bộ sưu tập nào.",
+    "addTo": "Thêm vào bộ sưu tập"
   },
   "browse": {
     "repo": "Repo",
@@ -118,7 +119,10 @@
     "copyPath": "Copy đường dẫn",
     "copied": "Đã copy",
     "copies_other": "File giống hệt ở {{count}} vị trí",
-    "openGitHub": "Mở trên GitHub"
+    "openGitHub": "Mở trên GitHub",
+    "issues": "{{count}} mục vượt ngân sách",
+    "depsSummary": "{{count}} file",
+    "warnings": "{{count}} cảnh báo"
   },
   "settings": {
     "title": "Cài đặt",
@@ -266,7 +270,7 @@
       "noMaterials": "FBX này tắt import material.",
       "missingModel": "Một số model hoặc prefab nó dùng không có trong repo.",
       "customScript": "Có script riêng của project: vẫn được xuất kèm, nhưng có thể cần thêm script hoặc package khác mới compile được.",
-      "particles": "Có particle system: số liệu và chi phí ở mục Particle; preview chuyển động chưa có.",
+      "particles": "Có particle system: số liệu và chi phí xem ở mục Particle.",
       "uiPrefab": "Prefab UI: có liệt kê hình ảnh, nhưng không xem 3D được."
     },
     "suggestedHint": "Không có gì nối FBX này với material. Các file .mat dưới đây nằm cạnh nó — chỉ là gợi ý; chọn một cái để xem trong preview và kèm khi xuất.",
@@ -309,7 +313,10 @@
     "done_other": "Đã xuất {{count}} asset ({{size}}):",
     "skipped_other": "Bỏ qua {{count}} file (thiếu .meta hoặc trùng GUID): {{list}}",
     "showInFolder": "Mở trong Finder",
-    "dismiss": "Đóng"
+    "dismiss": "Đóng",
+    "exportShort": "Xuất",
+    "unfold": "Mở danh sách và tuỳ chọn của rương",
+    "fold": "Thu gọn rương"
   },
   "prefab": {
     "title": "Material từ prefab",
@@ -636,7 +643,8 @@
     "loopHint": "Hết hiệu ứng thì tự phát lại",
     "fire": "+ Play",
     "fireHint": "Phát thêm một lượt chồng lên lượt đang chạy, như spawn prefab lần nữa (phím Space)",
-    "speed": "Tốc độ"
+    "speed": "Tốc độ",
+    "summary": "{{count}} emitter"
   },
   "scan": {
     "starting": "Đang tìm {{what}} trong branch…",
@@ -683,7 +691,8 @@
     "mappingError": "⚠ {{error}}",
     "missingScripts_other": "⚠ {{count}} asset dùng script từ package mà project chưa có (sẽ Missing Script sau khi import): {{list}}",
     "urp": "⚠ Nguồn dùng URP {{source}}, project dùng {{target}}: kiểm tra material sau khi import.",
-    "noUrp": "⚠ Nguồn dùng URP {{source}}, project chưa có URP: material có thể bị hồng."
+    "noUrp": "⚠ Nguồn dùng URP {{source}}, project chưa có URP: material có thể bị hồng.",
+    "missingShaders_other": "⚠ {{project}} thiếu {{count}} shader mà gói cần, các material liên quan sẽ hiện màu hồng: {{list}}. Cài shader/plugin vào {{project}} hoặc đổi sang shader khác bằng Shader Mapping."
   },
   "link": {
     "copy": "Copy link",
@@ -744,7 +753,8 @@
     "importInto": "Nhập vào {{project}}",
     "pick": "Chọn project Unity",
     "noneOpen": "Mở project trong Unity trước; nó sẽ hiện ở đây",
-    "done": "Đã mở {{count}} asset ({{size}}) trong Unity · {{project}}: bấm Import bên Unity để xác nhận."
+    "done": "Đã mở {{count}} asset ({{size}}) trong Unity · {{project}}: bấm Import bên Unity để xác nhận.",
+    "nothingNew": "{{project}} đã có đủ các asset này (cùng nội dung), không cần nhập thêm."
   },
   "multi": {
     "count": "Đã chọn {{count}}",
@@ -785,5 +795,22 @@
     "banner": "{{count}}{{more}} asset mới từ lần xem trước",
     "onlyNew": "Chỉ hiện asset mới",
     "seen": "Đã xem hết"
+  },
+  "filters": {
+    "title": "Bộ lọc",
+    "view": "Hiển thị",
+    "unlisted": "Hiện clip không tìm thấy model",
+    "remove": "Tắt {{name}}"
+  },
+  "actions": {
+    "export": "Xuất",
+    "chest": "Rương",
+    "inChest": "Trong rương",
+    "collection": "Sưu tập",
+    "copyPath": "Đường dẫn",
+    "copied": "Đã chép",
+    "link": "Link",
+    "watch": "Theo dõi",
+    "watching": "Đang theo dõi"
   }
 }

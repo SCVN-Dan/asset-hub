@@ -34,7 +34,8 @@ const TYPE_FOLDERS: Array<[RegExp, string]> = [
   [/\.(anim|controller|overrideController|mask)$/i, 'Animations'],
   [/\.(wav|mp3|ogg|aiff?|flac|m4a)$/i, 'Audio'],
   [/\.(ttf|otf|ttc|fnt|fontsettings)$/i, 'Fonts'],
-  [/\.(shader|hlsl|cginc|glslinc|compute|shadergraph|shadersubgraph)$/i, 'Shaders']
+  // Custom shader importers' files too (.tcp2shader…), kept beside the includes they reach by relative path.
+  [/\.(shader|hlsl|cginc|glslinc|compute|shadergraph|shadersubgraph|[a-z0-9]+shader)$/i, 'Shaders']
 ]
 
 /**

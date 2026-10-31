@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RunningUnity } from '@shared/ipc'
+import { ChevronDownIcon, UnityIcon } from './Icons'
 
 const LAST_KEY = 'assethub.lastUnityProject'
 const lastProject = () => {
@@ -16,7 +17,7 @@ const lastProject = () => {
  * open); the button goes to the one used last, the arrow picks another. Without
  * an open editor it waits for one, refreshed when the app comes back to the front.
  */
-export function UnityButton({ disabled, onImport }: { disabled?: boolean; onImport(editor: RunningUnity): void }) {
+export function UnityButton({ disabled, onImport, compact }: { disabled?: boolean; onImport(editor: RunningUnity): void; compact?: boolean }) {
   const { t } = useTranslation()
   const [editors, setEditors] = useState<RunningUnity[]>([])
   const [menu, setMenu] = useState(false)
@@ -41,8 +42,15 @@ export function UnityButton({ disabled, onImport }: { disabled?: boolean; onImpo
 
   if (!editors.length)
     return (
-      <button type="button" className="btn" disabled title={t('unity.noneOpen')}>
-        {t('unity.import')}
+      <button type="button" className={compact ? 'btn icon-btn labeled' : 'btn'} disabled title={t('unity.noneOpen')} aria-label={t('unity.import')}>
+        {compact ? (
+          <>
+            <UnityIcon />
+            <span>Unity</span>
+          </>
+        ) : (
+          t('unity.import')
+        )}
       </button>
     )
 
@@ -59,21 +67,29 @@ export function UnityButton({ disabled, onImport }: { disabled?: boolean; onImpo
 
   return (
     <div className="unity-button" ref={box}>
-      <button type="button" className="btn" disabled={disabled} title={preferred.projectPath} onClick={() => choose(preferred)}>
-        {t('unity.importInto', { project: preferred.project })}
+      <button type="button" className={compact ? 'btn icon-btn labeled' : 'btn'} disabled={disabled} title={`${t('unity.importInto', { project: preferred.project })} · ${preferred.projectPath}`} aria-label={t('unity.importInto', { project: preferred.project })} onClick={() => choose(preferred)}>
+        {compact ? (
+          <>
+            <UnityIcon />
+            <span>Unity</span>
+          </>
+        ) : (
+          t('unity.importInto', { project: preferred.project })
+        )}
       </button>
       {editors.length > 1 && (
         <button type="button" className="btn unity-more" disabled={disabled} aria-haspopup="menu" aria-expanded={menu} aria-label={t('unity.pick')} onClick={() => setMenu(!menu)}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-            <path d="M6 9l6 6 6-6" />
-          </svg>
+          <ChevronDownIcon size={10} />
         </button>
       )}
       {menu && (
         <div className="unity-menu" role="menu">
           {editors.map((e) => (
             <button key={e.pid} type="button" role="menuitem" className="unity-menu-item" aria-current={e.pid === preferred.pid || undefined} title={e.projectPath} onClick={() => choose(e)}>
-              <span>{e.project}</span>
+              <span>
+                {e.project}
+                {e.product && <span className="muted small"> · {e.product}</span>}
+              </span>
               {e.version && <span className="muted small">{e.version}</span>}
             </button>
           ))}

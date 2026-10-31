@@ -28,7 +28,7 @@ import { Dropdown } from '../components/Dropdown'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { GearIcon, RefreshIcon } from '../components/Icons'
+import { BellIcon, FilterIcon, GearIcon, RefreshIcon } from '../components/Icons'
 import { LogoMark } from '../components/Logo'
 import { VersionBadge } from '../components/VersionBadge'
 import { flyToPack } from '../motion'
@@ -51,6 +51,8 @@ import { useAiTools, waitFor } from '../useAiTools'
 import { offerChoices } from '../aiChat'
 import { MultiBar } from '../components/MultiBar'
 import { ShortcutHelp } from '../components/ShortcutHelp'
+import { Popover } from '../components/Popover'
+import { SideGroup } from '../components/Section'
 import { WatchNav } from '../components/WatchNav'
 import type { WatchedBranch } from '@shared/settings'
 
@@ -446,6 +448,9 @@ export function Browse({
 
   /** Quick filters over the cards; those on measurements only keep measured assets. */
   const [chips, setChips] = useState<QuickChip[]>([])
+  const toggleChip = (c: QuickChip) => setChips((on) => (on.includes(c) ? on.filter((x) => x !== c) : [...on, c]))
+  /** Filters changed from the defaults, counted on the Filters button. */
+  const activeFilters = chips.length + (budget ? 1 : 0) + (onlyFits && budget ? 1 : 0) + (mergeCopies ? 0 : 1) + (showUnlisted ? 1 : 0)
   const passesChips = useCallback(
     (a: Asset) => {
       if (newOnly && !newHere.has(root + a.path)) return false
@@ -819,7 +824,7 @@ export function Browse({
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const keyActions = useRef<(e: KeyboardEvent) => void>()
   keyActions.current = (e: KeyboardEvent) => {
-    const typing = !!(e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')
+    const typing = e.target instanceof Element && !!e.target.closest('input, textarea, select, [contenteditable]')
     const cmd = e.metaKey || e.ctrlKey
     const key = e.key.toLowerCase()
     if (cmd && key === 'k') {
@@ -1112,17 +1117,15 @@ export function Browse({
         )}
         <button
           type="button"
-          className="btn icon-btn watch-btn"
+          className="btn icon-btn labeled watch-btn"
           aria-pressed={watchingHere}
           aria-label={watchingHere ? t('watch.stop') : t('watch.start')}
           title={watchingHere ? t('watch.stop') : t('watch.start')}
           disabled={!branch || branchRepo !== repo}
           onClick={() => void toggleWatch()}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill={watchingHere ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
-            <circle cx="12" cy="12" r="3" fill={watchingHere ? 'var(--panel)' : 'none'} />
-          </svg>
+          <BellIcon filled={watchingHere} />
+          <span>{watchingHere ? t('actions.watching') : t('actions.watch')}</span>
         </button>
         <button
           type="button"
@@ -1173,19 +1176,12 @@ export function Browse({
             onOpen={setOpenCollection}
             onCreate={(id, name) => onCollections(addCollection(collections, id, name))}
           />
-          <nav aria-label={t('browse.folders')} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <span className="label-caps">{t('browse.folders')}</span>
+          <SideGroup id="folders" title={t('browse.folders')} className="folders-nav">
             {/* Mount only once the branch is loaded so the initial expansion sees real folders. */}
             {!inCatalog && tree.status === 'ready' && (
               <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={(f) => { setFolder(f); setOpenCollection(undefined) }} />
             )}
-          </nav>
-          {!inCatalog && (
-          <label className="check">
-            <input type="checkbox" checked={mergeCopies} onChange={(e) => setMergeCopies(e.target.checked)} />
-            {t('browse.mergeCopies')}
-          </label>
-          )}
+          </SideGroup>
           {!inCatalog && hiddenCount > 0 && (
             <p className="muted small" style={{ margin: 0 }}>
               {t('browse.hidden', { count: hiddenCount, folders: excludedFolders.join(', ') })}
@@ -1215,34 +1211,10 @@ export function Browse({
           <div className="content-head">
             <h1>{inCatalog ? t(`catalog.title.${scope}`, { repo: repo.split('/').pop() }) : folder || t('browse.allFolders')}</h1>
             <span className="muted small">
-              {inCatalog
-                ? t('browse.assetCount', { count: rankedCatalog.length })
-                : <>
-                    {t('browse.assetCount', { count: rankedShown.length })}
-                    {merged > 0 && ` · ${t('browse.merged', { count: merged })}`}
-                    {unlistedCount > 0 && (
-                      <>
-                        {' · '}
-                        <button type="button" className="inline-link" onClick={() => setShowUnlisted(true)}>
-                          {t('browse.unlistedShow', { count: unlistedCount })}
-                        </button>
-                      </>
-                    )}
-                    {showUnlisted && unlistedKey && (
-                      <>
-                        {' · '}
-                        <button type="button" className="inline-link" onClick={() => setShowUnlisted(false)}>
-                          {t('browse.unlistedHide')}
-                        </button>
-                      </>
-                    )}
-                  </>}
-              {renderable.length > 0 && (
-                <span className="loaded-count" title={t('browse.loadedHint')}>
-                  {' · '}
-                  {t('browse.loaded', { done: loadedCount.toLocaleString(), total: renderable.length.toLocaleString() })}
-                  {loadedCount < renderable.length && <progress className="loaded-bar" max={renderable.length} value={loadedCount} />}
-                </span>
+              {t('browse.assetCount', { count: inCatalog ? rankedCatalog.length : rankedShown.length })}
+              {/* Thumbnails still loading: a thin bar, the numbers on hover. */}
+              {renderable.length > 0 && loadedCount < renderable.length && (
+                <progress className="loaded-bar" max={renderable.length} value={loadedCount} title={`${t('browse.loaded', { done: loadedCount.toLocaleString(), total: renderable.length.toLocaleString() })} · ${t('browse.loadedHint')}`} />
               )}
             </span>
           </div>
@@ -1255,27 +1227,61 @@ export function Browse({
                 onChange={setSortMode}
                 label={t('ranking.sort')}
               />
+              <Popover
+                label={t('filters.title')}
+                trigger={
+                  <>
+                    <FilterIcon />
+                    {t('filters.title')}
+                    {activeFilters > 0 && <span className="count-dot">{activeFilters}</span>}
+                  </>
+                }
+              >
+                <span className="label-caps">{t('chips.label')}</span>
+                <div className="chips" role="group" aria-label={t('chips.label')}>
+                  {QUICK_CHIPS.map((c) => (
+                    <button key={c} type="button" className="chip" aria-pressed={chips.includes(c)} onClick={() => toggleChip(c)}>
+                      {t(`chips.${c}`)}
+                    </button>
+                  ))}
+                </div>
+                <span className="label-caps">{t('budget.preset')}</span>
+                <Dropdown size="sm" value={budgetPreset} options={BUDGET_PRESETS.map((p) => ({ value: p, label: t(`budget.presets.${p}`) }))} onChange={onBudgetPreset} label={t('budget.preset')} title={t('budget.presetHint')} />
+                {budget && (
+                  <label className="check small">
+                    <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
+                    {t('ranking.onlyFits')}
+                  </label>
+                )}
+                {!inCatalog && (
+                  <>
+                    <span className="label-caps">{t('filters.view')}</span>
+                    <label className="check small">
+                      <input type="checkbox" checked={mergeCopies} onChange={(e) => setMergeCopies(e.target.checked)} />
+                      {t('browse.mergeCopies')}
+                      {merged > 0 && <span className="muted"> ({merged})</span>}
+                    </label>
+                    {(unlistedCount > 0 || (showUnlisted && unlistedKey)) && (
+                      <label className="check small">
+                        <input type="checkbox" checked={showUnlisted} onChange={(e) => setShowUnlisted(e.target.checked)} />
+                        {t('filters.unlisted')}
+                        {unlistedCount > 0 && <span className="muted"> ({unlistedCount})</span>}
+                      </label>
+                    )}
+                  </>
+                )}
+              </Popover>
+              {/* What is on, each with its own off switch. */}
+              {chips.map((c) => (
+                <button key={c} type="button" className="chip active-pill" aria-label={t('filters.remove', { name: t(`chips.${c}`) })} onClick={() => toggleChip(c)}>
+                  {t(`chips.${c}`)} <span aria-hidden="true">×</span>
+                </button>
+              ))}
               {budget && (
-                <label className="check small">
-                  <input type="checkbox" checked={onlyFits} onChange={(e) => setOnlyFits(e.target.checked)} />
-                  {t('ranking.onlyFits')}
-                </label>
+                <button type="button" className="chip active-pill" onClick={() => onBudgetPreset('off')} aria-label={t('filters.remove', { name: t(`budget.presets.${budgetPreset}`) })}>
+                  {t(`budget.presets.${budgetPreset}`)} <span aria-hidden="true">×</span>
+                </button>
               )}
-              <Dropdown
-                size="sm"
-                value={budgetPreset}
-                options={BUDGET_PRESETS.map((p) => ({ value: p, label: t(`budget.presets.${p}`) }))}
-                onChange={onBudgetPreset}
-                label={t('budget.preset')}
-                title={t('budget.presetHint')}
-              />
-              <div className="chips" role="group" aria-label={t('chips.label')}>
-                {QUICK_CHIPS.map((c) => (
-                  <button key={c} type="button" className="chip" aria-pressed={chips.includes(c)} onClick={() => setChips((on) => (on.includes(c) ? on.filter((x) => x !== c) : [...on, c]))}>
-                    {t(`chips.${c}`)}
-                  </button>
-                ))}
-              </div>
               {chips.length > 0 && !gridItems.length && <span className="muted small">{t('chips.none')}</span>}
               {(sortMode !== 'relevance' || (onlyFits && budget) || chips.some((c) => c !== 'small')) && (
                 <>

@@ -29,7 +29,9 @@ export function flyToPack(assetId: string) {
   const img = source.querySelector('img')?.getAttribute('src')
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
-      const slot = document.querySelector<HTMLElement>(`[data-pack-id="${id}"]`)
+      // Its place in the chest's list, or the chest itself while the list is folded.
+      const item = document.querySelector<HTMLElement>(`[data-pack-id="${id}"]`)
+      const slot = item ?? document.querySelector<HTMLElement>('.pack-chest')
       if (!slot) return
       const to = slot.getBoundingClientRect()
       const size = Math.min(from.width, from.height, 140)
@@ -43,7 +45,7 @@ export function flyToPack(assetId: string) {
         backgroundImage: img ? `url("${img}")` : ''
       })
       document.body.appendChild(ghost)
-      slot.style.visibility = 'hidden'
+      if (item) item.style.visibility = 'hidden'
       const start = ghost.getBoundingClientRect()
       const dx = to.left + to.width / 2 - (start.left + size / 2)
       const dy = to.top + to.height / 2 - (start.top + size / 2)
@@ -59,8 +61,8 @@ export function flyToPack(assetId: string) {
       )
       const land = () => {
         ghost.remove()
-        slot.style.visibility = ''
-        slot.animate([{ transform: 'scale(.3)', opacity: 0 }, { transform: 'scale(1.15)', opacity: 1, offset: 0.6 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' })
+        if (item) item.style.visibility = ''
+        if (item) item.animate([{ transform: 'scale(.3)', opacity: 0 }, { transform: 'scale(1.15)', opacity: 1, offset: 0.6 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' })
         bumpChest()
       }
       flight.onfinish = land

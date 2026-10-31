@@ -338,7 +338,8 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       const result = await exportUnityPackage(src, req, file, (progress) => {
         if (!event.sender.isDestroyed()) event.sender.send(IPC.exportProgress, progress)
       })
-      await openInProcess(editor.pid, file)
+      // The project has all of it already: an empty package would only make Unity show nothing.
+      if ((result.assets ?? 0) > 0) await openInProcess(editor.pid, file)
       return { canceled: false, ...result, unity: editor.project }
     })
   )

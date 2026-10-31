@@ -72,7 +72,8 @@
     "empty": "Nothing here yet. Open an asset and press ☆ or \"Collections\" in the details panel to add it.",
     "star": "Add to Favourites",
     "unstar": "Remove from Favourites",
-    "none": "No collections yet."
+    "none": "No collections yet.",
+    "addTo": "Add to a collection"
   },
   "browse": {
     "repo": "Repo",
@@ -124,7 +125,10 @@
     "copied": "Copied",
     "copies_one": "Identical file in {{count}} place",
     "copies_other": "Identical file in {{count}} places",
-    "openGitHub": "Open on GitHub"
+    "openGitHub": "Open on GitHub",
+    "issues": "{{count}} over budget",
+    "depsSummary": "{{count}} files",
+    "warnings": "{{count}} warnings"
   },
   "settings": {
     "title": "Settings",
@@ -274,7 +278,7 @@
       "noMaterials": "Material import is turned off for this FBX.",
       "missingModel": "Some models or prefabs it uses are not in the repository.",
       "customScript": "Uses custom scripts: they are exported too, but may need other scripts or packages to compile.",
-      "particles": "Has particle systems: numbers and costs are under Particles; moving particles are not previewed yet.",
+      "particles": "Has particle systems: numbers and cost are under Particles.",
       "uiPrefab": "A UI prefab: its images are listed, but it cannot be previewed in 3D."
     },
     "suggestedHint": "Nothing links this FBX to a material. These .mat files sit next to it — a guess; pick one to preview it and include it in exports.",
@@ -323,7 +327,10 @@
     "skipped_one": "{{count}} file left out (no .meta or duplicate GUID): {{list}}",
     "skipped_other": "{{count}} files left out (no .meta or duplicate GUID): {{list}}",
     "showInFolder": "Show in Finder",
-    "dismiss": "Close"
+    "dismiss": "Close",
+    "exportShort": "Export",
+    "unfold": "Show the chest's list and options",
+    "fold": "Fold the chest"
   },
   "prefab": {
     "title": "Materials from prefabs",
@@ -661,7 +668,8 @@
     "loopHint": "Play the effect again when it is over",
     "fire": "+ Play",
     "fireHint": "Play once more on top of what is playing, like spawning the prefab again (Space)",
-    "speed": "Speed"
+    "speed": "Speed",
+    "summary": "{{count}} emitters"
   },
   "scan": {
     "starting": "Looking for {{what}} in this branch…",
@@ -717,7 +725,9 @@
     "missingScripts_one": "⚠ {{count}} asset uses scripts from a package the project does not have (Missing Script after import): {{list}}",
     "missingScripts_other": "⚠ {{count}} assets use scripts from packages the project does not have (Missing Script after import): {{list}}",
     "urp": "⚠ URP {{source}} in the source, {{target}} in the project: check materials after import.",
-    "noUrp": "⚠ The source uses URP {{source}}; the project has no URP: materials may show pink."
+    "noUrp": "⚠ The source uses URP {{source}}; the project has no URP: materials may show pink.",
+    "missingShaders_one": "⚠ 1 shader from the source project is not in {{project}}; materials using it will show magenta: {{list}}. Add that shader/plugin to {{project}} or switch them with Shader Mapping.",
+    "missingShaders_other": "⚠ {{count}} shaders from the source project are not in {{project}}; materials using them will show magenta: {{list}}. Add those shaders/plugins to {{project}} or switch them with Shader Mapping."
   },
   "link": {
     "copy": "Copy link",
@@ -778,7 +788,8 @@
     "importInto": "Import into {{project}}",
     "pick": "Choose the Unity project",
     "noneOpen": "Open the project in Unity first; it shows up here",
-    "done": "Opened {{count}} assets ({{size}}) in Unity · {{project}}: confirm the import there."
+    "done": "Opened {{count}} assets ({{size}}) in Unity · {{project}}: confirm the import there.",
+    "nothingNew": "{{project}} already has all of these assets (same content); nothing to import."
   },
   "multi": {
     "count": "{{count}} picked",
@@ -819,5 +830,22 @@
     "banner": "{{count}}{{more}} new assets since you last looked",
     "onlyNew": "Only new assets",
     "seen": "Mark all seen"
+  },
+  "filters": {
+    "title": "Filters",
+    "view": "View",
+    "unlisted": "Show clips without a model",
+    "remove": "Turn off {{name}}"
+  },
+  "actions": {
+    "export": "Export",
+    "chest": "Chest",
+    "inChest": "In chest",
+    "collection": "Collection",
+    "copyPath": "Path",
+    "copied": "Copied",
+    "link": "Link",
+    "watch": "Watch",
+    "watching": "Watching"
   }
 }

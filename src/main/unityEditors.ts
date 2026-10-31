@@ -6,8 +6,10 @@ import { basename, join } from 'path'
 export interface RunningUnity {
   pid: number
   projectPath: string
-  /** The project folder's name. */
+  /** The project folder's name (what people call the project). */
   project: string
+  /** Unity's productName, when it differs from the folder (copied projects often keep an old one). */
+  product?: string
   /** Editor version, from its install path (…/Hub/Editor/2022.3.19f1/Unity.app), when it shows. */
   version?: string
 }
@@ -39,18 +41,20 @@ export async function listRunningUnity(): Promise<RunningUnity[]> {
   const editors = parseUnityProcesses(await run('ps', ['-axo', 'pid=,args=']))
   return editors
     .filter((e) => existsSync(join(e.projectPath, 'Assets')) && existsSync(join(e.projectPath, 'ProjectSettings')))
-    .map((e) => ({ ...e, project: projectName(e.projectPath) }))
+    .map((e) => {
+      const product = productName(e.projectPath)
+      return { ...e, project: basename(e.projectPath), ...(product && product !== basename(e.projectPath) ? { product } : {}) }
+    })
 }
 
-/** The name Unity shows: productName from ProjectSettings when readable, else the folder's name. */
-function projectName(path: string): string {
+/** productName from ProjectSettings, when readable and set. */
+function productName(path: string): string | undefined {
   try {
     const name = /^\s*productName:\s*(.+)$/m.exec(readFileSync(join(path, 'ProjectSettings/ProjectSettings.asset'), 'utf8'))?.[1]?.trim()
-    if (name && name !== 'New Unity Project') return `${name} (${basename(path)})`
+    return name && name !== 'New Unity Project' ? name : undefined
   } catch {
-    // fall back to the folder
+    return undefined
   }
-  return basename(path)
 }
 
 /**

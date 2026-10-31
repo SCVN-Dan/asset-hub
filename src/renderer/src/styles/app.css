@@ -135,6 +135,54 @@ button { cursor: pointer; }
 .watch-remove:hover { color: var(--danger); }
 .new-badge { position: absolute; left: 8px; bottom: 8px; padding: 1px 7px; border-radius: 6px; background: #3ddc84; color: #06210f; font: 800 10px var(--display); letter-spacing: 0.06em; }
 .watch-banner { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; padding: 8px 12px; border-radius: 10px; border: 1px solid #3ddc84; background: rgba(61, 220, 132, 0.08); }
+/* Actions as icons (tooltips carry the words): one row in the details panel. */
+.action-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.action-row .collection-buttons { display: inline-flex; gap: 6px; }
+.icon-btn-more { width: auto; }
+/* An icon with one short word, so it is never a guess. */
+.icon-btn.labeled { width: auto; padding: 0 11px; gap: 6px; font-size: 13px; font-weight: 600; }
+.icon-btn-sm.labeled { width: auto; padding: 0 8px; gap: 5px; font-size: 12px; }
+.unity-button { align-items: stretch; }
+.unity-button > .btn { height: 36px; }
+.unity-more { display: inline-grid; place-items: center; width: 28px; }
+/* Sidebar groups fold under their title. */
+.side-group { display: flex; flex-direction: column; gap: 8px; }
+.side-head { display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.side-head .label-caps { margin: 0; }
+.side-head:hover .label-caps, .side-head:hover .section-chevron { color: var(--text); }
+.side-folded { margin-left: auto; }
+/* The chest folded to one line: toggle, room left, size, Unity, Export. */
+.pack-toggle { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.pack-count { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: 700 11px/20px var(--sans, inherit); text-align: center; }
+.section-chevron[data-open] { transform: rotate(90deg); }
+.pack-export { width: auto; padding: 0 14px; gap: 6px; }
+.icon-btn-sm { display: inline-grid; place-items: center; width: 30px; padding: 0; }
+.action-sep { width: 1px; height: 22px; margin: 0 4px; background: var(--border); }
+.icon-btn { display: inline-grid; grid-auto-flow: column; align-items: center; justify-content: center; gap: 4px; min-width: 36px; height: 36px; padding: 0 9px; }
+.icon-btn[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
+.icon-btn.btn-primary[aria-pressed='true'] { color: var(--on-accent); }
+.icon-count { font-size: 11px; font-weight: 700; color: var(--accent); }
+.nav-icon { display: inline-grid; place-items: center; width: 16px; color: var(--muted); }
+.tab[aria-pressed='true'] .nav-icon { color: var(--accent); }
+/* Filters: a button with what is on as a count, its panel, and pills for the active ones. */
+.popover { position: relative; display: inline-flex; }
+.popover-trigger { display: inline-flex; align-items: center; gap: 6px; }
+.popover-panel { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; width: 290px; display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--panel); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
+.popover-panel .label-caps { margin-top: 4px; }
+.count-dot { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: 700 11px/18px var(--sans, inherit); text-align: center; }
+.active-pill { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.active-pill span { margin-left: 4px; opacity: 0.8; }
+/* Details sections fold under their title; folded, a summary line stands in. */
+.section-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 2px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.section-head .label-caps { margin: 0; }
+.section-chevron { display: inline-grid; place-items: center; color: var(--muted); transition: transform 0.15s; }
+.section[data-open] .section-chevron { transform: rotate(90deg); }
+.section-summary { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.section-head:hover .label-caps, .section-head:hover .section-chevron { color: var(--text); }
+/* Viewer controls show while the pointer (or focus) is on the viewer; the picture stays clean otherwise. */
+.viewer .viewer-tools, .viewer .viewer-hint, .viewer .viewer-clips { opacity: 0; transition: opacity 0.15s; }
+.viewer:hover .viewer-tools, .viewer:hover .viewer-hint, .viewer:hover .viewer-clips, .viewer:focus-within .viewer-tools, .viewer:focus-within .viewer-clips { opacity: 1; }
+@media (hover: none) { .viewer .viewer-tools, .viewer .viewer-clips { opacity: 1; } }
 /* Quick filter chips above the grid. */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 3px 11px; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
@@ -284,6 +332,13 @@ body.resizing * { cursor: inherit !important; }
 .dep-list, .dep-list ul { list-style: none; margin: 0; padding: 0; }
 .dep-row { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 13px; }
 .dep-child { padding-left: 18px; }
+/* Dependencies as a tree: what a material holds hangs from it on drawn branches (├ └). */
+.dep-list li > ul { margin-left: 4px; }
+.dep-list li > ul > li.dep-row, .dep-list li > .dep-child { position: relative; padding-left: 20px; }
+.dep-list li > ul > li.dep-row::before, .dep-list li > .dep-child::before { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; border-left: 1px solid var(--border-strong); }
+.dep-list li > ul > li.dep-row::after, .dep-list li > .dep-child::after { content: ''; position: absolute; left: 7px; top: 50%; width: 9px; border-top: 1px solid var(--border-strong); }
+.dep-list li > ul > li.dep-row:last-child::before { bottom: 50%; }
+.dep-list li > .dep-child:last-child::before, .dep-list li > .dep-child:has(+ ul:empty)::before { bottom: 50%; }
 .dep-indent { padding-left: 14px !important; }
 .dep-type { flex: 0 0 30px; font-size: 10px; font-weight: 700; color: var(--muted); }
 .dep-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

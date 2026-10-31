@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, type Asset, type DependencyReport } from '@core/index'
 import type { ExportProgress, ExportResult, RunningUnity, TargetReport } from '@shared/ipc'
@@ -7,6 +8,7 @@ import { ErrorNote } from './ErrorNote'
 import { LogoMark } from './Logo'
 import { leaveSlot } from '../motion'
 import { UnityButton } from './UnityButton'
+import { ChevronRightIcon, ExportIcon } from './Icons'
 
 export interface PackItem {
   asset: Asset
@@ -89,7 +91,7 @@ function TargetSummary({ report }: { report: TargetReport }) {
   const project = report.project.split(/[\\/]/).pop()
   const list = (items: Array<{ path: string; existing: string }>) => items.slice(0, 6).map((i) => `${fileName(i.path)} → ${i.existing}`).join(', ') + (items.length > 6 ? ' …' : '')
   const nothing =
-    !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.shaderByName.length && !report.shaderKept.length && !report.shaderClash.length && !report.shaderMapped.length && !report.mappingErrors.length && !report.missingScripts.length && !report.urp
+    !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.shaderByName.length && !report.shaderKept.length && !report.shaderClash.length && !report.shaderMapped.length && !report.mappingErrors.length && !report.missingScripts.length && !report.missingShaders.length && !report.urp
   return (
     <div className="target-summary small">
       <span className="muted">{nothing ? t('target.clean', { project }) : t('target.title', { project })}</span>
@@ -118,6 +120,11 @@ function TargetSummary({ report }: { report: TargetReport }) {
           {t('target.missingScripts', { count: report.missingScripts.length, list: list(report.missingScripts) })}
         </span>
       )}
+      {report.missingShaders.length > 0 && (
+        <span className="warn-text" title={report.missingShaders.map((s) => `${s.path}: ${s.existing}`).join('\n')}>
+          {t('target.missingShaders', { count: report.missingShaders.length, project, list: report.missingShaders.map((s) => `${s.path} (${s.existing})`).join('; ') })}
+        </span>
+      )}
       {report.mappingErrors.map((error) => (
         <span key={error} className="warn-text">
           {t('target.mappingError', { error })}
@@ -134,29 +141,58 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
   const running = state.status === 'running'
   const progress = state.status === 'running' ? state.progress : undefined
   const over = sum.bytes > capacity
+  // Folded, the chest is one line: what is in it, and Export. Open, its list and options too.
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem('assethub.chestOpen') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggle = () => {
+    setOpen(!open)
+    try {
+      localStorage.setItem('assethub.chestOpen', open ? '0' : '1')
+    } catch {
+      // kept for this session
+    }
+  }
 
   return (
     <section className="export-bar" aria-label={t('export.title')}>
       {items.length > 0 && (
         <>
           <div className="export-head">
-            <span className="pack-chest">
-              <LogoMark size={28} />
-            </span>
-            <strong className="pack-title">{t('export.chest')}</strong>
+            <button type="button" className="pack-toggle" aria-expanded={open} title={open ? t('export.fold') : t('export.unfold')} onClick={toggle}>
+              <span className="pack-chest">
+                <LogoMark size={28} />
+              </span>
+              <strong className="pack-title">{t('export.chest')}</strong>
+              <span className="pack-count">{items.length}</span>
+              <span className="section-chevron" data-open={open || undefined}>
+                <ChevronRightIcon size={12} />
+              </span>
+            </button>
             <span className="pack-room" data-over={over}>
               {over ? t('export.tooHeavy', { size: formatBytes(sum.bytes - capacity) }) : t('export.room', { size: formatBytes(capacity - sum.bytes) })}
             </span>
             <span className="muted small">
-              {t('export.summary', { files: sum.files, size: formatBytes(sum.bytes) })}
+              {formatBytes(sum.bytes)}
               {sum.pending && ` · ${t('export.resolving')}`}
             </span>
             {sum.missing > 0 && <span className="badge badge-warn">{t('export.missing', { count: sum.missing })}</span>}
-            {sum.byName > 0 && <span className="badge">{t('export.byName', { count: sum.byName })}</span>}
+            <span style={{ flex: 1 }} />
+            <UnityButton compact disabled={running} onImport={onImportToUnity} />
+            <button type="button" className="btn btn-primary icon-btn pack-export" title={t('export.export', { count: items.length })} aria-label={t('export.export', { count: items.length })} onClick={onExport} disabled={running}>
+              <ExportIcon />
+              <span>{running ? t('export.exporting') : t('export.exportShort')}</span>
+            </button>
           </div>
           <div className="pack-meter" data-over={over} title={`${formatBytes(sum.bytes)} / ${formatBytes(capacity)}`}>
             <span className="pack-meter-fill" style={{ width: `${Math.min(sum.bytes / capacity, 1) * 100}%` }} />
           </div>
+          {open && (
+          <>
           <ul className="export-items">
             {items.map((i) => (
               <li key={i.path} data-pack-id={i.asset.id}>
@@ -202,15 +238,14 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
                 {t('target.reuse', { project: options.targetProject.split(/[\\/]/).pop() })}
               </label>
             )}
+            {sum.byName > 0 && <span className="badge">{t('export.byName', { count: sum.byName })}</span>}
             <span style={{ flex: 1 }} />
             <button type="button" className="btn" onClick={onClear} disabled={running}>
               {t('export.clear')}
             </button>
-            <UnityButton disabled={running} onImport={onImportToUnity} />
-            <button type="button" className="btn btn-primary" onClick={onExport} disabled={running}>
-              {running ? t('export.exporting') : t('export.export', { count: items.length })}
-            </button>
           </div>
+          </>
+          )}
         </>
       )}
 
@@ -224,7 +259,7 @@ export function ExportBar({ items, capacity, options, state, onOptions, onExport
         <div className="export-status done" role="status">
           <span className="small">
             {state.result.unity ? (
-              t('unity.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes), project: state.result.unity })
+              state.result.assets ? t('unity.done', { count: state.result.assets, size: formatBytes(state.result.bytes), project: state.result.unity }) : t('unity.nothingNew', { project: state.result.unity })
             ) : (
               <>
                 {t('export.done', { count: state.result.assets ?? 0, size: formatBytes(state.result.bytes) })}{' '}

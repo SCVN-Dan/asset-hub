@@ -71,7 +71,8 @@
     "empty": "아직 비어 있습니다. 에셋을 열고 세부 정보 패널에서 ☆ 또는 \"컬렉션\"을 눌러 추가하세요.",
     "star": "즐겨찾기에 추가",
     "unstar": "즐겨찾기에서 제거",
-    "none": "아직 컬렉션이 없습니다."
+    "none": "아직 컬렉션이 없습니다.",
+    "addTo": "컬렉션에 추가"
   },
   "browse": {
     "repo": "저장소",
@@ -118,7 +119,10 @@
     "copyPath": "경로 복사",
     "copied": "복사됨",
     "copies_other": "동일한 파일이 {{count}}곳에 있음",
-    "openGitHub": "GitHub에서 열기"
+    "openGitHub": "GitHub에서 열기",
+    "issues": "예산 초과 {{count}}개",
+    "depsSummary": "파일 {{count}}개",
+    "warnings": "경고 {{count}}개"
   },
   "settings": {
     "title": "설정",
@@ -265,7 +269,7 @@
       "noMaterials": "이 FBX는 머티리얼 임포트가 꺼져 있습니다.",
       "missingModel": "사용하는 일부 모델 또는 프리팹이 저장소에 없습니다.",
       "customScript": "커스텀 스크립트를 사용합니다. 함께 내보내지지만 컴파일하려면 다른 스크립트나 패키지가 필요할 수 있습니다.",
-      "particles": "파티클 시스템 포함: 수치와 비용은 파티클 항목에 있습니다. 움직이는 미리보기는 아직 없습니다.",
+      "particles": "파티클 시스템 포함: 수치와 비용은 파티클 항목에서 확인하세요.",
       "uiPrefab": "UI 프리팹: 이미지는 나열되지만 3D로 미리볼 수 없습니다."
     },
     "suggestedHint": "이 FBX에 연결된 머티리얼이 없습니다. 옆에 있는 .mat 파일들입니다 — 추정이므로 하나를 선택해 미리보고 내보내기에 포함하세요.",
@@ -308,7 +312,10 @@
     "done_other": "에셋 {{count}}개 내보냄 ({{size}}):",
     "skipped_other": "파일 {{count}}개 제외됨 (.meta 없음 또는 GUID 중복): {{list}}",
     "showInFolder": "Finder에서 보기",
-    "dismiss": "닫기"
+    "dismiss": "닫기",
+    "exportShort": "내보내기",
+    "unfold": "상자 목록과 옵션 보기",
+    "fold": "상자 접기"
   },
   "prefab": {
     "title": "프리팹의 머티리얼",
@@ -627,7 +634,8 @@
     "loopHint": "효과가 끝나면 다시 재생",
     "fire": "+ Play",
     "fireHint": "재생 중인 효과 위에 한 번 더 재생 (프리팹 다시 생성처럼, Space)",
-    "speed": "속도"
+    "speed": "속도",
+    "summary": "이미터 {{count}}개"
   },
   "scan": {
     "starting": "이 브랜치에서 {{what}} 찾는 중…",
@@ -674,7 +682,8 @@
     "mappingError": "⚠ {{error}}",
     "missingScripts_other": "⚠ 프로젝트에 없는 패키지 스크립트를 쓰는 에셋 {{count}}개 (임포트 후 Missing Script): {{list}}",
     "urp": "⚠ 원본 URP {{source}}, 프로젝트 {{target}}: 임포트 후 머티리얼을 확인하세요.",
-    "noUrp": "⚠ 원본은 URP {{source}}, 프로젝트에 URP 없음: 머티리얼이 분홍색일 수 있습니다."
+    "noUrp": "⚠ 원본은 URP {{source}}, 프로젝트에 URP 없음: 머티리얼이 분홍색일 수 있습니다.",
+    "missingShaders_other": "⚠ 원본 프로젝트의 셰이더 {{count}}개가 {{project}}에 없어 이를 쓰는 머티리얼이 분홍색으로 보입니다: {{list}}. {{project}}에 해당 셰이더/플러그인을 추가하거나 Shader Mapping으로 바꾸세요."
   },
   "link": {
     "copy": "링크 복사",
@@ -735,7 +744,8 @@
     "importInto": "{{project}}(으)로 가져오기",
     "pick": "Unity 프로젝트 선택",
     "noneOpen": "먼저 Unity에서 프로젝트를 여세요. 여기에 표시됩니다",
-    "done": "Unity · {{project}}에서 에셋 {{count}}개({{size}})를 열었습니다. Unity에서 Import를 눌러 확인하세요."
+    "done": "Unity · {{project}}에서 에셋 {{count}}개({{size}})를 열었습니다. Unity에서 Import를 눌러 확인하세요.",
+    "nothingNew": "{{project}}에 이 에셋이 모두 있습니다(같은 내용). 가져올 것이 없습니다."
   },
   "multi": {
     "count": "{{count}}개 선택됨",
@@ -776,5 +786,22 @@
     "banner": "지난번 이후 새 에셋 {{count}}{{more}}개",
     "onlyNew": "새 에셋만",
     "seen": "모두 확인함"
+  },
+  "filters": {
+    "title": "필터",
+    "view": "보기",
+    "unlisted": "모델 없는 클립 표시",
+    "remove": "{{name}} 끄기"
+  },
+  "actions": {
+    "export": "내보내기",
+    "chest": "상자",
+    "inChest": "상자에 있음",
+    "collection": "컬렉션",
+    "copyPath": "경로",
+    "copied": "복사됨",
+    "link": "링크",
+    "watch": "지켜보기",
+    "watching": "지켜보는 중"
   }
 }

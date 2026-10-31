@@ -152,6 +152,8 @@ export interface TargetReport {
   shaderMapped: Array<{ path: string; existing: string }>
   /** Exported assets using package scripts the project lacks ("existing" = their GUIDs, shortened): "Missing Script" after import. */
   missingScripts: Array<{ path: string; existing: string }>
+  /** Project shaders packed materials use that neither the package nor the project has (path: shader name, existing: its materials): they would turn magenta. */
+  missingShaders: Array<{ path: string; existing: string }>
   /** Problems with the mapping file (rules skipped). */
   mappingErrors: string[]
   /** URP versions of the source and target projects, when they differ. */
@@ -175,7 +177,10 @@ export interface ExportResult {
 export interface RunningUnity {
   pid: number
   projectPath: string
+  /** The project folder's name. */
   project: string
+  /** Unity's productName, when it differs from the folder. */
+  product?: string
   version?: string
 }
 

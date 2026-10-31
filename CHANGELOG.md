@@ -25,11 +25,18 @@ What changed in each release of Asset Hub. `npm run release` publishes the secti
 - **Sign out of GitHub** from Settings › Account: signing out can also log the account out of GitHub CLI on this Mac (on by default), so the next START signs in through the browser again and another account can be chosen. The button is red, and the Settings button in the top bar says it holds the account.
 
 ### Changed
+- Icon buttons carry a short word (Export, Chest, Unity, Collection, Path, GitHub, Link, Watch); Unity's button shows the Unity cube and its arrow lines up with it. Dependencies are drawn as a tree (├ └) so nested textures read as belonging to their material.
+- **Calmer hub.** The grid header is two rows: scope, then sort and one **Filters** button (quick filters, playable budget, merge identical files, clips without a model) with a count, and pills for what is on; thumbnail loading is a thin bar. The chest folds to one line (count, room left, size, Unity, Export) and opens for its list and options. In the details panel the viewer's controls appear on hover, actions are one row of icons (Export, Chest, Import into Unity, Favourite, Collection, then copy path / GitHub / link), and Dependency, Particles, prefab uses and copies fold with a summary line ("9 files · 1 warning"); stats left at zero are not listed. Sidebar groups (Watching, Recent, Collections, Folders) fold too; every fold is remembered.
+- **One icon family** drawn for the app (same grid and stroke): export, import into Unity, the chest, star, collection, bell for watching (was an eye), clock and package for recent lists, filter, copy, external, link — replacing emoji and text glyphs.
 - Names are shown without the company prefix: "SCVN-Dan" or "SC-Dan" reads "Dan" in the top bar, the greeting and Settings.
 - Explanatory lines removed across the app (Settings help texts, the AI assistant's intro, the gh sign-out hint, the sign-in screen's email/SSO/install notes, the catalog's folder note); labels and controls speak for themselves. Status and warnings stay.
 - Sign-in screen: the line "Sign in with your GitHub account" under START and the "Reads repos only · token kept in this Mac's Keychain" footer are gone.
 
 ### Fixed
+- Export to a target project now warns when packed materials use a shader that project cannot read — not in the package and not in the project, or a custom importer's file (Toony Colors Pro `.tcp2shader`) where that plugin is missing: those materials would turn magenta. Found by importing into a real Unity project.
+- Shaders of custom importers (any `*shader` extension, e.g. `.tcp2shader`) are found by GUID and packed beside their includes (they were left out, or put in Other/ away from the `.cginc` they include). Stored GUID indexes are rebuilt once for this.
+- Import into Unity no longer opens an empty package when the project already has everything; it says so instead.
+- Unity editors are named by their project folder (a copied project could show another project's productName).
 - Going back to the hub from Settings no longer replays the lobby's white flash (it happened when Settings was opened during the greeting); the hub and Settings now switch with a short, soft fade.
 - A card reached with the arrow keys had a bigger frame than a clicked one; both now have the same frame.
 

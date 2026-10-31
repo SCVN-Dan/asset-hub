@@ -4,6 +4,7 @@ import { withFavorites, type Collection } from '@shared/collections'
 import type { RunningUnity } from '@shared/ipc'
 import { useCollectionName } from './Collections'
 import { UnityButton } from './UnityButton'
+import { ChestIcon, ChevronDownIcon, CollectionIcon } from './Icons'
 
 interface Props {
   count: number
@@ -31,12 +32,15 @@ export function MultiBar({ count, collections, busy, onChest, onCollection, onIm
   return (
     <div className="multi-bar" role="toolbar" aria-label={t('multi.count', { count })}>
       <strong>{t('multi.count', { count })}</strong>
-      <button type="button" className="btn" disabled={busy} onClick={onChest}>
-        {t('multi.chest')}
+      <button type="button" className="btn icon-btn labeled" disabled={busy} title={t('multi.chest')} aria-label={t('multi.chest')} onClick={onChest}>
+        <ChestIcon />
+        <span>{t('actions.chest')}</span>
       </button>
       <div className="unity-button" ref={box}>
-        <button type="button" className="btn" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-          {t('multi.collection')} ▾
+        <button type="button" className="btn icon-btn icon-btn-more labeled" aria-haspopup="menu" aria-expanded={menu} title={t('multi.collection')} aria-label={t('multi.collection')} onClick={() => setMenu(!menu)}>
+          <CollectionIcon />
+          <span>{t('actions.collection')}</span>
+          <ChevronDownIcon size={10} />
         </button>
         {menu && (
           <div className="unity-menu multi-menu" role="menu">
@@ -58,7 +62,7 @@ export function MultiBar({ count, collections, busy, onChest, onCollection, onIm
           </div>
         )}
       </div>
-      <UnityButton disabled={busy} onImport={onImportToUnity} />
+      <UnityButton compact disabled={busy} onImport={onImportToUnity} />
       <span style={{ flex: 1 }} />
       <button type="button" className="link-btn" onClick={onClear} title="Esc">
         {t('multi.clear')}
