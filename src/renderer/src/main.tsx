@@ -16,6 +16,10 @@ import { App } from './App'
 // For scripts that check how many effects render at once (a contact sheet): one card, drawn as the grid draws it.
 ;(window as unknown as { assetHubRender: unknown }).assetHubRender = (repo: string, branch: string, root: string, path: string) =>
   import('./viewer/prefabThumb').then((m) => m.renderPrefabThumbnail({ repo, branch, root }, path))
+;(window as unknown as { assetHubFilm: unknown }).assetHubFilm = (repo: string, branch: string, root: string, path: string, times: number[], only?: string[]) =>
+  import('./viewer/prefabThumb').then((m) => m.filmEffectAt({ repo, branch, root }, path, times, only))
+;(window as unknown as { assetHubInspect: unknown }).assetHubInspect = (repo: string, branch: string, root: string, path: string) =>
+  import('./viewer/prefabThumb').then((m) => m.inspectEffect({ repo, branch, root }, path))
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

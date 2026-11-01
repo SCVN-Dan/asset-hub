@@ -9,6 +9,7 @@ import type { ExportProgress, ExportRequest, ExportResult, TargetReport } from '
 import { stripScripts } from '@core/export/stripScripts'
 import { metaGuid } from '@core/unity/yaml'
 import { parseShaderMapping, shaderMapper, SHADER_MAPPING_FILE } from '@core/export/shaderMapping'
+import { isUrpMaterial, urpToBuiltin } from '@core/export/pipelineConvert'
 import { contentHash, hasPackageCache, hashProjectFile, packageFiles, readProjectText, scanProject } from './targetProject'
 
 const DOWNLOAD_CONCURRENCY = 4
@@ -148,8 +149,14 @@ async function againstTarget(
   }
   const mapper = mapping && shaderMapper(mapping.rules, index.shaders!, new Map(candidates.flatMap((c) => (c.shader ? [[c.guid, c.shader.name] as const] : []))))
   const { decisions, remap } = planAgainstTarget(candidates, index, req.reuseExisting !== false)
+  const sourceUrp = urpVersion(await source.readFile(req.repo, req.branch, `${req.root}Packages/packages-lock.json`).then((b) => dec.decode(b), () => undefined))
+  const targetUrp = urpVersion(await readProjectText(root, 'Packages/packages-lock.json'))
+  // URP materials going to a project without URP get the built-in shaders that do the same job (after the team's own rules).
+  const toBuiltin = !!sourceUrp && !targetUrp
+  const graphs = new Set(candidates.flatMap((c) => (c.shader?.kind === 'shadergraph' ? [c.guid] : [])))
+  let urpLeft = 0
   const report: TargetReport = {
-    project: root, same: 0, reused: [], overwrite: [], renamed: [], shaderByName: [], shaderKept: [], shaderClash: [], shaderMapped: [], missingScripts: [], missingShaders: [],
+    project: root, same: 0, reused: [], overwrite: [], renamed: [], shaderByName: [], shaderKept: [], shaderClash: [], shaderMapped: [], urpConverted: [], missingScripts: [], missingShaders: [],
     mappingErrors: [...(mapping?.errors ?? []), ...(mapper?.errors ?? [])]
   }
   const entries: PackagePlan['entries'] = []
@@ -168,19 +175,25 @@ async function againstTarget(
     }
     let text = dec.decode(e.file.asset)
     const mapped = mapper?.map(text)
+    const converted = !mapped && toBuiltin ? urpToBuiltin(text) : undefined
     if (mapped) {
       text = mapped.text
       report.shaderMapped.push({ path: e.file.path, existing: `${mapped.from} → ${mapped.to}` })
+    } else if (converted) {
+      text = converted.text
+      report.urpConverted.push({ path: e.file.path, existing: `${converted.from} → ${converted.to}` })
     }
+    // What still needs URP: its shaders not converted, and Shader Graphs (made for a pipeline, no built-in counterpart).
+    if (/\.mat$/i.test(e.file.path) && (isUrpMaterial(text) || graphs.has(/m_Shader: \{fileID: -?\d+, guid: ([0-9a-f]{32})/.exec(text)?.[1] ?? ''))) urpLeft++
     // References to files left out now point at the project's copies (materials, prefabs, .meta remaps).
-    const file = remap.size || mapped ? { ...e.file, asset: enc.encode(remapGuids(text, remap)), meta: enc.encode(remapGuids(dec.decode(e.file.meta), remap)) } : e.file
+    const file = remap.size || mapped || converted ? { ...e.file, asset: enc.encode(remapGuids(text, remap)), meta: enc.encode(remapGuids(dec.decode(e.file.meta), remap)) } : e.file
     entries.push({ ...e, file })
   }
   report.missingScripts = await missingScripts(root, packageScripts, project.byGuid)
   report.missingShaders = missingShaders(entries, shaders, project.byGuid, [...project.sizes.keys(), ...(await packageFiles(root, /shader$/i)).keys()])
-  const sourceUrp = urpVersion(await source.readFile(req.repo, req.branch, `${req.root}Packages/packages-lock.json`).then((b) => dec.decode(b), () => undefined))
-  const targetUrp = urpVersion(await readProjectText(root, 'Packages/packages-lock.json'))
-  if (sourceUrp && urpMismatch(sourceUrp, targetUrp)) report.urp = { source: sourceUrp, ...(targetUrp ? { target: targetUrp } : {}) }
+  // Another pipeline (or URP version) always gets a word: the package goes, but may look unlike the preview;
+  // `needed` counts materials that still need URP (its shaders, Shader Graphs) and may turn pink.
+  if (sourceUrp && urpMismatch(sourceUrp, targetUrp)) report.urp = { source: sourceUrp, ...(targetUrp ? { target: targetUrp } : {}), needed: urpLeft }
   return { plan: { ...plan, entries }, report }
 }
 

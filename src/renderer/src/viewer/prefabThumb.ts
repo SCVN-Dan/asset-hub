@@ -54,3 +54,69 @@ export async function renderPrefabThumbnail(live: LiveContext, path: string): Pr
     build.dispose()
   }
 }
+
+/**
+ * What each emitter of an effect does over its first seconds (for scripts that track down
+ * effects drawn differently from Unity): its material and shader, whether a ported shader
+ * draws it, the most particles alive, and where they were.
+ */
+export async function inspectEffect(live: LiveContext, path: string, seconds = 3): Promise<Array<Record<string, unknown>>> {
+  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick'))
+  const build = await buildPrefab(live, path, report, true)
+  try {
+    const effect = await buildEffect(live, report, build.anchors, true)
+    const rows = effect.emitters.map((e) => {
+      const m = report.materials.find((x) => x.guid === e.emitter.material)
+      return { name: e.emitter.name, mode: e.emitter.renderMode, material: m?.name ?? e.emitter.material, shader: m?.shader?.label, ported: !!(e as unknown as { look: { custom?: unknown } }).look.custom, delay: e.emitter.sim.startDelay, max: 0, firstAt: -1, size: 0, at: [0, 0, 0] as number[] }
+    })
+    effect.restart()
+    for (let t = 0; t < seconds; t += 1 / 30) {
+      effect.update(1 / 30)
+      effect.emitters.forEach((e, i) => {
+        const n = (e as unknown as { count: number }).count
+        if (n > rows[i].max) {
+          rows[i].max = n
+          e.sample((p, size) => {
+            rows[i].at = [p.x, p.y, p.z].map((v) => Math.round(v * 100) / 100)
+            rows[i].size = Math.round(size * 100) / 100
+          })
+        }
+        if (n && rows[i].firstAt < 0) rows[i].firstAt = Math.round(t * 100) / 100
+      })
+    }
+    effect.dispose()
+    return rows
+  } finally {
+    build.dispose()
+  }
+}
+
+/** An effect filmed at given times (seconds from its start), side by side: to set beside Unity's frames at the same times. */
+export async function filmEffectAt(live: LiveContext, path: string, times: readonly number[], only?: readonly string[], width = 320, height = 240): Promise<string> {
+  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick'))
+  const build = await buildPrefab(live, path, report, true)
+  const viewer = new FbxViewer(offscreenHost())
+  try {
+    const effect = await buildEffect(live, report, build.anchors, true)
+    // Some emitters alone (by name), framed on them: to tell which part of an effect draws differently.
+    if (only?.length) for (const e of effect.emitters) e.mesh.visible = only.includes(e.emitter.name)
+    viewer.showGroup(build.group, effect.measuredExtent())
+    await dressPrefab(viewer, build)
+    const sheet = document.createElement('canvas')
+    sheet.width = width * times.length
+    sheet.height = height
+    const g = sheet.getContext('2d')!
+    effect.restart()
+    let now = 0
+    times.forEach((t, i) => {
+      effect.advance(t - now)
+      now = t
+      viewer.drawFrame(g, i * width, 0, width, height)
+    })
+    effect.dispose()
+    return sheet.toDataURL('image/png')
+  } finally {
+    viewer.dispose()
+    build.dispose()
+  }
+}

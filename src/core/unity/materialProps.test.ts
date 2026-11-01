@@ -50,8 +50,11 @@ describe('material props', () => {
     })
   })
 
-  it('reads keywords kept as one string by older Unity', () => {
+  it('reads keywords kept as one string by older Unity, also when it wraps', () => {
     expect(parseMaterialProps('Material:\n  m_ShaderKeywords: GLOW_ON MASK_ON\n').keywords).toEqual(['GLOW_ON', 'MASK_ON'])
+    // Unity wraps a long string onto indented lines; the next key ends it.
+    const wrapped = 'Material:\n  m_ShaderKeywords: ADDITIVECONFIG_ON COLORRAMPGRAD_ON COLORRAMP_ON GLOW_ON PREMULTIPLYCOLOR_ON\n    SHAPE2_ON\n  m_LightmapFlags: 4\n'
+    expect(parseMaterialProps(wrapped).keywords).toEqual(['ADDITIVECONFIG_ON', 'COLORRAMPGRAD_ON', 'COLORRAMP_ON', 'GLOW_ON', 'PREMULTIPLYCOLOR_ON', 'SHAPE2_ON'])
   })
 
   it('reads a shader name and its defaults', () => {

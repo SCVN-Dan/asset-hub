@@ -19,6 +19,20 @@ export interface EmitterLook {
   trail?: Omit<EmitterLook, 'mesh' | 'trail'>
   /** A shader ported from Unity (viewer/shaderPorts): drawn by its own fragment shader instead of texture × tint. */
   custom?: CustomLook
+  /** The project works in Gamma colour space: colours and textures are used as stored, as Unity does there. */
+  gamma?: boolean
+  /**
+   * Unity's legacy particle shaders whose blend has no plain equivalent: "premultiply" (Alpha Blended Premultiply:
+   * colour and alpha scaled by the particle's alpha) and "soft" (Additive (Soft): One, OneMinusSrcColor, which never burns out).
+   */
+  legacy?: 'premultiply' | 'soft'
+}
+
+interface StreamAttributes {
+  s0: THREE.InstancedBufferAttribute
+  s1: THREE.InstancedBufferAttribute
+  layout: Array<{ stream: number; component: number }>
+  uniforms: Record<string, THREE.IUniform>
 }
 
 export interface CustomLook {
@@ -115,6 +129,7 @@ uniform float uHasMap;
 uniform vec4 uTint;
 uniform float uMultiply;
 uniform float uPremultiply;
+uniform float uLegacyPremultiply;
 varying vec2 vUv;
 varying vec2 vCorner;
 varying vec4 vColor;
@@ -125,9 +140,15 @@ void main() {
   vec4 c = tex * vColor * uTint;
   if (c.a < 0.003) discard;
   // Premultiplied blending (One, OneMinusSrcAlpha) expects colour already scaled by alpha, as Unity's shaders do.
-  if (uPremultiply > 0.5) c.rgb *= c.a;
+  // Unity's legacy "Alpha Blended Premultiply" scales colour and alpha by the particle's alpha once more:
+  // a texture's black, opaque background then barely covers what is behind.
+  if (uLegacyPremultiply > 0.5) c *= vColor.a;
+  else if (uPremultiply > 0.5) c.rgb *= c.a;
   gl_FragColor = uMultiply > 0.5 ? vec4(mix(vec3(1.0), c.rgb, c.a), 1.0) : c;
+  // A Gamma project blends the values as they are; a Linear one is shown through sRGB.
+  #ifndef GAMMA_SPACE
   #include <colorspace_fragment>
+  #endif
 }
 `
 
@@ -168,6 +189,7 @@ uniform float uHasMap;
 uniform vec4 uTint;
 uniform float uMultiply;
 uniform float uPremultiply;
+uniform float uLegacyPremultiply;
 varying vec2 vUv;
 varying vec4 vColor;
 void main() {
@@ -175,9 +197,40 @@ void main() {
   vec4 c = tex * vColor * uTint;
   if (c.a < 0.003) discard;
   // Premultiplied blending (One, OneMinusSrcAlpha) expects colour already scaled by alpha, as Unity's shaders do.
-  if (uPremultiply > 0.5) c.rgb *= c.a;
+  // Unity's legacy "Alpha Blended Premultiply" scales colour and alpha by the particle's alpha once more:
+  // a texture's black, opaque background then barely covers what is behind.
+  if (uLegacyPremultiply > 0.5) c *= vColor.a;
+  else if (uPremultiply > 0.5) c.rgb *= c.a;
   gl_FragColor = uMultiply > 0.5 ? vec4(mix(vec3(1.0), c.rgb, c.a), 1.0) : c;
+  // A Gamma project blends the values as they are; a Linear one is shown through sRGB.
+  #ifndef GAMMA_SPACE
   #include <colorspace_fragment>
+  #endif
+}
+`
+
+/** Mesh particles drawn by a ported shader: the mesh's UV where the streams put UVs, the particle's streams (custom data…), colour and alpha. */
+const MESH_VERT = /* glsl */ `
+attribute float instanceAlpha;
+attribute vec4 iS0;
+attribute vec4 iS1;
+uniform vec4 uUvMap0;
+uniform vec4 uUvMap1;
+varying vec4 vTex0;
+varying vec4 vTex1;
+varying vec4 vColor;
+vec4 withUv(vec4 values, vec4 map, vec2 uv) {
+  return mix(mix(values, vec4(uv.x), vec4(equal(map, vec4(1.0)))), vec4(uv.y), vec4(equal(map, vec4(2.0))));
+}
+void main() {
+  vTex0 = withUv(iS0, uUvMap0, uv);
+  vTex1 = withUv(iS1, uUvMap1, uv);
+  vec3 c = vec3(1.0);
+  #ifdef USE_INSTANCING_COLOR
+  c = instanceColor;
+  #endif
+  vColor = vec4(c, instanceAlpha);
+  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
 }
 `
 
@@ -315,7 +368,8 @@ function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit
       side: THREE.DoubleSide,
       blending: THREE.CustomBlending,
       blendSrc: custom.blendSrc,
-      blendDst: custom.blendDst
+      blendDst: custom.blendDst,
+      defines: look.gamma ? { GAMMA_SPACE: '' } : {}
     })
     return material
   }
@@ -325,16 +379,23 @@ function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit
     uniforms: {
       map: { value: look.texture ?? null },
       uHasMap: { value: look.texture ? 1 : 0 },
-      uTint: { value: new THREE.Vector4(toLinear(look.tint[0]), toLinear(look.tint[1]), toLinear(look.tint[2]), look.tint[3]) },
+      uTint: { value: look.gamma ? new THREE.Vector4(...look.tint) : new THREE.Vector4(toLinear(look.tint[0]), toLinear(look.tint[1]), toLinear(look.tint[2]), look.tint[3]) },
       uMultiply: { value: look.blend === 'multiply' ? 1 : 0 },
-      uPremultiply: { value: look.blend === 'premultiply' ? 1 : 0 },
+      uPremultiply: { value: look.blend === 'premultiply' || look.legacy === 'soft' ? 1 : 0 },
+      uLegacyPremultiply: { value: look.legacy === 'premultiply' ? 1 : 0 },
       ...extra
     },
     transparent: true,
     depthWrite: false,
-    side: THREE.DoubleSide
+    side: THREE.DoubleSide,
+    defines: look.gamma ? { GAMMA_SPACE: '' } : {}
   })
   blending(material, look.blend)
+  if (look.legacy === 'soft') {
+    material.blending = THREE.CustomBlending
+    material.blendSrc = THREE.OneFactor
+    material.blendDst = THREE.OneMinusSrcColorFactor
+  }
   return material
 }
 
@@ -358,8 +419,12 @@ export class EmitterPlayer {
   private readonly sim: ParticleSim
   private readonly max: number
   private readonly shapeRot?: THREE.Quaternion
-  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute; rotXY: THREE.InstancedBufferAttribute; sizeY: THREE.InstancedBufferAttribute; streams?: { s0: THREE.InstancedBufferAttribute; s1: THREE.InstancedBufferAttribute; layout: Array<{ stream: number; component: number }> } }
+  private readonly quads?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; pos: THREE.InstancedBufferAttribute; vel: THREE.InstancedBufferAttribute; color: THREE.InstancedBufferAttribute; srf: THREE.InstancedBufferAttribute; rotXY: THREE.InstancedBufferAttribute; sizeY: THREE.InstancedBufferAttribute; streams?: StreamAttributes }
   private readonly meshes?: THREE.InstancedMesh
+  /** Vertex streams of mesh particles drawn by a ported shader. */
+  private readonly meshStreams?: StreamAttributes
+  /** How far a mesh particle of size 1 spans (its mesh's bounds around the pivot, across): 1 for billboards. */
+  private readonly span: number = 1
   private readonly meshAlpha?: THREE.InstancedBufferAttribute
   private readonly trail?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; attrs: Record<'a' | 'b' | 'width' | 'colorA' | 'colorB' | 'u', THREE.InstancedBufferAttribute>; hist: Float32Array; histTime: Float32Array; histCount: Uint8Array; has: Uint8Array }
   // Per particle.
@@ -416,6 +481,28 @@ export class EmitterPlayer {
     this.mesh = group
 
     if (emitter.renderMode === 'mesh' && look.mesh) {
+      // Framing counts the mesh itself: a slash mesh can be many times its particle's size.
+      if (!look.mesh.boundingSphere) look.mesh.computeBoundingSphere()
+      const b = look.mesh.boundingSphere
+      if (b && Number.isFinite(b.radius) && b.radius > 0) this.span = 2 * (b.center.length() + b.radius)
+    }
+    if (emitter.renderMode === 'mesh' && look.mesh && look.custom) {
+      const geometry = look.mesh.clone()
+      this.meshAlpha = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1).setUsage(THREE.DynamicDrawUsage)
+      geometry.setAttribute('instanceAlpha', this.meshAlpha)
+      if (!geometry.getAttribute('uv')) geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2))
+      const streams = this.streamAttributes(n)
+      geometry.setAttribute('iS0', streams.s0)
+      geometry.setAttribute('iS1', streams.s1)
+      this.meshStreams = streams
+      this.meshes = new THREE.InstancedMesh(geometry, shaderMaterial(MESH_VERT, '', look, streams.uniforms), n)
+      this.meshes.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+      this.meshes.setColorAt(0, new THREE.Color(1, 1, 1))
+      this.meshes.count = 0
+      this.meshes.frustumCulled = false
+      this.meshes.userData.particles = true
+      group.add(this.meshes)
+    } else if (emitter.renderMode === 'mesh' && look.mesh) {
       const material = new THREE.MeshBasicMaterial({ map: look.texture ?? null, transparent: true, depthWrite: false, side: THREE.DoubleSide })
       const c = look.tint
       material.color.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace)
@@ -461,18 +548,11 @@ export class EmitterPlayer {
       geometry.setAttribute('iSRF', q.srf)
       geometry.instanceCount = 0
       // Ported shaders read the renderer's vertex streams (custom data, randoms…), in Unity's TEXCOORD layout.
-      const layout = look.custom ? streamTexcoords(this.sim.streams ?? DEFAULT_STREAMS).slice(0, 8) : undefined
-      const streams = layout && { s0: attr(4), s1: attr(4), layout }
+      const streams = look.custom ? this.streamAttributes(n) : undefined
       if (streams) {
-        // A TEXCOORD component no stream fills reads as the GPU's default, (0, 0, 0, 1).
-        for (let i = 0; i < n; i++) {
-          if (layout.length <= 3) (streams.s0.array as Float32Array)[i * 4 + 3] = 1
-          if (layout.length <= 7) (streams.s1.array as Float32Array)[i * 4 + 3] = 1
-        }
         geometry.setAttribute('iS0', streams.s0)
         geometry.setAttribute('iS1', streams.s1)
       }
-      const uvMap = [0, 0, 0, 0, 0, 0, 0, 0].map((_, j) => (layout?.[j] && layout[j].stream >= 4 && layout[j].stream <= 7 ? layout[j].component + 1 : 0))
       // Billboards aligned to the system's axes, not the camera, are drawn as quads in its space.
       const oriented = emitter.renderMode === 'billboard' && (this.sim.alignment === 'local' || this.sim.alignment === 'world')
       const mode = oriented ? 4 : { billboard: 0, mesh: 0, none: 0, stretched: 1, horizontal: 2, vertical: 3 }[emitter.renderMode]
@@ -484,8 +564,7 @@ export class EmitterPlayer {
         uVelScale: { value: this.sim.velocityScale },
         // Unity scales particles with their transforms (hierarchy scaling): kept up to date in update().
         uSizeScale: { value: 1 },
-        uUvMap0: { value: new THREE.Vector4(...uvMap.slice(0, 4)) },
-        uUvMap1: { value: new THREE.Vector4(...uvMap.slice(4)) }
+        ...streams?.uniforms
       })
       this.quads = { ...q, material, streams }
       const m = new THREE.Mesh(geometry, material)
@@ -554,7 +633,7 @@ export class EmitterPlayer {
 
   update(dt: number): void {
     this.step(dt * this.sim.simulationSpeed)
-    for (const m of [this.quads?.material, this.trail?.material]) if (m?.uniforms.uTime) m.uniforms.uTime.value = this.time
+    for (const m of [this.quads?.material, this.trail?.material, this.meshes?.material as THREE.ShaderMaterial | undefined]) if (m?.uniforms?.uTime) m.uniforms.uTime.value = this.time
     if (this.quads && this.mesh.parent) {
       const s = this.mesh.parent.getWorldScale(scratch)
       this.quads.material.uniforms.uSizeScale.value = (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3
@@ -576,7 +655,7 @@ export class EmitterPlayer {
     const s = this.mesh.parent.getWorldScale(scratch)
     const k = (Math.abs(s.x) + Math.abs(s.y) + Math.abs(s.z)) / 3
     const at = new THREE.Vector3()
-    for (let i = 0; i < this.count; i++) visit(this.mesh.localToWorld(at.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2])), this.size[i] * k)
+    for (let i = 0; i < this.count; i++) visit(this.mesh.localToWorld(at.set(this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2])), this.size[i] * k * this.span)
   }
 
   /** Space particles may reach, in the emitter's space, to frame the camera. */
@@ -853,9 +932,10 @@ export class EmitterPlayer {
           // Multiply has no alpha: fading goes towards white, which leaves the background as it is.
           this.meshes.setColorAt(i, color.setRGB(1 - (1 - c[0]) * c[3], 1 - (1 - c[1]) * c[3], 1 - (1 - c[2]) * c[3], THREE.SRGBColorSpace))
         } else {
-          this.meshes.setColorAt(i, color.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace))
+          this.meshes.setColorAt(i, color.setRGB(c[0], c[1], c[2], this.look.gamma && this.look.custom ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace))
           ;(this.meshAlpha!.array as Float32Array)[i] = c[3]
         }
+        if (this.meshStreams) this.writeStreams(this.meshStreams, i, t, size, angle, 0)
         continue
       }
       const qd = this.quads!
@@ -863,7 +943,7 @@ export class EmitterPlayer {
       ;(qd.vel.array as Float32Array).set(this.vel.subarray(i * 3, i * 3 + 3), i * 3)
       const col = qd.color.array as Float32Array
       // Colours are authored in sRGB; the shader works in linear light.
-      for (let k = 0; k < 4; k++) col[i * 4 + k] = k < 3 ? toLinear(c[k]) : c[k]
+      for (let k = 0; k < 4; k++) col[i * 4 + k] = k < 3 && !this.look.gamma ? toLinear(c[k]) : c[k]
       let frame = 0
       if (sheet) {
         const f = (evalMinMax(sheet.frame, t, r(3)) * sheet.cycles) % 1
@@ -876,26 +956,48 @@ export class EmitterPlayer {
       srf[i * 3 + 2] = frame
       ;(qd.rotXY.array as Float32Array).set(this.rotXY.subarray(i * 2, i * 2 + 2), i * 2)
       ;(qd.sizeY.array as Float32Array)[i] = sizeY
-      if (qd.streams) {
-        const s0 = qd.streams.s0.array as Float32Array
-        const s1 = qd.streams.s1.array as Float32Array
-        qd.streams.layout.forEach(({ stream, component }, j) => {
-          const v = this.streamValue(i, stream, component, t, size, angle, frame)
-          if (j < 4) s0[i * 4 + j] = v
-          else s1[i * 4 + j - 4] = v
-        })
-      }
+      if (qd.streams) this.writeStreams(qd.streams, i, t, size, angle, frame)
     }
     if (this.meshes) {
       this.meshes.count = this.count
       this.meshes.instanceMatrix.needsUpdate = true
       if (this.meshes.instanceColor) this.meshes.instanceColor.needsUpdate = true
       if (this.meshAlpha) this.meshAlpha.needsUpdate = true
+      if (this.meshStreams) this.meshStreams.s0.needsUpdate = this.meshStreams.s1.needsUpdate = true
     } else if (this.quads) {
       this.quads.geometry.instanceCount = this.count
       for (const a of [this.quads.pos, this.quads.vel, this.quads.color, this.quads.srf, this.quads.rotXY, this.quads.sizeY, this.quads.streams?.s0, this.quads.streams?.s1]) if (a) a.needsUpdate = true
     }
     if (this.trail) this.uploadTrails(c)
+  }
+
+  /**
+   * Per-particle TEXCOORD0 and TEXCOORD1 for a ported shader, laid out as the renderer's vertex streams say;
+   * `uUvMap` marks the components that are the vertex's own UV.
+   */
+  private streamAttributes(n: number): StreamAttributes {
+    const layout = streamTexcoords(this.sim.streams ?? DEFAULT_STREAMS).slice(0, 8)
+    const attr = () => new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4).setUsage(THREE.DynamicDrawUsage)
+    const s0 = attr()
+    const s1 = attr()
+    // A TEXCOORD component no stream fills reads as the GPU's default, (0, 0, 0, 1).
+    for (let i = 0; i < n; i++) {
+      if (layout.length <= 3) (s0.array as Float32Array)[i * 4 + 3] = 1
+      if (layout.length <= 7) (s1.array as Float32Array)[i * 4 + 3] = 1
+    }
+    const uvMap = [0, 0, 0, 0, 0, 0, 0, 0].map((_, j) => (layout[j] && layout[j].stream >= 4 && layout[j].stream <= 7 ? layout[j].component + 1 : 0))
+    return { s0, s1, layout, uniforms: { uUvMap0: { value: new THREE.Vector4(...uvMap.slice(0, 4)) }, uUvMap1: { value: new THREE.Vector4(...uvMap.slice(4)) } } }
+  }
+
+  /** Fills particle `i`'s streams. */
+  private writeStreams(st: StreamAttributes, i: number, t: number, size: number, angle: number, frame: number): void {
+    const s0 = st.s0.array as Float32Array
+    const s1 = st.s1.array as Float32Array
+    st.layout.forEach(({ stream, component }, j) => {
+      const v = this.streamValue(i, stream, component, t, size, angle, frame)
+      if (j < 4) s0[i * 4 + j] = v
+      else s1[i * 4 + j - 4] = v
+    })
   }
 
   /** One component of a vertex stream for particle `i` (ParticleSystemVertexStream numbers); UVs are filled in by the shader. */
@@ -970,7 +1072,7 @@ export class EmitterPlayer {
           const arr = attr.array as Float32Array
           for (let ch = 0; ch < 4; ch++) {
             const v = over[ch] * life[ch] * own[ch] * (ch === 3 ? 1 - uu : 1)
-            arr[seg * 4 + ch] = ch < 3 ? toLinear(v) : v
+            arr[seg * 4 + ch] = ch < 3 && !this.look.gamma ? toLinear(v) : v
           }
         }
         ;(u.array as Float32Array).set([ua, ub], seg * 2)
@@ -1085,7 +1187,11 @@ export class EffectPlayer {
 
   /** Runs the effect forward without drawing (thumbnails). */
   advance(seconds: number): void {
-    for (let t = 0; t < seconds; t += 1 / 30) for (const e of this.emitters) e.update(1 / 30)
+    // Steps of a 30th of a second, then what is left: exactly `seconds`, so frames at set times land on them.
+    for (let left = seconds; left > 1e-6; left -= 1 / 30) {
+      const step = Math.min(1 / 30, left)
+      for (const e of this.emitters) e.update(step)
+    }
   }
 
   /**

@@ -24,7 +24,7 @@ const FLOATS = [
   '_AlphaFadeAmount', '_AlphaFadeSmooth', '_AlphaFadePow', '_ColorGradingMidPoint', '_ColorRampLuminosity', '_ColorRampBlend', '_PosterizeNumColors',
   '_RimBias', '_RimScale', '_RimPower', '_RimIntensity', '_RimAddAmount', '_RimErodesAlpha', '_HsvShift', '_HsvSaturation', '_HsvBright',
   '_MaskPow', '_AlphaStepMin', '_AlphaStepMax', '_AlphaCutoffValue', '_TimingSeed',
-  '_OffsetSh1', '_OffsetSh2', '_OffsetSh3', '_Sh1BlendOffset', '_Sh2BlendOffset', '_Sh3BlendOffset'
+  '_OffsetSh1', '_OffsetSh2', '_OffsetSh3', '_Sh1BlendOffset', '_Sh2BlendOffset', '_Sh3BlendOffset', '_DistortionBlend'
 ]
 const COLORS = ['_Color', '_GlowColor', '_ShapeColor', '_Shape2Color', '_Shape3Color', '_FadeBurnColor', '_ColorGradingLight', '_ColorGradingMiddle', '_ColorGradingDark', '_RimColor']
 /** Texture slots; each has its tiling and offset as `<slot>_ST`. */
@@ -42,7 +42,7 @@ const KEYWORDS = new Set([
   'SHAPEADD_ON', 'SPLITRGBA_ON', 'SHAPE1MASK_ON', 'PREMULTIPLYCOLOR_ON', 'PREMULTIPLYALPHA_ON',
   'FADE_ON', 'FADEBURN_ON', 'ALPHAFADE_ON', 'ALPHAFADEUSESHAPE1_ON', 'ALPHAFADEUSEREDCHANNEL_ON', 'ALPHAFADETRANSPARENCYTOO_ON', 'ALPHAFADEINPUTSTREAM_ON',
   'COLORGRADING_ON', 'COLORRAMP_ON', 'COLORRAMPGRAD_ON', 'POSTERIZE_ON', 'RIM_ON', 'GLOW_ON', 'GLOWTEX_ON', 'HSV_ON', 'MASK_ON', 'ALPHASMOOTHSTEP_ON', 'ALPHACUTOFF_ON', 'ADDITIVECONFIG_ON',
-  'OFFSETSTREAM_ON', 'SHAPEWEIGHTS_ON'
+  'OFFSETSTREAM_ON', 'SHAPEWEIGHTS_ON', 'SCREENDISTORTION_ON'
 ])
 
 /** The fragment shader for one material's keywords. Expects `vTex0`, `vTex1` and `vColor` from the particle vertex shader. */
@@ -56,7 +56,7 @@ export function allIn1Fragment(keywords: readonly string[]): string {
     'uniform vec4 _MainTex_TexelSize;',
     'uniform float uTime;',
     // Unity's TRANSFORM_TEX macro pastes tokens (name##_ST), which WebGL's preprocessor cannot: written out instead.
-    BODY.replace(/TRANSFORM_TEX\((\w+), (\w+)\)/g, '(($1) * $2_ST.xy + $2_ST.zw)')
+    BODY.replace(/TRANSFORM_TEX\(([\w.]+), (\w+)\)/g, '(($1) * $2_ST.xy + $2_ST.zw)')
   ].join('\n')
 }
 
@@ -465,12 +465,21 @@ void main() {
   #else
   col.a *= _Alpha;
   #endif
+  #ifdef SCREENDISTORTION_ON
+  // The GrabPass variant blends its colour into the screen behind it, bent (_DistortionBlend of the way):
+  // with no screen to sample, that part is left see-through rather than drawn as a flat card.
+  float keep = 1.0 - clamp(_DistortionBlend, 0.0, 1.0);
+  col *= keep;
+  #endif
   #ifdef ADDITIVECONFIG_ON
   col.rgb *= col.a;
   #endif
 
   if (col.a < 0.003 && col.r + col.g + col.b < 0.003) discard;
   gl_FragColor = col;
+  // A Gamma project blends the values as they are; a Linear one is shown through sRGB.
+  #ifndef GAMMA_SPACE
   #include <colorspace_fragment>
+  #endif
 }
 `

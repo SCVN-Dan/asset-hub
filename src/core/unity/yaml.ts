@@ -15,12 +15,24 @@ export const KNOWN_PACKAGE_SHADERS: Record<string, string> = {
 
 /** Built-in shaders by fileID (they share one GUID). */
 export const BUILTIN_SHADER_NAMES: Record<string, string> = {
+  // File IDs as Unity 2022.3 reports them (AssetDatabase.TryGetGUIDAndLocalFileIdentifier on each shader).
   '46': 'Standard',
   '45': 'Standard (Specular setup)',
   '200': 'Legacy Shaders/Particles/Additive',
+  '201': 'Legacy Shaders/Particles/~Additive-Multiply',
+  '202': 'Legacy Shaders/Particles/Additive (Soft)',
   '203': 'Legacy Shaders/Particles/Alpha Blended',
+  '205': 'Legacy Shaders/Particles/Multiply',
+  '206': 'Legacy Shaders/Particles/Multiply (Double)',
+  '207': 'Legacy Shaders/Particles/Alpha Blended Premultiply',
+  '208': 'Legacy Shaders/Particles/VertexLit Blended',
+  '209': 'Legacy Shaders/Particles/Anim Alpha Blended',
   '210': 'Particles/Standard Surface',
   '211': 'Particles/Standard Unlit',
+  '10750': 'Unlit/Transparent',
+  '10751': 'Unlit/Transparent Cutout',
+  '10752': 'Unlit/Texture',
+  '10755': 'Unlit/Color',
   '10720': 'Mobile/Particles/Additive',
   '10721': 'Mobile/Particles/Alpha Blended'
 }
@@ -206,8 +218,7 @@ export function parseMaterialLook(matText: string): MaterialLook {
     const n = Number(v)
     if (Number.isFinite(n)) floats[k] = n
   }
-  // Keywords are a string (m_ShaderKeywords) or a list (m_ValidKeywords), depending on the Unity version.
-  const emissive = /_EMISSION\b/.test(/m_ShaderKeywords:.*$/m.exec(matText)?.[0] ?? '') || /m_ValidKeywords:(?:\s*\n\s*- \w+)*?\s*\n\s*- _EMISSION\s*$/m.test(matText)
+  const emissive = materialKeywords(matText).includes('_EMISSION')
   // URP: _Surface 0 opaque / 1 transparent, _AlphaClip for cutout. Built-in Standard: _Mode 0 opaque, 1 cutout, 2 fade, 3 transparent.
   const surface: MaterialLook['surface'] =
     floats._Surface === 1 || floats._Mode === 2 || floats._Mode === 3 ? 'transparent' : floats._AlphaClip === 1 || floats._Mode === 1 ? 'cutout' : 'opaque'
@@ -221,6 +232,17 @@ export function parseMaterialLook(matText: string): MaterialLook {
     metallic: floats._Metallic,
     ...(blendOf(floats) ? { blend: blendOf(floats) } : {})
   }
+}
+
+/**
+ * Shader keywords a material turns on: a string (m_ShaderKeywords) or a list (m_ValidKeywords),
+ * depending on the Unity version. A long string wraps onto indented lines, which belong to it.
+ */
+export function materialKeywords(matText: string): string[] {
+  const text = matText.replace(/\r\n/g, '\n')
+  const line = /m_ShaderKeywords: *([^\n]*(?:\n {3,}[A-Za-z0-9_ ]+(?=\n))*)/.exec(text)?.[1] ?? ''
+  const list = /m_ValidKeywords:((?:\s*\n\s*- \w+)*)/.exec(text)?.[1] ?? ''
+  return [...new Set([...line.split(/\s+/), ...list.split(/\n\s*- /).map((k) => k.trim())].filter((k) => /^\w+$/.test(k)))]
 }
 
 /** Everything a material sets, for previews that reproduce one shader exactly (see renderer viewer/shaderPorts). */
@@ -237,10 +259,7 @@ export interface MaterialProps {
 
 export function parseMaterialProps(matText: string): MaterialProps {
   const text = matText.replace(/\r\n/g, '\n')
-  // Keywords are a string (m_ShaderKeywords) or a list (m_ValidKeywords), depending on the Unity version.
-  const line = /m_ShaderKeywords: *(.*)$/m.exec(text)?.[1] ?? ''
-  const list = /m_ValidKeywords:((?:\s*\n\s*- \w+)*)/.exec(text)?.[1] ?? ''
-  const keywords = [...new Set([...line.split(/\s+/), ...list.split(/\n\s*- /).map((k) => k.trim())].filter((k) => /^\w+$/.test(k)))]
+  const keywords = materialKeywords(text)
   const floats: Record<string, number> = {}
   for (const [k, v] of [...propertyList(text, 'm_Ints'), ...propertyList(text, 'm_Floats')]) {
     const n = Number(v)

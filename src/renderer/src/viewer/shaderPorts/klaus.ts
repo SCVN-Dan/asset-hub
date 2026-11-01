@@ -27,6 +27,9 @@ void main() {
   vec4 col = tex.r * vColor * dissolve * (uAdditive > 0.5 ? _Emission_Power : 1.0);
   if (col.a < 0.003 && col.r + col.g + col.b < 0.003) discard;
   gl_FragColor = col;
+  // A Gamma project blends the values as they are; a Linear one is shown through sRGB.
+  #ifndef GAMMA_SPACE
   #include <colorspace_fragment>
+  #endif
 }
 `

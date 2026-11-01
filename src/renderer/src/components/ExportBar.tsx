@@ -91,7 +91,7 @@ function TargetSummary({ report }: { report: TargetReport }) {
   const project = report.project.split(/[\\/]/).pop()
   const list = (items: Array<{ path: string; existing: string }>) => items.slice(0, 6).map((i) => `${fileName(i.path)} → ${i.existing}`).join(', ') + (items.length > 6 ? ' …' : '')
   const nothing =
-    !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.shaderByName.length && !report.shaderKept.length && !report.shaderClash.length && !report.shaderMapped.length && !report.mappingErrors.length && !report.missingScripts.length && !report.missingShaders.length && !report.urp
+    !report.same && !report.reused.length && !report.overwrite.length && !report.renamed.length && !report.shaderByName.length && !report.shaderKept.length && !report.shaderClash.length && !report.shaderMapped.length && !report.urpConverted.length && !report.mappingErrors.length && !report.missingScripts.length && !report.missingShaders.length && !report.urp
   return (
     <div className="target-summary small">
       <span className="muted">{nothing ? t('target.clean', { project }) : t('target.title', { project })}</span>
@@ -115,6 +115,7 @@ function TargetSummary({ report }: { report: TargetReport }) {
         </span>
       )}
       {report.shaderMapped.length > 0 && <span title={list(report.shaderMapped)}>{t('target.shaderMapped', { count: report.shaderMapped.length, list: list(report.shaderMapped) })}</span>}
+      {report.urpConverted.length > 0 && <span title={list(report.urpConverted)}>{t('target.urpConverted', { count: report.urpConverted.length, list: list(report.urpConverted) })}</span>}
       {report.missingScripts.length > 0 && (
         <span className="warn-text" title={list(report.missingScripts)}>
           {t('target.missingScripts', { count: report.missingScripts.length, list: list(report.missingScripts) })}
@@ -130,7 +131,12 @@ function TargetSummary({ report }: { report: TargetReport }) {
           {t('target.mappingError', { error })}
         </span>
       ))}
-      {report.urp && <span className="warn-text">{report.urp.target ? t('target.urp', { source: report.urp.source, target: report.urp.target }) : t('target.noUrp', { source: report.urp.source })}</span>}
+      {report.urp && (
+        <span className="warn-text">
+          {report.urp.target ? t('target.urp', { source: report.urp.source, target: report.urp.target }) : t('target.noUrp', { source: report.urp.source })}
+          {!report.urp.target && !!report.urp.needed && ` ${t('target.urpNeeded', { count: report.urp.needed })}`}
+        </span>
+      )}
     </div>
   )
 }

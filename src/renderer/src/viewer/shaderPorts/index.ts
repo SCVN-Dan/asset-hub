@@ -32,6 +32,8 @@ function defaultParticle(): THREE.Texture {
 export interface PortFiles {
   texture(path: string): Promise<THREE.Texture | undefined>
   text(path: string): Promise<string | undefined>
+  /** The project works in Gamma colour space: colours stay as stored. */
+  gamma?: boolean
 }
 
 /** The texture in one slot: a texture file, one saved inside another asset, Unity's own particle dot, or white. */
@@ -46,7 +48,7 @@ async function slotTexture(material: MaterialRef, props: MaterialProps, slot: st
     const tex = text ? parseEmbeddedTexture(text, ref.fileID) : undefined
     if (!tex) return whiteTexture()
     const t = new THREE.DataTexture(tex.rgba, tex.width, tex.height)
-    t.colorSpace = tex.linear ? THREE.NoColorSpace : THREE.SRGBColorSpace
+    t.colorSpace = tex.linear || files.gamma ? THREE.NoColorSpace : THREE.SRGBColorSpace
     t.wrapS = t.wrapT = tex.clamp ? THREE.ClampToEdgeWrapping : THREE.RepeatWrapping
     t.magFilter = t.minFilter = tex.point ? THREE.NearestFilter : THREE.LinearFilter
     t.needsUpdate = true
@@ -70,7 +72,7 @@ export async function portedLook(material: MaterialRef, shaderText: string, matT
   const colors = { ...defaults.colors, ...props.colors }
   const uniforms: Record<string, THREE.IUniform> = {}
   for (const [k, v] of Object.entries(floats)) uniforms[k] = { value: v }
-  for (const [k, c] of Object.entries(colors)) uniforms[k] = { value: new THREE.Vector4(linear(c.r), linear(c.g), linear(c.b), c.a) }
+  for (const [k, c] of Object.entries(colors)) uniforms[k] = { value: files.gamma ? new THREE.Vector4(c.r, c.g, c.b, c.a) : new THREE.Vector4(linear(c.r), linear(c.g), linear(c.b), c.a) }
   // Only the slots the material's features read are downloaded.
   const used = new Set(['_MainTex', ...ALLIN1_TEXTURES.filter((slot) => usesSlot(slot, props.keywords))])
   await Promise.all(

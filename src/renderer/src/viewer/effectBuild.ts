@@ -1,12 +1,31 @@
 import * as THREE from 'three'
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js'
-import { meshForFileId, modelImportScale, parseMaterialLook, parseTextureMeta, shaderBlend, shaderTextureProps, type BuiltinMesh, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
+import { meshForFileId, modelImportScale, parseMaterialLook, parseTextureMeta, parseUnityMesh, shaderBlend, shaderTextureProps, type BuiltinMesh, type DependencyReport, type MaterialLook, type ParticleEmitter } from '@core/index'
 import type { LiveContext } from '../components/ModelViewer'
 import { mainTexture } from './particleThumb'
 import { EffectPlayer, EmitterPlayer, type EmitterLook } from './particlePlayer'
 import { portedLook } from './shaderPorts'
 import { fetchTextureFile } from './textures'
 import { unwrap } from '../remoteSource'
+
+/** Projects in Gamma colour space, by repo, branch and project root (read once each). */
+const gammaProjects = new Map<string, Promise<boolean>>()
+
+/**
+ * Whether a project works in Gamma colour space (PlayerSettings m_ActiveColorSpace 0), where Unity
+ * computes and blends colours as stored: effects there are drawn that way too. Linear when unknown.
+ */
+export function isGammaProject(live: LiveContext, background = false): Promise<boolean> {
+  const key = `${live.repo}\n${live.branch}\n${live.root}`
+  let p = gammaProjects.get(key)
+  if (!p) {
+    p = window.api.assets
+      .readFile(live.repo, live.branch, `${live.root}ProjectSettings/ProjectSettings.asset`, background)
+      .then((r) => (r.ok ? /^\s*m_ActiveColorSpace: 0\s*$/m.test(new TextDecoder().decode(r.data)) : false), () => false)
+    gammaProjects.set(key, p)
+  }
+  return p
+}
 
 /** Mesh particles from models larger than this are drawn as billboards. */
 const MAX_MESH_BYTES = 8 * 1024 * 1024
@@ -46,6 +65,29 @@ function maskFromColour(image: HTMLImageElement): HTMLCanvasElement | undefined 
   return canvas
 }
 
+/**
+ * A mesh Unity saved as YAML (effect packs' waves and rings), turned to match meshes from an
+ * FBX: those arrive mirrored along X, which the particle system's own mirroring undoes.
+ */
+function nativeMesh(text: string): THREE.BufferGeometry | undefined {
+  const m = parseUnityMesh(text)
+  if (!m) return undefined
+  const flip = (a: Float32Array) => {
+    const out = a.slice()
+    for (let i = 0; i < out.length; i += 3) out[i] = -out[i]
+    return out
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.BufferAttribute(flip(m.positions), 3))
+  if (m.normals) g.setAttribute('normal', new THREE.BufferAttribute(flip(m.normals), 3))
+  if (m.uvs) g.setAttribute('uv', new THREE.BufferAttribute(m.uvs, 2))
+  // Mirroring turns triangles around: wind them back.
+  const idx = m.indices.slice()
+  for (let i = 0; i + 2 < idx.length; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]]
+  g.setIndex(new THREE.BufferAttribute(idx, 1))
+  return g
+}
+
 /** Unity's own meshes at their sizes (Quad and Plane facing along Z and Y like Unity's). */
 function builtinGeometry(mesh: BuiltinMesh): THREE.BufferGeometry {
   switch (mesh) {
@@ -83,6 +125,7 @@ function blendFromShader(label: string | undefined): EmitterLook['blend'] {
  */
 export async function buildEffect(live: LiveContext, report: DependencyReport, anchors: ReadonlyArray<{ emitter: ParticleEmitter & { prefab?: string }; object: THREE.Object3D }>, background = false): Promise<EffectPlayer> {
   const byGuid = new Map(report.materials.flatMap((m) => (m.guid ? [[m.guid, m] as const] : [])))
+  const gamma = await isGammaProject(live, background)
   const textures = new Map<string, Promise<THREE.Texture | undefined>>()
   const looks = new Map<string, Promise<MaterialLook | undefined>>()
   let maxSide = 0
@@ -98,7 +141,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
             const masked = maskFromColour(tex.image as HTMLImageElement)
             if (masked) tex.image = masked
           }
-          tex.colorSpace = THREE.SRGBColorSpace
+          tex.colorSpace = gamma ? THREE.NoColorSpace : THREE.SRGBColorSpace
           const img = tex.image as { width?: number; height?: number } | undefined
           maxSide = Math.max(maxSide, img?.width ?? 0, img?.height ?? 0)
           return tex
@@ -143,7 +186,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
           const wrap = (w: number | undefined) => (w === 1 ? THREE.ClampToEdgeWrapping : w === 2 || w === 3 ? THREE.MirroredRepeatWrapping : THREE.RepeatWrapping)
           tex.wrapS = wrap(meta?.wrapU)
           tex.wrapT = wrap(meta?.wrapV)
-          tex.colorSpace = meta?.sRGB === false ? THREE.NoColorSpace : THREE.SRGBColorSpace
+          tex.colorSpace = meta?.sRGB === false || gamma ? THREE.NoColorSpace : THREE.SRGBColorSpace
           const img = tex.image as { width?: number; height?: number } | undefined
           maxSide = Math.max(maxSide, img?.width ?? 0, img?.height ?? 0)
           return tex
@@ -181,6 +224,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
       p = (async () => {
         try {
           const read = (f: string) => window.api.assets.readFile(live.repo, live.branch, f, background)
+          if (!/\.fbx$/i.test(path)) return nativeMesh(new TextDecoder().decode(await read(path).then(unwrap)))
           const [bytes, meta] = await Promise.all([read(path).then(unwrap), read(`${path}.meta`).then((r) => (r.ok ? new TextDecoder().decode(r.data) : ''))])
           if (bytes.byteLength > MAX_MESH_BYTES) return undefined
           const root = new FBXLoader().parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, '')
@@ -217,8 +261,9 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
     const texture = texPath ? await loadTexture(texPath, custom) : undefined
     // A shader we have a port of draws exactly; the rest above stays for mesh particles, which it does not cover.
     const matText = info && material?.path ? await loadMatText(material.path) : undefined
-    const ported = info && material && matText ? await portedLook(material, info.text, matText, { texture: loadPortTexture, text: loadMatText }).catch(() => undefined) : undefined
-    return { texture, blend, tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1], ...(ported ? { custom: ported } : {}) }
+    const ported = info && material && matText ? await portedLook(material, info.text, matText, { texture: loadPortTexture, text: loadMatText, gamma }).catch(() => undefined) : undefined
+    const legacy = shader?.kind !== 'builtin' ? undefined : /Alpha Blended Premultiply/.test(shader.label) ? 'premultiply' : /Additive \(Soft\)/.test(shader.label) ? 'soft' : undefined
+    return { texture, blend, tint: c ? [c.r, c.g, c.b, c.a] : [1, 1, 1, 1], ...(ported ? { custom: ported } : {}), ...(legacy ? { legacy } : {}), ...(gamma ? { gamma } : {}) }
   }
 
   const players = await Promise.all(
@@ -227,7 +272,7 @@ export async function buildEffect(live: LiveContext, report: DependencyReport, a
       const [look, trail, mesh] = await Promise.all([
         lookOf(emitter.material),
         emitter.sim.trail ? lookOf(emitter.trailMaterial ?? emitter.material) : undefined,
-        meshPath && /\.fbx$/i.test(meshPath) ? loadMesh(meshPath, emitter.meshFileID) : emitter.renderMode === 'mesh' && emitter.builtinMesh ? builtinGeometry(emitter.builtinMesh) : undefined
+        meshPath && /\.(fbx|mesh|asset)$/i.test(meshPath) ? loadMesh(meshPath, emitter.meshFileID) : emitter.renderMode === 'mesh' && emitter.builtinMesh ? builtinGeometry(emitter.builtinMesh) : undefined
       ])
       const player = new EmitterPlayer(emitter, { ...look, trail, mesh })
       object.add(player.mesh)

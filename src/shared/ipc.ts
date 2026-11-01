@@ -153,6 +153,8 @@ export interface TargetReport {
   shaderClash: Array<{ path: string; existing: string }>
   /** Materials switched to a project shader by `.assethub/shader-mapping.json` ("existing" = "from → to"). */
   shaderMapped: Array<{ path: string; existing: string }>
+  /** URP materials switched to built-in shaders, the project having no URP ("existing" = "from → to"). */
+  urpConverted: Array<{ path: string; existing: string }>
   /** Exported assets using package scripts the project lacks ("existing" = their GUIDs, shortened): "Missing Script" after import. */
   missingScripts: Array<{ path: string; existing: string }>
   /** Project shaders packed materials use that neither the package nor the project has (path: shader name, existing: its materials): they would turn magenta. */
@@ -160,7 +162,7 @@ export interface TargetReport {
   /** Problems with the mapping file (rules skipped). */
   mappingErrors: string[]
   /** URP versions of the source and target projects, when they differ. */
-  urp?: { source: string; target?: string }
+  urp?: { source: string; target?: string; /** Materials that still need URP after conversion. */ needed?: number }
 }
 
 export interface ExportResult {

@@ -16,18 +16,24 @@ const groups = JSON.parse(readFileSync(listFile, 'utf8'))
 mkdirSync(join(outDir, 'img'), { recursive: true })
 
 const APP = process.env.APP_DIR || new URL('..', import.meta.url).pathname
-const app = await electron.launch({ executablePath: `${APP}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`, args: [APP], env: { ...process.env }, timeout: 60000 })
-const page = await app.firstWindow()
-// Signed in (restored from the copied settings) before anything is read from GitHub.
-for (let i = 0; ; i++) {
-  if (await page.evaluate(() => window.api.auth.status().then((r) => r.ok && r.data.signedIn))) break
-  if (i > 60) throw new Error('not signed in after 60 s')
-  await new Promise((r) => setTimeout(r, 1000))
+let app, page
+/** Starts the app (again, after an effect brought its renderer down), signed in, the branch's tree read. */
+async function launch() {
+  await app?.close().catch(() => {})
+  app = await electron.launch({ executablePath: `${APP}/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron`, args: [APP], env: { ...process.env }, timeout: 60000 })
+  page = await app.firstWindow()
+  page.on('console', (m) => m.type() === 'error' && /shader|WebGL|GL_/i.test(m.text()) && console.log('  gl:', m.text().slice(0, 300)))
+  // Signed in (restored from the copied settings) before anything is read from GitHub.
+  for (let i = 0; ; i++) {
+    if (await page.evaluate(() => window.api.auth.status().then((r) => r.ok && r.data.signedIn))) break
+    if (i > 60) throw new Error('not signed in after 60 s')
+    await new Promise((r) => setTimeout(r, 1000))
+  }
+  // The branch's file tree first, as opening it in the app does: resolving dependencies needs it.
+  const tree = await page.evaluate(([repo, branch]) => window.api.source.listTree(repo, branch).then((r) => (r.ok ? r.data.length ?? 'ok' : r.error.message)), [REPO, BRANCH])
+  console.log('tree:', tree)
 }
-
-// The branch's file tree first, as opening it in the app does: resolving dependencies needs it.
-const tree = await page.evaluate(([repo, branch]) => window.api.source.listTree(repo, branch).then((r) => (r.ok ? r.data.length ?? 'ok' : r.error.message)), [REPO, BRANCH])
-console.log('tree:', tree)
+await launch()
 
 const done = new Set()
 const cards = []
@@ -41,7 +47,14 @@ for (const [group, paths] of Object.entries(groups)) {
     }
     done.add(full)
     const t = Date.now()
-    const r = await page.evaluate(([repo, branch, root, path]) => window.assetHubRender(repo, branch, root, path).then((x) => ({ url: x.url }), (e) => ({ error: String(e) })), [REPO, BRANCH, ROOT, path])
+    let r
+    try {
+      r = await page.evaluate(([repo, branch, root, path]) => window.assetHubRender(repo, branch, root, path).then((x) => ({ url: x.url }), (e) => ({ error: String(e) })), [REPO, BRANCH, ROOT, path])
+    } catch (e) {
+      // The renderer went down with this one: noted, and the app started again for the rest.
+      r = { error: 'crashed the renderer: ' + String(e).split('\n')[0] }
+      await launch()
+    }
     const file = `img/${id}.webp`
     if (r.url) writeFileSync(join(outDir, file), Buffer.from(r.url.split(',')[1], 'base64'))
     cards.push({ group, path, file: r.url ? file : undefined, error: r.error, ms: Date.now() - t })

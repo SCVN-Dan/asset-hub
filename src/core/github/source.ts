@@ -69,7 +69,7 @@ const KIND_PATTERN: Record<GuidKind, RegExp> = {
   // Any extension ending in "shader" too: custom shader importers (Toony Colors Pro's .tcp2shader…).
   shader: /\.(shader|shadergraph|shadersubgraph|[a-z0-9]+shader|hlsl|cginc)\.meta$/i,
   any: /\.meta$/i,
-  model: /\.(fbx|obj|blend|dae|3ds|max|ma|mb|asset)\.meta$/i,
+  model: /\.(fbx|obj|blend|dae|3ds|max|ma|mb|asset|mesh)\.meta$/i,
   prefab: /\.(prefab|fbx|obj|blend)\.meta$/i,
   script: /\.(cs|dll)\.meta$/i,
   other: /\.(wav|mp3|ogg|aiff?|anim|controller|overridecontroller|asset|ttf|otf|fontsettings|mask|physicmaterial|physicsmaterial2d|playable|signal|spriteatlas|spriteatlasv2|mixer|cubemap|flare|guiskin|renderTexture|lighting|terrainlayer)\.meta$/i
