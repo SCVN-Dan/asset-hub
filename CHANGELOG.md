@@ -2,6 +2,24 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.5] — 2026-11-01
+
+### Added
+- **The AI pet has a face:** a round 16×16 LED face fills the avatar instead of the chest icon. Its expression follows the chat — resting (blinks, glances around), listening while you type, thinking, eyes scanning while a search runs, a happy face when the answer comes, a "?" when it asks back, X eyes on an error, sad after 👎 or Stop — and it falls asleep after 5 minutes alone, waking when the pointer comes near. Reactions stay 8 seconds once the bubble is closed.
+- **URP materials converted for projects without URP:** exporting from a URP project to one without it (the "materials may show pink" case) now switches each material to the built-in shader that does the same job — Lit, Simple Lit and Baked Lit to Standard (opaque, cutout, fade or transparent, with the keywords, blend, depth and queue Unity's own editor sets), Unlit to Unlit/Texture, Transparent or Transparent Cutout, Particles to the legacy particle shader of their blend — properties renamed (`_BaseMap` → `_MainTex`, `_BaseColor` → `_Color`…). The team's own `.assethub/shader-mapping.json` rules still come first. Going to another pipeline still exports, with a warning that the result may break or look unlike the preview; materials still needing URP (Shader Graphs) are counted in it. Checked by importing into a Unity 2022.3 project without URP.
+- **AI pet:** a click outside folds the bubble away; an answer that comes in while it is closed puts a red "!" on the avatar until it is opened.
+- Effects whose particles are Unity meshes saved as YAML (`.mesh`, e.g. AllIn1Vfx's waves and rings: 89 in hb_creative_xp_hero) are drawn with their mesh.
+
+### Fixed
+- Effects made with AllIn1Vfx lost features whenever a material's keyword list was long: Unity wraps it onto a second line, which was not read (157 of 1,269 materials in hb_creative_xp_hero; Blue Fire showed square cards).
+- AllIn1Vfx materials with a distortion map failed to compile and drew nothing like Unity (Digital Muzzle Flash, and others).
+- Mesh particles (slashes, waves) use the ported shaders and their custom data too, and cards frame them by the mesh's real size instead of filling the card with it.
+- The GrabPass variant's screen distortion is left see-through instead of drawn as a flat card.
+- Effects drawn with Unity's legacy particle shaders by file ID got their names and blends wrong past Additive and Alpha Blended: the IDs now come from Unity itself, and Additive (Soft) blends softly, so smoke on a black texture (FX_Smoke_Small, Water Vapor, Dust) is see-through instead of a black card.
+- Effects of projects in Gamma colour space (hb_creative_xp_hero is one) were computed in Linear: AllIn1Vfx's fades and thresholds cut most of some effects away (Blue Impact's sparks and ring, dim smoke). They are now drawn in the project's own colour space, read from its ProjectSettings. Checked frame by frame against Unity 2022.3 (`scripts/unity/RenderFx.cs`).
+- Moving cards' frames landed later and later (each step rounded up to a 30th of a second): they now fall at the right times.
+- Effect cards are drawn again once.
+
 ## [0.1.4] — 2026-10-31
 
 ### Added
