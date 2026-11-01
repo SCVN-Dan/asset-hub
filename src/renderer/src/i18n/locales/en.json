@@ -728,9 +728,13 @@
     "missingScripts_one": "⚠ {{count}} asset uses scripts from a package the project does not have (Missing Script after import): {{list}}",
     "missingScripts_other": "⚠ {{count}} assets use scripts from packages the project does not have (Missing Script after import): {{list}}",
     "urp": "⚠ URP {{source}} in the source, {{target}} in the project: check materials after import.",
-    "noUrp": "⚠ The source uses URP {{source}}; the project has no URP: materials may show pink.",
+    "noUrp": "⚠ The source uses URP {{source}}, the project the Built-in pipeline: it still exports, but may break or not look like the preview after import, the pipelines being different.",
     "missingShaders_one": "⚠ 1 shader from the source project is not in {{project}}; materials using it will show magenta: {{list}}. Add that shader/plugin to {{project}} or switch them with Shader Mapping.",
-    "missingShaders_other": "⚠ {{count}} shaders from the source project are not in {{project}}; materials using them will show magenta: {{list}}. Add those shaders/plugins to {{project}} or switch them with Shader Mapping."
+    "missingShaders_other": "⚠ {{count}} shaders from the source project are not in {{project}}; materials using them will show magenta: {{list}}. Add those shaders/plugins to {{project}} or switch them with Shader Mapping.",
+    "urpConverted_one": "{{count}} URP material switched to built-in shaders (the project has no URP): {{list}}",
+    "urpConverted_other": "{{count}} URP materials switched to built-in shaders (the project has no URP): {{list}}",
+    "urpNeeded_one": "{{count}} material still needs URP and may show pink.",
+    "urpNeeded_other": "{{count}} materials still need URP and may show pink."
   },
   "link": {
     "copy": "Copy link",
@@ -784,7 +788,8 @@
     "other": "Other…",
     "choices": "Choices",
     "report": "This answer is wrong",
-    "reported": "Reported — thanks"
+    "reported": "Reported — thanks",
+    "newAnswer": "New answer"
   },
   "unity": {
     "import": "Import into Unity",

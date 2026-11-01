@@ -694,8 +694,10 @@
     "mappingError": "⚠ {{error}}",
     "missingScripts_other": "⚠ {{count}} asset dùng script từ package mà project chưa có (sẽ Missing Script sau khi import): {{list}}",
     "urp": "⚠ Nguồn dùng URP {{source}}, project dùng {{target}}: kiểm tra material sau khi import.",
-    "noUrp": "⚠ Nguồn dùng URP {{source}}, project chưa có URP: material có thể bị hồng.",
-    "missingShaders_other": "⚠ {{project}} thiếu {{count}} shader mà gói cần, các material liên quan sẽ hiện màu hồng: {{list}}. Cài shader/plugin vào {{project}} hoặc đổi sang shader khác bằng Shader Mapping."
+    "noUrp": "⚠ Nguồn dùng URP {{source}}, project dùng Built-in: vẫn xuất được, nhưng sau khi import có thể lỗi hoặc không giống preview vì khác pipeline.",
+    "missingShaders_other": "⚠ {{project}} thiếu {{count}} shader mà gói cần, các material liên quan sẽ hiện màu hồng: {{list}}. Cài shader/plugin vào {{project}} hoặc đổi sang shader khác bằng Shader Mapping.",
+    "urpConverted_other": "{{count}} material URP đã tự chuyển sang shader built-in (project không có URP): {{list}}",
+    "urpNeeded_other": "{{count}} material vẫn cần URP, có thể bị hồng."
   },
   "link": {
     "copy": "Copy link",
@@ -749,7 +751,8 @@
     "other": "Khác…",
     "choices": "Lựa chọn",
     "report": "Câu trả lời này sai",
-    "reported": "Đã ghi lại, cảm ơn bạn"
+    "reported": "Đã ghi lại, cảm ơn bạn",
+    "newAnswer": "Có câu trả lời mới"
   },
   "unity": {
     "import": "Nhập vào Unity",

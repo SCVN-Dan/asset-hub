@@ -636,9 +636,20 @@ body.resizing * { cursor: inherit !important; }
 .ai-pet > * { pointer-events: auto; }
 .ai-pet-avatar { display: grid; place-items: center; width: 56px; height: 56px; padding: 0; border-radius: 50%; border: 2px solid var(--accent); background: radial-gradient(circle at 50% 40%, #2a2f3a, var(--panel) 70%); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 174, 31, 0.25); cursor: pointer; animation: ai-pet-idle 3.2s ease-in-out infinite; }
 .ai-pet-avatar:hover { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 26px rgba(255, 174, 31, 0.45); }
-.ai-pet[data-busy] .ai-pet-avatar { animation: ai-pet-talk 0.5s ease-in-out infinite; }
+/* The face fills the round avatar; its expressions do the talking, so the avatar only floats. */
+.ai-pet-avatar .pixel-face { display: block; border-radius: 50%; }
+/* A new answer while the bubble was closed. Outside the round face, so the avatar may not clip it. */
+.ai-pet-avatar { position: relative; overflow: visible; }
+.ai-pet-avatar .pixel-face { overflow: hidden; }
+.ai-pet-badge { position: absolute; top: -3px; right: -3px; box-sizing: border-box; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid #ff4d5e; background: radial-gradient(circle at 50% 40%, #2a2f3a, #121821 70%); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 8px rgba(255, 77, 94, 0.45); animation: ai-badge-pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+/* LEDs as on the face: off ones faintly there, lit ones glowing red and gently pulsing. */
+.ai-pet-badge svg { display: block; overflow: visible; }
+.ai-pet-badge circle { fill: rgba(255, 77, 94, 0.12); }
+.ai-pet-badge circle.lit { fill: #ff5a69; filter: drop-shadow(0 0 0.5px #ff4d5e); animation: ai-badge-led 1.2s ease-in-out infinite; }
+@keyframes ai-badge-led { 50% { fill: #ffb3ba; } }
+@keyframes ai-badge-pop { from { transform: scale(0); } }
+.ai-pet-avatar[data-expression='sleeping'] { animation-duration: 6s; }
 @keyframes ai-pet-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-@keyframes ai-pet-talk { 0%, 100% { transform: rotate(0) translateY(0); } 25% { transform: rotate(-6deg) translateY(-2px); } 75% { transform: rotate(6deg) translateY(-2px); } }
 .ai-pet-bubble { position: relative; width: min(360px, calc(100vw - 40px)); display: flex; flex-direction: column; border-radius: 14px; border: 1px solid var(--border-strong); background: var(--panel); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); animation: ai-pet-pop 0.18s ease-out; transform-origin: bottom right; }
 /* The bubble's tail, pointing at the pet. */
 .ai-pet-bubble::after { content: ''; position: absolute; right: 22px; bottom: -7px; width: 12px; height: 12px; background: var(--panel); border-right: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); transform: rotate(45deg); }
@@ -673,4 +684,4 @@ body.resizing * { cursor: inherit !important; }
 .ai-pet-input { display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--border); }
 .ai-pet-input .input { flex: 1; min-width: 0; height: 34px; }
 .ai-pet-input .btn { height: 34px; }
-@media (prefers-reduced-motion: reduce) { .ai-pet-avatar, .ai-pet[data-busy] .ai-pet-avatar, .ai-pet-bubble, .ai-typing i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .ai-pet-badge circle.lit, .ai-pet-avatar, .ai-pet-bubble, .ai-typing i { animation: none; } }

@@ -2,7 +2,8 @@ import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AiStatus } from '@shared/ipc'
 import { reportAnswer, resetChat, sendChat, stopChat, useAiChat, type ChatMessage } from '../aiChat'
-import { LogoMark } from './Logo'
+import { petExpression } from '../petFace'
+import { PixelFace } from './PixelFace'
 
 /** **bold** and `code` inside a line; everything else stays plain text (never HTML). */
 function inline(text: string): ReactNode[] {
@@ -55,10 +56,21 @@ function Choices({ choices, onPick, onOther }: { choices: NonNullable<ChatMessag
   )
 }
 
+/** The "!" badge, an 8×8 round LED matrix like the face: [x, y, lit]. */
+const BADGE_DOTS: Array<[number, number, boolean]> = []
+for (let y = 0; y < 8; y++)
+  for (let x = 0; x < 8; x++)
+    if ((x - 3.5) ** 2 + (y - 3.5) ** 2 <= 4.2 ** 2) BADGE_DOTS.push([x, y, (x === 3 || x === 4) && ((y >= 1 && y <= 4) || y === 6)])
+
+/** A reaction (found, error, sad) shows this long once the bubble is closed. */
+const REACTION_MS = 8000
+/** The pet dozes off after this long without anything happening. */
+const DOZE_MS = 5 * 60_000
+
 /**
- * The AI assistant as a small pet in the hub's corner: the chest, which opens a
- * chat bubble for short exchanges. Shown once ChatGPT is connected, unless
- * turned off in Settings.
+ * The AI assistant as a small pet in the hub's corner: a round LED face whose
+ * expression follows the chat (see petFace), opening a chat bubble for short
+ * exchanges. Shown once ChatGPT is connected, unless turned off in Settings.
  */
 export function AiPet({ language, enabled }: { language: string; enabled: boolean }) {
   const { t } = useTranslation()
@@ -68,6 +80,38 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
   const [draft, setDraft] = useState('')
   const log = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
+  const root = useRef<HTMLDivElement>(null)
+  /** An answer came in while the bubble was closed: a red "!" on the avatar until it is opened. */
+  const [unseen, setUnseen] = useState(false)
+  // When the latest answer came in (or was reported), and when anything last happened: they set the face.
+  const [reactedAt, setReactedAt] = useState(0)
+  const [activeAt, setActiveAt] = useState(() => Date.now())
+  const [, setNow] = useState(0)
+  const last = [...messages].reverse().find((m) => m.role === 'assistant')
+  useEffect(() => {
+    if (!busy && last && last.state !== 'pending') {
+      setReactedAt(Date.now())
+      if (!open && !last.reported) setUnseen(true)
+    }
+  }, [busy, last?.id, last?.reported])
+  useEffect(() => {
+    if (open) setUnseen(false)
+  }, [open])
+  // A press anywhere outside the pet folds the bubble away (the conversation stays).
+  useEffect(() => {
+    if (!open) return
+    const outside = (e: PointerEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', outside)
+    return () => document.removeEventListener('pointerdown', outside)
+  }, [open])
+  useEffect(() => setActiveAt(Date.now()), [open, draft, busy, messages.length])
+  // Re-checks the face once a reaction is over and once it is time to doze.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 2000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     void window.api.ai.status().then(setStatus)
@@ -100,8 +144,19 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
     setDraft('')
   }
 
+  const now = Date.now()
+  const expression = petExpression({
+    open,
+    typing: !!draft.trim(),
+    busy,
+    working: !!activity,
+    last: last && last.state !== 'pending' ? { state: last.state, reported: last.reported, choices: !!last.choices, text: !!last.text } : undefined,
+    fresh: now - reactedAt < REACTION_MS,
+    dozing: now - activeAt > DOZE_MS
+  })
+
   return (
-    <div className="ai-pet" data-busy={busy || undefined} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
+    <div ref={root} className="ai-pet" data-busy={busy || undefined} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       {open && (
         <div className="ai-pet-bubble" role="dialog" aria-label={t('aiPet.title')}>
           <div className="ai-pet-head">
@@ -175,8 +230,17 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
           </form>
         </div>
       )}
-      <button type="button" className="ai-pet-avatar" aria-expanded={open} aria-label={t('aiPet.title')} title={t('aiPet.title')} onClick={() => setOpen(!open)}>
-        <LogoMark size={36} />
+      <button type="button" className="ai-pet-avatar" data-expression={expression} aria-expanded={open} aria-label={t('aiPet.title')} title={t('aiPet.title')} onClick={() => setOpen(!open)} onPointerEnter={() => setActiveAt(Date.now())}>
+        <PixelFace expression={expression} size={52} />
+        {unseen && (
+          <span className="ai-pet-badge" role="status" aria-label={t('aiPet.newAnswer')}>
+            <svg width="14" height="14" viewBox="0 0 8 8" aria-hidden="true">
+              {BADGE_DOTS.map(([x, y, lit]) => (
+                <circle key={`${x},${y}`} cx={x + 0.5} cy={y + 0.5} r={0.4} className={lit ? 'lit' : undefined} />
+              ))}
+            </svg>
+          </span>
+        )}
       </button>
     </div>
   )

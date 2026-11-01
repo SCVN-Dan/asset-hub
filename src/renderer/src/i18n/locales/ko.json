@@ -685,8 +685,10 @@
     "mappingError": "⚠ {{error}}",
     "missingScripts_other": "⚠ 프로젝트에 없는 패키지 스크립트를 쓰는 에셋 {{count}}개 (임포트 후 Missing Script): {{list}}",
     "urp": "⚠ 원본 URP {{source}}, 프로젝트 {{target}}: 임포트 후 머티리얼을 확인하세요.",
-    "noUrp": "⚠ 원본은 URP {{source}}, 프로젝트에 URP 없음: 머티리얼이 분홍색일 수 있습니다.",
-    "missingShaders_other": "⚠ 원본 프로젝트의 셰이더 {{count}}개가 {{project}}에 없어 이를 쓰는 머티리얼이 분홍색으로 보입니다: {{list}}. {{project}}에 해당 셰이더/플러그인을 추가하거나 Shader Mapping으로 바꾸세요."
+    "noUrp": "⚠ 원본은 URP {{source}}, 프로젝트는 Built-in 파이프라인입니다: 내보내기는 되지만 파이프라인이 달라 가져온 뒤 오류가 나거나 미리 보기와 다르게 보일 수 있습니다.",
+    "missingShaders_other": "⚠ 원본 프로젝트의 셰이더 {{count}}개가 {{project}}에 없어 이를 쓰는 머티리얼이 분홍색으로 보입니다: {{list}}. {{project}}에 해당 셰이더/플러그인을 추가하거나 Shader Mapping으로 바꾸세요.",
+    "urpConverted_other": "URP 머티리얼 {{count}}개를 빌트인 셰이더로 바꿨습니다(프로젝트에 URP 없음): {{list}}",
+    "urpNeeded_other": "머티리얼 {{count}}개는 여전히 URP가 필요해 분홍색으로 보일 수 있습니다."
   },
   "link": {
     "copy": "링크 복사",
@@ -740,7 +742,8 @@
     "other": "기타…",
     "choices": "선택지",
     "report": "이 답변이 틀렸어요",
-    "reported": "기록했어요, 감사합니다"
+    "reported": "기록했어요, 감사합니다",
+    "newAnswer": "새 답변"
   },
   "unity": {
     "import": "Unity로 가져오기",
