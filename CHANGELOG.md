@@ -2,6 +2,12 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.8] — 2026-11-02
+
+### Changed
+- **Sign out** (GitHub) and **Disconnect** (ChatGPT) in Settings are a calm blue instead of red, which read as an error.
+- The AI pet's new-answer badge is an amber "…" (a message waiting) in the face's own LED style, instead of a red "!".
+
 ## [0.1.7] — 2026-11-02
 
 ### Changed
