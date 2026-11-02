@@ -272,6 +272,14 @@ export class FbxViewer {
     }
   }
 
+  /** The home view, closer (below 1) or farther: the camera keeps its direction to the target. */
+  zoomHome(factor: number): void {
+    const { target, position } = this.home
+    this.camera.position.copy(position).sub(target).multiplyScalar(factor).add(target)
+    this.controls.target.copy(target)
+    this.controls.update()
+  }
+
   setView(preset: ViewPreset): void {
     const { target, radius } = this.home
     const d = radius * 2.4

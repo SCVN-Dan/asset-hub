@@ -1,3 +1,4 @@
+import * as THREE from 'three'
 import { summarizeStats, type StatsSummary } from '@core/checks/playable'
 import type { LiveContext } from '../components/ModelViewer'
 import { unwrap } from '../remoteSource'
@@ -91,8 +92,11 @@ export async function inspectEffect(live: LiveContext, path: string, seconds = 3
   }
 }
 
-/** An effect filmed at given times (seconds from its start), side by side: to set beside Unity's frames at the same times. */
-export async function filmEffectAt(live: LiveContext, path: string, times: readonly number[], only?: readonly string[], width = 320, height = 240): Promise<string> {
+/**
+ * An effect filmed at given times (seconds from its start), side by side: to set beside Unity's frames at the same
+ * times. `center` and `radius` (Unity's axes) are how the camera was framed, for Unity to frame the same way.
+ */
+export async function filmEffectAt(live: LiveContext, path: string, times: readonly number[], only?: readonly string[], width = 320, height = 240, zoom = 1): Promise<{ url: string; center: number[]; radius: number; floor: number }> {
   const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick'))
   const build = await buildPrefab(live, path, report, true)
   const viewer = new FbxViewer(offscreenHost())
@@ -100,8 +104,14 @@ export async function filmEffectAt(live: LiveContext, path: string, times: reado
     const effect = await buildEffect(live, report, build.anchors, true)
     // Some emitters alone (by name), framed on them: to tell which part of an effect draws differently.
     if (only?.length) for (const e of effect.emitters) e.mesh.visible = only.includes(e.emitter.name)
-    viewer.showGroup(build.group, effect.measuredExtent())
+    const extent = effect.measuredExtent()
+    // The box the viewer frames (see FbxViewer.frameModel), taken before it moves the model.
+    const box = new THREE.Box3().setFromObject(build.group).union(extent)
+    const c = box.getCenter(new THREE.Vector3())
+    const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 1e-3)
+    viewer.showGroup(build.group, extent)
     await dressPrefab(viewer, build)
+    if (zoom !== 1) viewer.zoomHome(zoom)
     const sheet = document.createElement('canvas')
     sheet.width = width * times.length
     sheet.height = height
@@ -114,7 +124,8 @@ export async function filmEffectAt(live: LiveContext, path: string, times: reado
       viewer.drawFrame(g, i * width, 0, width, height)
     })
     effect.dispose()
-    return sheet.toDataURL('image/png')
+    // three.js has X mirrored from Unity.
+    return { url: sheet.toDataURL('image/png'), center: [-c.x, c.y, c.z], radius: radius * zoom, floor: box.min.y }
   } finally {
     viewer.dispose()
     build.dispose()

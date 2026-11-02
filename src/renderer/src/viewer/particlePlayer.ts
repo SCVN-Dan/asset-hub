@@ -42,6 +42,9 @@ export interface CustomLook {
   /** three.js blend factors (Unity's `Blend [src] [dst]`). */
   blendSrc: THREE.BlendingSrcFactor
   blendDst: THREE.BlendingDstFactor
+  /** Unity's ZWrite and Cull; off and both sides when not given. */
+  depthWrite?: boolean
+  side?: THREE.Side
 }
 
 const VERT = /* glsl */ `
@@ -57,6 +60,7 @@ attribute float iSizeY;
 uniform vec2 uTiles;
 uniform float uLength;
 uniform float uVelScale;
+uniform vec2 uPivot;
 uniform float uSizeScale;
 // Vertex streams for ported shaders: TEXCOORD0 and TEXCOORD1 per particle; uUvMap says which components are the vertex's UV (1 u, 2 v).
 attribute vec4 iS0;
@@ -83,6 +87,8 @@ void main() {
   float fx = mod(frame, uTiles.x);
   float fy = floor(frame / uTiles.x);
   vec2 uv = corner + 0.5;
+  // Stretched, Unity lays the texture's U along the stretch, from the head (0) back to the tail (1).
+  if (uMode > 0.5 && uMode < 1.5) uv = vec2(0.5 - corner.y, corner.x + 0.5);
   vUv = vec2((fx + uv.x) / uTiles.x, 1.0 - (fy + 1.0 - uv.y) / uTiles.y);
   vTex0 = withUv(iS0, uUvMap0, vUv);
   vTex1 = withUv(iS1, uUvMap1, vUv);
@@ -112,7 +118,8 @@ void main() {
     vec2 dir = speed > 1e-5 ? v.xy / speed : vec2(0.0, 1.0);
     vec2 side = vec2(dir.y, -dir.x);
     float len = size * uLength + length(iVel) * uVelScale;
-    mv.xy += side * corner.x * size + dir * (corner.y - 0.5) * len;
+    // The pivot moves it along the stretch in lengths and sideways in sizes.
+    mv.xy += side * (corner.x + uPivot.x) * size + dir * (corner.y - 0.5 + uPivot.y) * len;
   } else if (uMode > 2.5) {
     // Vertical: faces the camera but stays upright.
     mv.xy += vec2(corner.x * size, corner.y * sizeY);
@@ -219,6 +226,8 @@ uniform vec4 uUvMap1;
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vColor;
+varying vec3 vNormalW;
+varying vec3 vViewDirW;
 vec4 withUv(vec4 values, vec4 map, vec2 uv) {
   return mix(mix(values, vec4(uv.x), vec4(equal(map, vec4(1.0)))), vec4(uv.y), vec4(equal(map, vec4(2.0))));
 }
@@ -230,7 +239,12 @@ void main() {
   c = instanceColor;
   #endif
   vColor = vec4(c, instanceAlpha);
-  gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+  // World-space normal and direction to the camera, for the shaders' rim and backface tint.
+  mat4 world = modelMatrix * instanceMatrix;
+  vec4 at = world * vec4(position, 1.0);
+  vNormalW = mat3(world) * normal;
+  vViewDirW = cameraPosition - at.xyz;
+  gl_Position = projectionMatrix * viewMatrix * at;
 }
 `
 
@@ -355,7 +369,7 @@ const wander = (x: number, y: number, z: number, t: number) => [
   Math.sin(x * 1.3 - t * 1.2) + Math.sin(y * 2.7 + t * 0.9)
 ]
 
-function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit<EmitterLook, 'mesh' | 'trail'>, extra: Record<string, THREE.IUniform> = {}): THREE.ShaderMaterial {
+function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit<EmitterLook, 'mesh' | 'trail'>, extra: Record<string, THREE.IUniform> = {}, defines: Record<string, string> = {}): THREE.ShaderMaterial {
   const custom = look.custom
   if (custom) {
     const material = new THREE.ShaderMaterial({
@@ -363,13 +377,14 @@ function shaderMaterial(vertexShader: string, fragmentShader: string, look: Omit
       fragmentShader: custom.fragmentShader,
       // Each emitter keeps its own clock; values (textures too) are shared, as they never change.
       uniforms: { ...Object.fromEntries(Object.entries(custom.uniforms).map(([k, u]) => [k, { value: u.value }])), uTime: { value: 0 }, ...extra },
-      transparent: true,
-      depthWrite: false,
-      side: THREE.DoubleSide,
+      // A material that writes depth and replaces what is behind it (Unity's opaque and cutout) is drawn first, as Unity's queue does.
+      transparent: !(custom.depthWrite && custom.blendDst === THREE.ZeroFactor),
+      depthWrite: custom.depthWrite ?? false,
+      side: custom.side ?? THREE.DoubleSide,
       blending: THREE.CustomBlending,
       blendSrc: custom.blendSrc,
       blendDst: custom.blendDst,
-      defines: look.gamma ? { GAMMA_SPACE: '' } : {}
+      defines: { ...(look.gamma ? { GAMMA_SPACE: '' } : {}), ...defines }
     })
     return material
   }
@@ -491,11 +506,12 @@ export class EmitterPlayer {
       this.meshAlpha = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1).setUsage(THREE.DynamicDrawUsage)
       geometry.setAttribute('instanceAlpha', this.meshAlpha)
       if (!geometry.getAttribute('uv')) geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2))
+      if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
       const streams = this.streamAttributes(n)
       geometry.setAttribute('iS0', streams.s0)
       geometry.setAttribute('iS1', streams.s1)
       this.meshStreams = streams
-      this.meshes = new THREE.InstancedMesh(geometry, shaderMaterial(MESH_VERT, '', look, streams.uniforms), n)
+      this.meshes = new THREE.InstancedMesh(geometry, shaderMaterial(MESH_VERT, '', look, streams.uniforms, { MESH_PARTICLE: '' }), n)
       this.meshes.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       this.meshes.setColorAt(0, new THREE.Color(1, 1, 1))
       this.meshes.count = 0
@@ -562,6 +578,7 @@ export class EmitterPlayer {
         uTiles: { value: new THREE.Vector2(sheet?.tilesX ?? 1, sheet?.tilesY ?? 1) },
         uLength: { value: this.sim.lengthScale },
         uVelScale: { value: this.sim.velocityScale },
+        uPivot: { value: new THREE.Vector2(this.sim.pivot[0], this.sim.pivot[1]) },
         // Unity scales particles with their transforms (hierarchy scaling): kept up to date in update().
         uSizeScale: { value: 1 },
         ...streams?.uniforms
@@ -593,6 +610,10 @@ export class EmitterPlayer {
       m.userData.particles = true
       group.add(m)
     }
+    // Unity sorts an effect's renderers by their order in layer, then by distance shifted by the fudge: emitters
+    // in one spot (a dark backdrop behind a glow) keep the order the effect was made with.
+    const order = this.sim.sortingOrder * 1e6 - this.sim.sortingFudge
+    for (const child of group.children) child.renderOrder = order
     this.restart()
   }
 

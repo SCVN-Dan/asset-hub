@@ -12,4 +12,12 @@ describe('AllIn1Vfx port', () => {
     expect(allIn1Fragment(['GLOW_ON', 'DEPTHGLOW_ON', 'SOFTPART_ON'])).toMatch(/#define GLOW_ON 1/)
     expect(allIn1Fragment(['DEPTHGLOW_ON'])).not.toMatch(/#define DEPTHGLOW_ON/)
   })
+
+  it('tints front and back faces by the mesh normal, which billboards stand in for', () => {
+    const glsl = allIn1Fragment(['BACKFACETINT_ON', 'RIM_ON'])
+    expect(glsl).toMatch(/#define BACKFACETINT_ON 1/)
+    expect(glsl).toContain('uniform vec4 _FrontFaceTint;')
+    expect(glsl).toContain('step(0.0, dot(normalW, viewDirW))')
+    expect(glsl).toMatch(/#ifdef MESH_PARTICLE\nvarying vec3 vNormalW;/)
+  })
 })

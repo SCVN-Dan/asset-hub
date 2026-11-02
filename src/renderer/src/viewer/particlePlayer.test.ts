@@ -25,6 +25,9 @@ function sim(over: Partial<ParticleSim>): ParticleSim {
     bursts: [],
     lengthScale: 2,
     velocityScale: 0,
+    pivot: [0, 0, 0],
+    sortingOrder: 0,
+    sortingFudge: 0,
     maxScreenSize: 0.5,
     alignment: 'view',
     ...over

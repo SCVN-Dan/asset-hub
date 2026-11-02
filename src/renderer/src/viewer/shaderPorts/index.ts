@@ -36,15 +36,16 @@ export interface PortFiles {
   gamma?: boolean
 }
 
-/** The texture in one slot: a texture file, one saved inside another asset, Unity's own particle dot, or white. */
-async function slotTexture(material: MaterialRef, props: MaterialProps, slot: string, files: PortFiles): Promise<THREE.Texture> {
+/** The texture in one slot: a texture file, one saved inside another asset or the material itself, Unity's own particle dot, or white. */
+async function slotTexture(material: MaterialRef, matText: string, props: MaterialProps, slot: string, files: PortFiles): Promise<THREE.Texture> {
   const ref = props.refs[slot]
   if (!ref) return whiteTexture()
   if (ref.guid && BUILTIN_SHADER_GUIDS.has(ref.guid)) return ref.fileID === '10300' ? defaultParticle() : whiteTexture()
-  const path = material.textures.find((t) => t.prop === slot)?.path
+  // No GUID: a texture saved inside the material (AllIn1Vfx keeps its gradients there).
+  const path = ref.guid ? material.textures.find((t) => t.prop === slot)?.path : material.path
   if (!path) return whiteTexture()
   if (ref.fileID !== '2800000' && /\.(mat|asset)$/i.test(path)) {
-    const text = await files.text(path)
+    const text = ref.guid ? await files.text(path) : matText
     const tex = text ? parseEmbeddedTexture(text, ref.fileID) : undefined
     if (!tex) return whiteTexture()
     const t = new THREE.DataTexture(tex.rgba, tex.width, tex.height)
@@ -77,7 +78,7 @@ export async function portedLook(material: MaterialRef, shaderText: string, matT
   const used = new Set(['_MainTex', ...ALLIN1_TEXTURES.filter((slot) => usesSlot(slot, props.keywords))])
   await Promise.all(
     ALLIN1_TEXTURES.map(async (slot) => {
-      uniforms[slot] = { value: used.has(slot) ? await slotTexture(material, props, slot, files) : whiteTexture() }
+      uniforms[slot] = { value: used.has(slot) ? await slotTexture(material, matText, props, slot, files) : whiteTexture() }
       const st = props.st[slot] ?? [1, 1, 0, 0]
       uniforms[`${slot}_ST`] = { value: new THREE.Vector4(...st) }
     })
@@ -91,7 +92,10 @@ export async function portedLook(material: MaterialRef, shaderText: string, matT
     fragmentShader: allIn1Fragment(props.keywords),
     uniforms,
     blendSrc: UNITY_BLEND_FACTORS[floats._SrcMode ?? 5] as THREE.BlendingSrcFactor,
-    blendDst: UNITY_BLEND_FACTORS[floats._DstMode ?? 10] as THREE.BlendingDstFactor
+    blendDst: UNITY_BLEND_FACTORS[floats._DstMode ?? 10] as THREE.BlendingDstFactor,
+    depthWrite: floats._ZWrite === 1,
+    // Unity's Cull: 0 off, 1 front (the back faces are drawn), 2 back.
+    side: floats._CullingOption === 1 ? THREE.BackSide : floats._CullingOption === 2 ? THREE.FrontSide : THREE.DoubleSide
   }
 }
 
@@ -102,7 +106,7 @@ async function klausLook(material: MaterialRef, shaderText: string, matText: str
   return {
     fragmentShader: KLAUS_FRAGMENT,
     uniforms: {
-      _Main_Tex: { value: await slotTexture(material, props, '_Main_Tex', files) },
+      _Main_Tex: { value: await slotTexture(material, matText, props, '_Main_Tex', files) },
       _Main_Tex_ST: { value: new THREE.Vector4(...(props.st._Main_Tex ?? [1, 1, 0, 0])) },
       _Emission_Power: { value: floats._Emission_Power ?? 1 },
       uAdditive: { value: additive ? 1 : 0 }

@@ -2,7 +2,8 @@
  * AllIn1Vfx (the "All In 1 Vfx Toolkit" asset): its particle shader ported to
  * WebGL line by line, so effects made with it look as they do in Unity. The
  * shader turns its features on per material with keywords; each becomes a
- * #define here. Left out: what needs the scene (soft particles, depth glow,
+ * #define here. Mesh particles bring their normal and view direction (MESH_PARTICLE),
+ * which rim and backface tint read; billboards face the camera. Left out: what needs the scene (soft particles, depth glow,
  * screen distortion, fog, light and shadow), the camera distance fade and
  * vertex offset. Vertex streams come in as Unity lays them out: `vTex0` is
  * TEXCOORD0 (uv, then the seed and the alpha stream), `vTex1` TEXCOORD1.
@@ -26,7 +27,7 @@ const FLOATS = [
   '_MaskPow', '_AlphaStepMin', '_AlphaStepMax', '_AlphaCutoffValue', '_TimingSeed',
   '_OffsetSh1', '_OffsetSh2', '_OffsetSh3', '_Sh1BlendOffset', '_Sh2BlendOffset', '_Sh3BlendOffset', '_DistortionBlend'
 ]
-const COLORS = ['_Color', '_GlowColor', '_ShapeColor', '_Shape2Color', '_Shape3Color', '_FadeBurnColor', '_ColorGradingLight', '_ColorGradingMiddle', '_ColorGradingDark', '_RimColor']
+const COLORS = ['_Color', '_GlowColor', '_ShapeColor', '_Shape2Color', '_Shape3Color', '_FadeBurnColor', '_ColorGradingLight', '_ColorGradingMiddle', '_ColorGradingDark', '_RimColor', '_BackFaceTint', '_FrontFaceTint']
 /** Texture slots; each has its tiling and offset as `<slot>_ST`. */
 export const ALLIN1_TEXTURES = [
   '_MainTex', '_ShapeDistortTex', '_Shape2Tex', '_Shape2DistortTex', '_Shape3Tex', '_Shape3DistortTex', '_Shape1MaskTex', '_DistortTex', '_TrailWidthGradient',
@@ -41,7 +42,7 @@ const KEYWORDS = new Set([
   'SHAPE3_ON', 'SHAPE3CONTRAST_ON', 'SHAPE3DISTORT_ON', 'SHAPE3ROTATE_ON', 'SHAPE3SHAPECOLOR_ON',
   'SHAPEADD_ON', 'SPLITRGBA_ON', 'SHAPE1MASK_ON', 'PREMULTIPLYCOLOR_ON', 'PREMULTIPLYALPHA_ON',
   'FADE_ON', 'FADEBURN_ON', 'ALPHAFADE_ON', 'ALPHAFADEUSESHAPE1_ON', 'ALPHAFADEUSEREDCHANNEL_ON', 'ALPHAFADETRANSPARENCYTOO_ON', 'ALPHAFADEINPUTSTREAM_ON',
-  'COLORGRADING_ON', 'COLORRAMP_ON', 'COLORRAMPGRAD_ON', 'POSTERIZE_ON', 'RIM_ON', 'GLOW_ON', 'GLOWTEX_ON', 'HSV_ON', 'MASK_ON', 'ALPHASMOOTHSTEP_ON', 'ALPHACUTOFF_ON', 'ADDITIVECONFIG_ON',
+  'BACKFACETINT_ON', 'COLORGRADING_ON', 'COLORRAMP_ON', 'COLORRAMPGRAD_ON', 'POSTERIZE_ON', 'RIM_ON', 'GLOW_ON', 'GLOWTEX_ON', 'HSV_ON', 'MASK_ON', 'ALPHASMOOTHSTEP_ON', 'ALPHACUTOFF_ON', 'ADDITIVECONFIG_ON',
   'OFFSETSTREAM_ON', 'SHAPEWEIGHTS_ON', 'SCREENDISTORTION_ON'
 ])
 
@@ -69,6 +70,10 @@ const BODY = /* glsl */ `
 varying vec4 vTex0;
 varying vec4 vTex1;
 varying vec4 vColor;
+#ifdef MESH_PARTICLE
+varying vec3 vNormalW;
+varying vec3 vViewDirW;
+#endif
 
 vec4 sampleScroll(sampler2D tex, vec2 uv, float xs, float ys, float time) {
   uv.x += mod(time * xs, 1.0);
@@ -96,6 +101,14 @@ void main() {
   float alphaFadeAmount = _AlphaFadeAmount;
   float alphaFadeSmooth = _AlphaFadeSmooth;
   vec4 vcol = vColor;
+  #ifdef MESH_PARTICLE
+  vec3 normalW = normalize(vNormalW);
+  vec3 viewDirW = normalize(vViewDirW);
+  #else
+  // Billboards face the camera: the normal is the view direction.
+  vec3 normalW = vec3(0.0, 0.0, 1.0);
+  vec3 viewDirW = normalW;
+  #endif
 
   #ifdef PIXELATE_ON
   uv = floor(uv * _PixelateSize) / _PixelateSize;
@@ -383,6 +396,10 @@ void main() {
   }
   #endif
 
+  #ifdef BACKFACETINT_ON
+  col.rgb = mix(col.rgb * _BackFaceTint.rgb, col.rgb * _FrontFaceTint.rgb, step(0.0, dot(normalW, viewDirW)));
+  #endif
+
   #ifdef COLORGRADING_ON
   col.rgb *= mix(mix(_ColorGradingDark.rgb, _ColorGradingMiddle.rgb, luminance / _ColorGradingMidPoint),
     mix(_ColorGradingMiddle.rgb, _ColorGradingLight.rgb, (luminance - _ColorGradingMidPoint) / (1.0 - _ColorGradingMidPoint)), step(_ColorGradingMidPoint, luminance));
@@ -407,8 +424,8 @@ void main() {
 
   #ifdef RIM_ON
   {
-    // Billboards face the camera: the normal is the view direction.
-    float rimFactor = clamp(_RimBias, 0.0, 1.0);
+    float NdV = max(1.0 - abs(dot(normalW, viewDirW)), 0.0);
+    float rimFactor = clamp(_RimBias + _RimScale * pow(NdV, _RimPower), 0.0, 1.0);
     vec3 rimCol = _RimColor.rgb * rimFactor * _RimIntensity;
     col.rgb = mix(col.rgb * (rimCol + vec3(1.0)), col.rgb + rimCol, _RimAddAmount);
     col.a = clamp(col.a * (1.0 - rimFactor * _RimErodesAlpha), 0.0, 1.0);

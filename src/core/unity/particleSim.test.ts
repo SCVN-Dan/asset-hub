@@ -89,8 +89,8 @@ ${curveYaml}    maxNumParticles: 50
   ColorModule:
     enabled: 0
 `
-    const sim = parseParticleSim(ps, '  m_LengthScale: 3\n')
-    expect(sim).toMatchObject({ duration: 2, looping: true, worldSpace: true, maxParticles: 50, lengthScale: 3 })
+    const sim = parseParticleSim(ps, '  m_LengthScale: 3\n  m_Pivot: {x: 0, y: 0.95, z: 0}\n  m_SortingFudge: 1\n')
+    expect(sim).toMatchObject({ duration: 2, looping: true, worldSpace: true, maxParticles: 50, lengthScale: 3, pivot: [0, 0.95, 0], sortingFudge: 1 })
     expect(sim.shape).toMatchObject({ type: 4, angle: 30, radius: 0.5, arc: 180, position: [0, 1, 0], rotation: [-90, 0, 0] })
     expect(sim.sheet).toMatchObject({ tilesX: 4, tilesY: 4, singleRow: false })
     expect(sim.colorOverLifetime).toBeUndefined()

@@ -97,8 +97,13 @@ export interface ParticleSim {
   /** Renderer settings for stretched billboards. */
   lengthScale: number
   velocityScale: number
+  /** The renderer's pivot: a stretched particle moves along its stretch by y lengths, sideways by x sizes. */
+  pivot: [number, number, number]
   /** Largest size on screen, as a fraction of the view height. */
   maxScreenSize: number
+  /** Drawing order among transparent renderers: the order in layer first, then the fudge (lower is drawn later, on top). */
+  sortingOrder: number
+  sortingFudge: number
   /** Which way billboards face: the camera, or the world's / the system's own axes (a ring lying on the ground). */
   alignment: 'view' | 'world' | 'local' | 'facing' | 'velocity'
   /** Custom Data module, vector mode: up to 4 curves over each particle's lifetime (Custom1, Custom2). */
@@ -268,7 +273,10 @@ export function parseParticleSim(ps: string, renderer?: string): ParticleSim {
       : [],
     lengthScale: (renderer ? yamlNum(renderer, 2, 'm_LengthScale') : undefined) ?? 2,
     velocityScale: (renderer ? yamlNum(renderer, 2, 'm_VelocityScale') : undefined) ?? 0,
+    pivot: (renderer ? vec3(renderer, 2, 'm_Pivot') : undefined) ?? [0, 0, 0],
     maxScreenSize: (renderer ? yamlNum(renderer, 2, 'm_MaxParticleSize') : undefined) ?? 0.5,
+    sortingOrder: (renderer ? yamlNum(renderer, 2, 'm_SortingOrder') : undefined) ?? 0,
+    sortingFudge: (renderer ? yamlNum(renderer, 2, 'm_SortingFudge') : undefined) ?? 0,
     alignment: ALIGNMENTS[(renderer ? yamlNum(renderer, 2, 'm_RenderAlignment') : undefined) ?? 0] ?? 'view'
   }
   if (on(shape))
