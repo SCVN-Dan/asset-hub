@@ -2,6 +2,20 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.6] — 2026-11-02
+
+### Changed
+- **Faster start:** the hub opens the last repo and branch straight away instead of waiting for GitHub's repo and branch lists, and the lobby loads that branch's files while the chest opens, so assets show as soon as the hub does (about 4.5 s from launch instead of 7–12 s). The lobby also shows at once while the previous sign-in is checked, instead of a blank window.
+- **Recent lists keep their order while open:** opening an asset from "Viewed lately" no longer moves it to the top under the pointer; it is first the next time the list is opened.
+
+### Fixed
+- Effects made with AllIn1Vfx (Dark Magic Orb and others), checked against Unity 2022.3:
+  - Mesh particles with **Backface Tint** (front and back faces in their own colours) were white, and **Rim** ignored the mesh's shape: meshes now pass their normals to the shader.
+  - Materials that write depth or cull a side (opaque or cutout waves) are drawn as Unity draws them, before the glows.
+  - Colour gradients saved inside the material were read as white (glows grey instead of blue).
+- Effects drawn in the wrong order: renderers now keep Unity's **Order in Layer** and **Sorting Fudge**, so a dark backdrop stays behind the glow over it.
+- **Stretched particles** (rays, streaks, sparks) showed their texture turned 90° and ignored the renderer's **Pivot**: the texture now runs along the stretch and the pivot moves it, as in Unity. Effect cards are drawn again once.
+
 ## [0.1.5] — 2026-11-01
 
 ### Added
