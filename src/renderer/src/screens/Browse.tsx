@@ -165,7 +165,14 @@ export function Browse({
     { id: RECENT_VIEWED, name: '', items: recent?.viewed ?? [] },
     { id: RECENT_EXPORTED, name: '', items: recent?.exported ?? [] }
   ]
-  const shownCollection = [...collections, ...recentLists].find((c) => c.id === openCollection)
+  // A recent list keeps the order it had when opened: an asset opened from it moves to the top next time, not under the pointer.
+  const [frozenRecent, setFrozenRecent] = useState<Collection>()
+  useEffect(() => {
+    setFrozenRecent(recentLists.find((c) => c.id === openCollection))
+    // Taken once per opening; later views must not reorder it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openCollection])
+  const shownCollection = frozenRecent?.id === openCollection ? frozenRecent : [...collections, ...recentLists].find((c) => c.id === openCollection)
   /** Remembers assets in a recent list (the latest settings are read at the time). */
   const recentRef = useRef(recent)
   recentRef.current = recent
@@ -180,11 +187,14 @@ export function Browse({
   const [viewerHeight, setViewerHeight] = useStoredSize('assethub.viewerHeight')
   const budget = useBudget()
   const [repos, setRepos] = useState<Load<RepoRef[]>>({ status: 'loading' })
-  const [repo, setRepo] = useState('')
+  // The last repo and branch open straight away; the repo and branch lists, which take a round trip
+  // to GitHub each, fill in the pickers meanwhile.
+  const resume = !!initialRepo && !!initialBranch
+  const [repo, setRepo] = useState(resume ? initialRepo! : '')
   const [branches, setBranches] = useState<string[]>([])
-  const [branch, setBranch] = useState('')
+  const [branch, setBranch] = useState(resume ? initialBranch! : '')
   /** Repo the current branch was listed for; until it matches `repo`, the branch is stale. */
-  const [branchRepo, setBranchRepo] = useState('')
+  const [branchRepo, setBranchRepo] = useState(resume ? initialRepo! : '')
   const [tree, setTree] = useState<Load<TreeEntry[]>>({ status: 'loading' })
   const [reloadKey, setReloadKey] = useState(0)
   const [root, setRoot] = useState('')
@@ -252,9 +262,13 @@ export function Browse({
   useEffect(() => {
     if (!repo) return
     let cancelled = false
-    setBranches([])
-    setBranch('')
-    setTree({ status: 'loading' })
+    // A branch of this repo already open (the last one, resumed): it stays while the list loads.
+    const shown = repo === branchRepo ? branch : ''
+    if (!shown) {
+      setBranches([])
+      setBranch('')
+      setTree({ status: 'loading' })
+    }
     source.listBranches(repo).then(
       (list) => {
         if (cancelled) return
@@ -262,16 +276,22 @@ export function Browse({
         setBranchRepo(repo)
         const preferred = repoList.find((r) => r.fullName === repo)?.defaultBranch
         const wanted = nav.current?.repo === repo ? nav.current.branch : undefined
-        if (wanted && list.includes(wanted)) setBranch(wanted)
-        else if (repo === initialRepo && initialBranch && list.includes(initialBranch)) setBranch(initialBranch)
-        else setBranch(preferred && list.includes(preferred) ? preferred : (list[0] ?? ''))
+        const next =
+          wanted && list.includes(wanted)
+            ? wanted
+            : repo === initialRepo && initialBranch && list.includes(initialBranch)
+              ? initialBranch
+              : preferred && list.includes(preferred)
+                ? preferred
+                : (list[0] ?? '')
+        if (next !== shown) setBranch(next)
       },
       (error: unknown) => !cancelled && setTree({ status: 'error', error })
     )
     return () => {
       cancelled = true
     }
-    // repoList is read only for the default branch; it must not retrigger branch loading.
+    // repoList is read only for the default branch, and the open branch only on a repo change; neither retriggers branch loading.
   }, [source, repo])
 
   useEffect(() => {

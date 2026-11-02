@@ -51,14 +51,25 @@ export function App() {
     setScreen('browse')
   }, [])
 
+  /** The lobby shows at once; its sign-in buttons wait until the previous sign-in is checked. */
+  const [checking, setChecking] = useState(true)
+
   useEffect(() => {
     void window.api.getSettings().then(setSettings)
-    // Restores the previous sign-in; any failure falls back to the sign-in screen.
+    setScreen('signin')
+    // Restores the previous sign-in; any failure falls back to the sign-in buttons.
     void window.api.auth.status().then((result) => {
       if (result.ok && result.data.signedIn) setAutoEnter(result.data)
-      setScreen('signin')
+      setChecking(false)
     })
   }, [enterGitHub])
+
+  // While the chest opens, the last branch's file list loads, so the hub fills as soon as it shows.
+  const resumeRepo = autoEnter ? settings?.lastRepo : undefined
+  const resumeBranch = autoEnter ? settings?.lastBranch : undefined
+  useEffect(() => {
+    if (resumeRepo && resumeBranch) void window.api.source.listTree(resumeRepo, resumeBranch)
+  }, [resumeRepo, resumeBranch])
 
   useEffect(() => {
     if (!settings) return
@@ -96,6 +107,7 @@ export function App() {
             return unwrap(await window.api.auth.ghWebLogin())
           }}
           autoEnter={autoEnter}
+          checking={checking}
           onEnter={(status) => {
             setAutoEnter(undefined)
             setWelcome({ login: status.login })

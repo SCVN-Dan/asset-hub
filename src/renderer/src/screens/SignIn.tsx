@@ -17,6 +17,8 @@ interface Props {
   onEnter(status: AuthStatus): void
   /** Already signed in (the app was opened again): the chest opens by itself, no start button. */
   autoEnter?: AuthStatus
+  /** The previous sign-in is still being checked: no sign-in buttons yet. */
+  checking?: boolean
 }
 
 type Busy = 'pat' | 'gh' | 'install' | undefined
@@ -30,7 +32,7 @@ const OPEN_MS_FALLBACK = 500
  * Signing in opens the chest; the camera dives into its light and the hub
  * takes over (`onEnter`).
  */
-export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter }: Props) {
+export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter, checking }: Props) {
   const { t } = useTranslation()
   const [token, setToken] = useState('')
   const [busy, setBusy] = useState<Busy>()
@@ -141,7 +143,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
 
   const code = ghPrompt?.code.replace(/[^A-Z0-9]/gi, '').toUpperCase() ?? ''
   const percent = progress?.stage === 'download' && progress.total ? Math.round((progress.received / progress.total) * 100) : undefined
-  const idle = !busy && !opening && !autoEnter
+  const idle = !busy && !opening && !autoEnter && !checking
 
   return (
     <div className="lobby" data-opening={opening || undefined} data-scene={sceneState}>
@@ -152,7 +154,7 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
           <div className="lobby-chest-space" ref={chestSpace} aria-hidden="true" />
           <h1 className="lobby-title">Asset Hub</h1>
 
-          {!autoEnter && (
+          {!autoEnter && !checking && (
           <div className="lobby-stage">
             {ghPrompt && busy === 'gh' ? (
               <section className="lobby-panel" aria-live="polite">
