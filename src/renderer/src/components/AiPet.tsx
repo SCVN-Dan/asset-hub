@@ -56,11 +56,12 @@ function Choices({ choices, onPick, onOther }: { choices: NonNullable<ChatMessag
   )
 }
 
-/** The "!" badge, an 8×8 round LED matrix like the face: [x, y, lit]. */
+/** The new-answer badge, an 8×8 round LED matrix like the face: [x, y, lit]. */
 const BADGE_DOTS: Array<[number, number, boolean]> = []
 for (let y = 0; y < 8; y++)
   for (let x = 0; x < 8; x++)
-    if ((x - 3.5) ** 2 + (y - 3.5) ** 2 <= 4.2 ** 2) BADGE_DOTS.push([x, y, (x === 3 || x === 4) && ((y >= 1 && y <= 4) || y === 6)])
+    // "…": a message waiting, three 2×2 dots across the middle.
+    if ((x - 3.5) ** 2 + (y - 3.5) ** 2 <= 4.2 ** 2) BADGE_DOTS.push([x, y, (y === 3 || y === 4) && x % 3 !== 2])
 
 /** A reaction (found, error, sad) shows this long once the bubble is closed. */
 const REACTION_MS = 8000

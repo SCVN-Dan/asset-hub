@@ -216,8 +216,9 @@ button { cursor: pointer; }
 .setting-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .setting-actions:empty { display: none; }
 .ai-install { display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
-.btn-signout { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
-.btn-signout:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+/* Signing out is a normal choice, not an error: a calm blue, never the danger red. */
+.btn-signout { color: var(--info); border-color: color-mix(in srgb, var(--info) 45%, var(--border)); }
+.btn-signout:hover { background: color-mix(in srgb, var(--info) 14%, transparent); color: var(--text); }
 .topbar-settings .small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker { position: relative; display: flex; align-items: center; gap: 8px; }
 .picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: left; }
@@ -641,12 +642,12 @@ body.resizing * { cursor: inherit !important; }
 /* A new answer while the bubble was closed. Outside the round face, so the avatar may not clip it. */
 .ai-pet-avatar { position: relative; overflow: visible; }
 .ai-pet-avatar .pixel-face { overflow: hidden; }
-.ai-pet-badge { position: absolute; top: -3px; right: -3px; box-sizing: border-box; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid #ff4d5e; background: radial-gradient(circle at 50% 40%, #2a2f3a, #121821 70%); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 8px rgba(255, 77, 94, 0.45); animation: ai-badge-pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
-/* LEDs as on the face: off ones faintly there, lit ones glowing red and gently pulsing. */
+.ai-pet-badge { position: absolute; top: -3px; right: -3px; box-sizing: border-box; display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border-radius: 50%; border: 1.5px solid var(--accent); background: radial-gradient(circle at 50% 40%, #2a2f3a, #121821 70%); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45), 0 0 8px rgba(255, 174, 31, 0.45); animation: ai-badge-pop 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+/* LEDs as on the face, in its amber (red would read as an error): off ones faintly there, lit ones glowing and gently pulsing. */
 .ai-pet-badge svg { display: block; overflow: visible; }
-.ai-pet-badge circle { fill: rgba(255, 77, 94, 0.12); }
-.ai-pet-badge circle.lit { fill: #ff5a69; filter: drop-shadow(0 0 0.5px #ff4d5e); animation: ai-badge-led 1.2s ease-in-out infinite; }
-@keyframes ai-badge-led { 50% { fill: #ffb3ba; } }
+.ai-pet-badge circle { fill: rgba(255, 183, 51, 0.12); }
+.ai-pet-badge circle.lit { fill: #ffb733; filter: drop-shadow(0 0 0.5px #ffae1f); animation: ai-badge-led 1.2s ease-in-out infinite; }
+@keyframes ai-badge-led { 50% { fill: #fff4cf; } }
 @keyframes ai-badge-pop { from { transform: scale(0); } }
 .ai-pet-avatar[data-expression='sleeping'] { animation-duration: 6s; }
 @keyframes ai-pet-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
