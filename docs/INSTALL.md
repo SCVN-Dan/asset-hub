@@ -7,13 +7,13 @@ A Mac with Apple silicon (**M1, M2, M3, M4**) — check under  (top left of the 
 ## 2. Install
 
 1. Download **`Asset-Hub-Installer.dmg`** (about 1 MB) and open it.
-2. Open **Cài Asset Hub** (the installer) in the window that appears.
+2. Open **Install Asset Hub** (the installer) in the window that appears.
 3. **The first time**, macOS blocks the installer because it is not notarized by Apple — allow it once:
-   - **macOS 15 (Sequoia) or later:** click **Done** on the warning → open **System Settings** › **Privacy & Security**, scroll to the bottom, click **Open Anyway** next to *"Cài Asset Hub was blocked…"* → enter your password → **Open**.
-   - **macOS 14 (Sonoma) or earlier:** **right-click** **Cài Asset Hub** › **Open** → **Open**.
-4. Click **Cài đặt** (Install). The installer downloads the latest version from GitHub (with a progress bar), verifies the file, installs it into **Applications** and opens Asset Hub. An app installed this way opens directly, without being blocked.
+   - **macOS 15 (Sequoia) or later:** click **Done** on the warning → open **System Settings** › **Privacy & Security**, scroll to the bottom, click **Open Anyway** next to *"Install Asset Hub was blocked…"* → enter your password → **Open**.
+   - **macOS 14 (Sonoma) or earlier:** **right-click** **Install Asset Hub** › **Open** → **Open**.
+4. Click **Install**. The installer downloads the latest version from GitHub (with a progress bar), verifies the file, installs it into **Applications** and opens Asset Hub. An app installed this way opens directly, without being blocked.
 
-New version: run **Cài Asset Hub** again — it downloads the latest version and replaces the old one.
+New version: run **Install Asset Hub** again — it downloads the latest version and replaces the old one.
 
 ## 3. Sign in
 

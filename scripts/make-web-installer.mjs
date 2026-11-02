@@ -1,4 +1,4 @@
-// Makes release/Asset-Hub-Installer.dmg: just the small "Cài Asset Hub" installer, which downloads the
+// Makes release/Asset-Hub-Installer.dmg: just the small "Install Asset Hub" installer, which downloads the
 // newest build from the public release repo (package.json "releaseRepo"). Part of `npm run dist:web`, after
 // electron-builder leaves release/Asset-Hub-arm64.zip; its SHA-256 file is written here, to publish with it.
 import { createHash } from 'node:crypto'
@@ -21,7 +21,7 @@ rmSync(stage, { recursive: true, force: true })
 mkdirSync(stage, { recursive: true })
 const source = join(stage, 'installer.applescript')
 writeFileSync(source, readFileSync(join(root, 'scripts/installer.applescript'), 'utf8').replaceAll('{{BASE_URL}}', baseURL))
-const app = join(stage, 'Cài Asset Hub.app')
+const app = join(stage, 'Install Asset Hub.app')
 execFileSync('osacompile', ['-o', app, source])
 rmSync(source)
 copyFileSync(join(root, 'build/icon.icns'), join(app, 'Contents/Resources/applet.icns'))
@@ -29,6 +29,6 @@ execFileSync('codesign', ['--force', '--deep', '--sign', '-', app])
 
 const dmg = join(release, 'Asset-Hub-Installer.dmg')
 rmSync(dmg, { force: true })
-execFileSync('hdiutil', ['create', '-volname', 'Cài Asset Hub', '-srcfolder', stage, '-ov', '-format', 'UDZO', '-quiet', dmg])
+execFileSync('hdiutil', ['create', '-volname', 'Install Asset Hub', '-srcfolder', stage, '-ov', '-format', 'UDZO', '-quiet', dmg])
 rmSync(stage, { recursive: true, force: true })
 console.log(`${dmg}  ${(statSync(dmg).size / 1024).toFixed(0)} KB  (downloads from ${baseURL})`)

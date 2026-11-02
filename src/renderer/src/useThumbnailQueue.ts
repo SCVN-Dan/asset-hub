@@ -17,7 +17,8 @@ const RENDER: Record<ThumbKind, () => Promise<Render>> = {
   tmpfont: () => import('./viewer/tmpFont').then((m) => m.renderTmpFontThumbnail)
 }
 
-const CONCURRENCY = 2
+// Four at once draws about a fifth more per minute than two; more gains nothing (they wait on the disk and the GPU).
+const CONCURRENCY = 4
 /** A model whose thumbnail failed is retried after this long (the network may be back). */
 const RETRY_MS = 2 * 60_000
 
