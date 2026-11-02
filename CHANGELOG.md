@@ -2,6 +2,12 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.7] — 2026-11-02
+
+### Changed
+- **Thumbnails come in faster:** cards not drawn yet are drawn four at a time instead of two — about a fifth more per minute, and the first screen fills in about 2.6 s instead of 3.5 s.
+- **The installer is in English:** "Install Asset Hub" (was "Cài Asset Hub"), with its dialogs, progress and errors in English, as it cannot follow the app's language setting.
+
 ## [0.1.6] — 2026-11-02
 
 ### Changed
