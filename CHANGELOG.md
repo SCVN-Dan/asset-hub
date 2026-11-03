@@ -2,6 +2,19 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.2.0] — 2026-11-03
+
+### Added
+- **Images in the AI chat:** attach up to 4 pictures to a message with the paperclip, by pasting (⌘V) or by dropping them on the chat; the assistant sees them (a screenshot of a bug, a reference to find assets like it).
+- **Right-click menus:** on an asset card — export, import into Unity, chest, favourites, add to a collection, copy path or link, open on GitHub, show its folder; on several picked cards the same for all of them; on results from other branches and repos, on folders and on pinned branches.
+- **Axis gizmo in the 3D viewers:** the Front / Side / Top buttons are replaced by Unity's axes in the viewer's corner, turning with the camera; click an axis to look from that side (again for the other side). Reset stays.
+
+### Changed
+- **"Alert new assets" is now "Pin branch":** pinned branches sit in the sidebar for one-click return, still with their new assets counted. Each shows the repo above the branch, so long names can be read.
+
+### Fixed
+- **"All repos" no longer freezes the app:** with many indexed repos it took over 10 s per refresh and refreshed every 3 s while indexing. Results are now grouped about four times faster, sent at about half the size, filtered by repo and branch where they are kept, and re-read less often while indexing.
+
 ## [0.1.10] — 2026-11-03
 
 ### Added
