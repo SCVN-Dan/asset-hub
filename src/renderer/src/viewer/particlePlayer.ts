@@ -216,8 +216,20 @@ void main() {
 }
 `
 
+/** A mesh's UV moved into the texture sheet's frame (left to right, top to bottom), as Unity does for mesh particles. */
+const SHEET_UV = /* glsl */ `
+attribute float instanceFrame;
+uniform vec2 uTiles;
+vec2 sheetUv(vec2 uv) {
+  float fx = mod(instanceFrame, uTiles.x);
+  float fy = floor(instanceFrame / uTiles.x);
+  return vec2((fx + uv.x) / uTiles.x, 1.0 - (fy + 1.0 - uv.y) / uTiles.y);
+}
+`
+
 /** Mesh particles drawn by a ported shader: the mesh's UV where the streams put UVs, the particle's streams (custom data…), colour and alpha. */
 const MESH_VERT = /* glsl */ `
+${SHEET_UV}
 attribute float instanceAlpha;
 attribute vec4 iS0;
 attribute vec4 iS1;
@@ -232,8 +244,9 @@ vec4 withUv(vec4 values, vec4 map, vec2 uv) {
   return mix(mix(values, vec4(uv.x), vec4(equal(map, vec4(1.0)))), vec4(uv.y), vec4(equal(map, vec4(2.0))));
 }
 void main() {
-  vTex0 = withUv(iS0, uUvMap0, uv);
-  vTex1 = withUv(iS1, uUvMap1, uv);
+  vec2 tileUv = sheetUv(uv);
+  vTex0 = withUv(iS0, uUvMap0, tileUv);
+  vTex1 = withUv(iS1, uUvMap1, tileUv);
   vec3 c = vec3(1.0);
   #ifdef USE_INSTANCING_COLOR
   c = instanceColor;
@@ -256,6 +269,22 @@ const MAX_TRAILS = 600
 const DEG = Math.PI / 180
 const GRAVITY = 9.81
 const toLinear = (v: number) => Math.pow(v, 2.2)
+
+/** One frame of the timeline and of runs done without drawing: a 30th of a second. */
+export const FRAME = 1 / 30
+
+/**
+ * The particles' random numbers (mulberry32): seeded at each play of an effect,
+ * so going back on the timeline plays the same particles again.
+ */
+let rngState = 1
+function rnd(): number {
+  let t = (rngState = (rngState + 0x6d2b79f5) | 0)
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+}
+const newSeed = () => Math.floor(Math.random() * 4294967296)
 
 /** A quad, shared by every emitter. */
 function quad(): THREE.InstancedBufferGeometry {
@@ -284,8 +313,8 @@ function blending(material: THREE.ShaderMaterial, blend: EmitterLook['blend']) {
 const shapeRotation = (s: ParticleShape) => new THREE.Quaternion().setFromEuler(new THREE.Euler(s.rotation[0] * DEG, s.rotation[1] * DEG, s.rotation[2] * DEG, 'YXZ'))
 
 const randomUnit = (out: THREE.Vector3) => {
-  const z = Math.random() * 2 - 1
-  const a = Math.random() * Math.PI * 2
+  const z = rnd() * 2 - 1
+  const a = rnd() * Math.PI * 2
   const r = Math.sqrt(1 - z * z)
   return out.set(r * Math.cos(a), r * Math.sin(a), z)
 }
@@ -299,7 +328,7 @@ function emitFromShape(shape: ParticleShape | undefined, pos: THREE.Vector3, dir
     return
   }
   const arc = (shape.arc / 360) * Math.PI * 2
-  const radial = () => shape.radius * (1 - shape.radiusThickness * (1 - Math.cbrt(Math.random())))
+  const radial = () => shape.radius * (1 - shape.radiusThickness * (1 - Math.cbrt(rnd())))
   switch (shape.type) {
     case 0:
     case 1:
@@ -315,37 +344,37 @@ function emitFromShape(shape: ParticleShape | undefined, pos: THREE.Vector3, dir
     case 8:
     case 9: {
       // Cone: from a disc of `radius`, spreading out by `angle` towards the rim.
-      const a = Math.random() * arc
-      const d = shape.type === 7 || shape.type === 9 ? 1 : Math.sqrt(1 - shape.radiusThickness * Math.random())
+      const a = rnd() * arc
+      const d = shape.type === 7 || shape.type === 9 ? 1 : Math.sqrt(1 - shape.radiusThickness * rnd())
       const x = Math.cos(a) * d
       const y = Math.sin(a) * d
       const spread = Math.sin(shape.angle * DEG)
       pos.set(x * shape.radius, y * shape.radius, 0)
       dir.set(x * spread, y * spread, Math.cos(shape.angle * DEG)).normalize()
       // Volume cones emit along their length too.
-      if (shape.type >= 8) pos.addScaledVector(dir, Math.random() * shape.length)
+      if (shape.type >= 8) pos.addScaledVector(dir, rnd() * shape.length)
       break
     }
     case 5:
     case 15:
     case 16:
-      pos.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5)
+      pos.set(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5)
       dir.set(0, 0, 1)
       break
     case 10:
     case 11: {
-      const a = Math.random() * arc
+      const a = rnd() * arc
       const r = shape.type === 11 ? shape.radius : radial()
       pos.set(Math.cos(a) * r, Math.sin(a) * r, 0)
       dir.set(Math.cos(a), Math.sin(a), 0)
       break
     }
     case 12:
-      pos.set((Math.random() - 0.5) * 2 * shape.radius, 0, 0)
+      pos.set((rnd() - 0.5) * 2 * shape.radius, 0, 0)
       dir.set(0, 1, 0)
       break
     case 18:
-      pos.set(Math.random() - 0.5, Math.random() - 0.5, 0)
+      pos.set(rnd() - 0.5, rnd() - 0.5, 0)
       dir.set(0, 0, 1)
       break
     default:
@@ -441,6 +470,8 @@ export class EmitterPlayer {
   /** How far a mesh particle of size 1 spans (its mesh's bounds around the pivot, across): 1 for billboards. */
   private readonly span: number = 1
   private readonly meshAlpha?: THREE.InstancedBufferAttribute
+  /** Texture sheet frame of each mesh particle. */
+  private readonly meshFrame?: THREE.InstancedBufferAttribute
   private readonly trail?: { geometry: THREE.InstancedBufferGeometry; material: THREE.ShaderMaterial; attrs: Record<'a' | 'b' | 'width' | 'colorA' | 'colorB' | 'u', THREE.InstancedBufferAttribute>; hist: Float32Array; histTime: Float32Array; histCount: Uint8Array; has: Uint8Array }
   // Per particle.
   private readonly pos: Float32Array
@@ -505,13 +536,15 @@ export class EmitterPlayer {
       const geometry = look.mesh.clone()
       this.meshAlpha = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1).setUsage(THREE.DynamicDrawUsage)
       geometry.setAttribute('instanceAlpha', this.meshAlpha)
+      this.meshFrame = new THREE.InstancedBufferAttribute(new Float32Array(n), 1).setUsage(THREE.DynamicDrawUsage)
+      geometry.setAttribute('instanceFrame', this.meshFrame)
       if (!geometry.getAttribute('uv')) geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(geometry.getAttribute('position').count * 2), 2))
       if (!geometry.getAttribute('normal')) geometry.computeVertexNormals()
       const streams = this.streamAttributes(n)
       geometry.setAttribute('iS0', streams.s0)
       geometry.setAttribute('iS1', streams.s1)
       this.meshStreams = streams
-      this.meshes = new THREE.InstancedMesh(geometry, shaderMaterial(MESH_VERT, '', look, streams.uniforms, { MESH_PARTICLE: '' }), n)
+      this.meshes = new THREE.InstancedMesh(geometry, shaderMaterial(MESH_VERT, '', look, { ...streams.uniforms, uTiles: { value: this.tiles() } }, { MESH_PARTICLE: '' }), n)
       this.meshes.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       this.meshes.setColorAt(0, new THREE.Color(1, 1, 1))
       this.meshes.count = 0
@@ -536,9 +569,14 @@ export class EmitterPlayer {
       const geometry = look.mesh.clone()
       this.meshAlpha = new THREE.InstancedBufferAttribute(new Float32Array(n).fill(1), 1).setUsage(THREE.DynamicDrawUsage)
       geometry.setAttribute('instanceAlpha', this.meshAlpha)
+      this.meshFrame = new THREE.InstancedBufferAttribute(new Float32Array(n), 1).setUsage(THREE.DynamicDrawUsage)
+      geometry.setAttribute('instanceFrame', this.meshFrame)
+      const tiles = this.tiles()
       material.onBeforeCompile = (shader) => {
+        shader.uniforms.uTiles = { value: tiles }
         shader.vertexShader = shader.vertexShader
-          .replace('#include <common>', '#include <common>\nattribute float instanceAlpha;\nvarying float vInstanceAlpha;')
+          .replace('#include <common>', `#include <common>\nattribute float instanceAlpha;\nvarying float vInstanceAlpha;\n${SHEET_UV}`)
+          .replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nvMapUv = sheetUv(vMapUv);\n#endif')
           .replace('#include <begin_vertex>', '#include <begin_vertex>\nvInstanceAlpha = instanceAlpha;')
         shader.fragmentShader = shader.fragmentShader
           .replace('#include <common>', '#include <common>\nvarying float vInstanceAlpha;')
@@ -552,7 +590,6 @@ export class EmitterPlayer {
       this.meshes.userData.particles = true
       group.add(this.meshes)
     } else {
-      const sheet = this.sim.sheet
       const geometry = quad()
       const attr = (size: number) => new THREE.InstancedBufferAttribute(new Float32Array(n * size), size).setUsage(THREE.DynamicDrawUsage)
       const q = { geometry, pos: attr(3), vel: attr(3), color: attr(4), srf: attr(3), rotXY: attr(2), sizeY: attr(1) }
@@ -575,7 +612,7 @@ export class EmitterPlayer {
       const material = shaderMaterial(VERT, FRAG, look, {
         uMode: { value: mode },
         uAlign: { value: new THREE.Matrix3() },
-        uTiles: { value: new THREE.Vector2(sheet?.tilesX ?? 1, sheet?.tilesY ?? 1) },
+        uTiles: { value: this.tiles() },
         uLength: { value: this.sim.lengthScale },
         uVelScale: { value: this.sim.velocityScale },
         uPivot: { value: new THREE.Vector2(this.sim.pivot[0], this.sim.pivot[1]) },
@@ -634,7 +671,7 @@ export class EmitterPlayer {
     this.emitDebt = 0
     this.lastCycle = -1
     this.lastCycleTime = -1e-6
-    this.delay = evalMinMax(this.sim.startDelay, 0, Math.random())
+    this.delay = evalMinMax(this.sim.startDelay, 0, rnd())
     if (this.sim.prewarm && this.looping && !this.isSub) {
       this.delay = 0
       for (let t = 0; t < this.sim.duration; t += 1 / 30) this.step(1 / 30)
@@ -695,14 +732,14 @@ export class EmitterPlayer {
    */
   trigger(at: THREE.Vector3, inherit: number, parent?: { color: ArrayLike<number>; size: number }): void {
     const s = this.sim
-    const bursts = s.bursts.reduce((n, b) => n + Math.round(evalMinMax(b.count, 0, Math.random())) * Math.max(1, b.cycles), 0)
-    const count = Math.min(60, bursts || Math.round(evalMinMax(s.rate, 0, Math.random()) * Math.min(1, s.duration)))
+    const bursts = s.bursts.reduce((n, b) => n + Math.round(evalMinMax(b.count, 0, rnd())) * Math.max(1, b.cycles), 0)
+    const count = Math.min(60, bursts || Math.round(evalMinMax(s.rate, 0, rnd()) * Math.min(1, s.duration)))
     for (let i = 0; i < count; i++) this.spawn(0, at, inherit, parent)
   }
 
   /** Birth sub emitters: emitting from a live parent particle, at this system's rate. */
   emitFrom(at: THREE.Vector3, dt: number, inherit: number, parent?: { color: ArrayLike<number>; size: number }): void {
-    const n = Math.floor(Math.max(0, evalMinMax(this.sim.rate, 0, Math.random())) * dt + Math.random())
+    const n = Math.floor(Math.max(0, evalMinMax(this.sim.rate, 0, rnd())) * dt + rnd())
     for (let i = 0; i < n; i++) this.spawn(0, at, inherit, parent)
   }
 
@@ -725,7 +762,7 @@ export class EmitterPlayer {
     this.lastCycle = cycle
     this.lastCycleTime = ct
     const nt = s.duration > 0 ? ct / s.duration : 0
-    this.emitDebt += Math.max(0, evalMinMax(s.rate, nt, Math.random())) * dt
+    this.emitDebt += Math.max(0, evalMinMax(s.rate, nt, rnd())) * dt
     const n = Math.floor(this.emitDebt)
     this.emitDebt -= n
     for (let i = 0; i < n; i++) this.spawn(nt)
@@ -734,8 +771,8 @@ export class EmitterPlayer {
       const cycles = b.cycles > 0 ? b.cycles : Math.ceil((s.duration - b.time) / b.interval)
       for (let k = 0; k < cycles; k++) {
         const at = b.time + k * b.interval
-        if (at > from && at <= ct && Math.random() <= b.probability) {
-          const count = Math.round(evalMinMax(b.count, nt, Math.random()))
+        if (at > from && at <= ct && rnd() <= b.probability) {
+          const count = Math.round(evalMinMax(b.count, nt, rnd()))
           for (let i = 0; i < count; i++) this.spawn(nt)
         }
       }
@@ -750,32 +787,32 @@ export class EmitterPlayer {
     const d = new THREE.Vector3()
     emitFromShape(s.shape, p, d, this.shapeRot)
     if (at) p.add(at)
-    const speed = evalMinMax(s.startSpeed, nt, Math.random())
+    const speed = evalMinMax(s.startSpeed, nt, rnd())
     this.pos.set([p.x, p.y, p.z], i * 3)
     this.vel.set([d.x * speed, d.y * speed, d.z * speed], i * 3)
     this.age[i] = 0
-    this.life[i] = Math.max(0.01, evalMinMax(s.startLifetime, nt, Math.random()))
+    this.life[i] = Math.max(0.01, evalMinMax(s.startLifetime, nt, rnd()))
     const inherited = parent && inherit & 2 ? parent.size : 1
-    this.size[i] = evalMinMax(s.startSize, nt, Math.random()) * inherited
+    this.size[i] = evalMinMax(s.startSize, nt, rnd()) * inherited
     const [sy, sz] = s.startSize3D ?? []
-    this.sizeYZ[i * 2] = sy ? evalMinMax(sy, nt, Math.random()) * inherited : this.size[i]
-    this.sizeYZ[i * 2 + 1] = sz ? evalMinMax(sz, nt, Math.random()) * inherited : this.size[i]
+    this.sizeYZ[i * 2] = sy ? evalMinMax(sy, nt, rnd()) * inherited : this.size[i]
+    this.sizeYZ[i * 2 + 1] = sz ? evalMinMax(sz, nt, rnd()) * inherited : this.size[i]
     // Unity turns clockwise for a positive angle; mirrored here.
-    this.rot[i * 2] = -evalMinMax(s.startRotation, nt, Math.random())
+    this.rot[i * 2] = -evalMinMax(s.startRotation, nt, rnd())
     this.rot[i * 2 + 1] = 0
     // X keeps its sign under the X mirror; Y turns the other way, like Z.
     const [rx, ry] = s.startRotation3D ?? []
-    this.rotXY[i * 2] = rx ? evalMinMax(rx, nt, Math.random()) : 0
-    this.rotXY[i * 2 + 1] = ry ? -evalMinMax(ry, nt, Math.random()) : 0
-    for (let k = 0; k < 4; k++) this.rand[i * 4 + k] = Math.random()
-    const c = evalMinMaxColor(s.startColor, nt, Math.random())
+    this.rotXY[i * 2] = rx ? evalMinMax(rx, nt, rnd()) : 0
+    this.rotXY[i * 2 + 1] = ry ? -evalMinMax(ry, nt, rnd()) : 0
+    for (let k = 0; k < 4; k++) this.rand[i * 4 + k] = rnd()
+    const c = evalMinMaxColor(s.startColor, nt, rnd())
     if (parent && inherit & 1) for (let k = 0; k < 4; k++) c[k] *= parent.color[k]
     this.color.set(c, i * 4)
     if (this.trail) {
-      this.trail.has[i] = Math.random() < (s.trail?.ratio ?? 1) && i < MAX_TRAILS ? 1 : 0
+      this.trail.has[i] = rnd() < (s.trail?.ratio ?? 1) && i < MAX_TRAILS ? 1 : 0
       this.trail.histCount[i] = 0
     }
-    for (const sub of this.subs) if (sub.type === 'birth' && Math.random() <= sub.probability) this.fire(sub, i, true)
+    for (const sub of this.subs) if (sub.type === 'birth' && rnd() <= sub.probability) this.fire(sub, i, true)
   }
 
   /** Starts a sub emitter at particle `i`, bringing its position into the sub emitter's space. */
@@ -810,7 +847,7 @@ export class EmitterPlayer {
       this.age[i] += dt
       if (this.age[i] >= this.life[i]) {
         // Collision sub emitters fire at death too: the preview has nothing to collide with.
-        for (const sub of deaths) if (Math.random() <= sub.probability) this.fire(sub, i)
+        for (const sub of deaths) if (rnd() <= sub.probability) this.fire(sub, i)
         this.remove(i)
         continue
       }
@@ -862,7 +899,7 @@ export class EmitterPlayer {
         this.rotXY[i * 2] += evalMinMax(s.rotationOverLifetime3D[0], t, r(2)) * dt
         this.rotXY[i * 2 + 1] -= evalMinMax(s.rotationOverLifetime3D[1], t, r(2)) * dt
       }
-      for (const sub of births) if (Math.random() <= sub.probability) this.fire(sub, i, false, dt)
+      for (const sub of births) if (rnd() <= sub.probability) this.fire(sub, i, false, dt)
       if (this.trail?.has[i]) this.record(i)
       i++
     }
@@ -913,6 +950,11 @@ export class EmitterPlayer {
     }
   }
 
+  /** Columns and rows of the texture sheet: one tile without the module. */
+  private tiles(): THREE.Vector2 {
+    return new THREE.Vector2(this.sim.sheet?.tilesX ?? 1, this.sim.sheet?.tilesY ?? 1)
+  }
+
   /** Colour of particle `i` now (start colour × colour over lifetime), sRGB. */
   private colorAt(i: number, t: number, out: number[]): number[] {
     const over = this.sim.colorOverLifetime ? evalMinMaxColor(this.sim.colorOverLifetime, t, this.rand[i * 4 + 1]) : undefined
@@ -940,6 +982,12 @@ export class EmitterPlayer {
       const sizeY = Math.max(0, this.sizeYZ[i * 2] * overY)
       const sizeZ = Math.max(0, this.sizeYZ[i * 2 + 1] * overZ)
       const angle = this.rot[i * 2] + this.rot[i * 2 + 1]
+      let frame = 0
+      if (sheet) {
+        const f = (evalMinMax(sheet.frame, t, r(3)) * sheet.cycles) % 1
+        frame = Math.min(frames - 1, Math.floor(f * frames + evalMinMax(sheet.startFrame, 0, r(0)))) % frames
+        if (sheet.singleRow) frame += sheet.row * sheet.tilesX
+      }
       if (this.meshes) {
         // Mirrored back: the mesh comes from an FBX already in three.js handedness.
         // Z, then X, then Y, like Unity; World alignment undoes the system's rotation first.
@@ -956,7 +1004,8 @@ export class EmitterPlayer {
           this.meshes.setColorAt(i, color.setRGB(c[0], c[1], c[2], this.look.gamma && this.look.custom ? THREE.LinearSRGBColorSpace : THREE.SRGBColorSpace))
           ;(this.meshAlpha!.array as Float32Array)[i] = c[3]
         }
-        if (this.meshStreams) this.writeStreams(this.meshStreams, i, t, size, angle, 0)
+        ;(this.meshFrame!.array as Float32Array)[i] = frame
+        if (this.meshStreams) this.writeStreams(this.meshStreams, i, t, size, angle, frame)
         continue
       }
       const qd = this.quads!
@@ -965,12 +1014,6 @@ export class EmitterPlayer {
       const col = qd.color.array as Float32Array
       // Colours are authored in sRGB; the shader works in linear light.
       for (let k = 0; k < 4; k++) col[i * 4 + k] = k < 3 && !this.look.gamma ? toLinear(c[k]) : c[k]
-      let frame = 0
-      if (sheet) {
-        const f = (evalMinMax(sheet.frame, t, r(3)) * sheet.cycles) % 1
-        frame = Math.min(frames - 1, Math.floor(f * frames + evalMinMax(sheet.startFrame, 0, r(0)))) % frames
-        if (sheet.singleRow) frame += sheet.row * sheet.tilesX
-      }
       const srf = qd.srf.array as Float32Array
       srf[i * 3] = size
       srf[i * 3 + 1] = angle
@@ -984,6 +1027,7 @@ export class EmitterPlayer {
       this.meshes.instanceMatrix.needsUpdate = true
       if (this.meshes.instanceColor) this.meshes.instanceColor.needsUpdate = true
       if (this.meshAlpha) this.meshAlpha.needsUpdate = true
+      if (this.meshFrame) this.meshFrame.needsUpdate = true
       if (this.meshStreams) this.meshStreams.s0.needsUpdate = this.meshStreams.s1.needsUpdate = true
     } else if (this.quads) {
       this.quads.geometry.instanceCount = this.count
@@ -1130,6 +1174,12 @@ export class EffectPlayer {
   speed = 1
   /** Replays a one-shot effect once it is over. */
   loop = true
+  /** Seconds since this play started. */
+  time = 0
+  /** Seed of this play's random numbers, for going back to an earlier moment of it. */
+  private seed = newSeed()
+  /** Held on the timeline since it last played: moving forward goes on from where it is. */
+  private scrubbing = false
   /** Largest side of the textures its emitters use. */
   maxTextureSize = 0
   private wait = 0
@@ -1141,7 +1191,9 @@ export class EffectPlayer {
   update(dt: number): void {
     if (this.paused) return
     const step = dt * this.speed
+    this.scrubbing = false
     for (const e of this.emitters) e.update(step)
+    this.time += step
     if (this.loop && this.emitters.every((e) => e.finished)) {
       // A short pause between plays, so the start of the effect reads.
       this.wait += step
@@ -1156,9 +1208,36 @@ export class EffectPlayer {
 
   /** Clears the shots fired, and plays the effect from its start. */
   restart(): void {
+    this.seed = newSeed()
+    this.replay()
+  }
+
+  /** From the start of this same play: the same random numbers, so the same particles. */
+  private replay(): void {
+    rngState = this.seed
     this.wait = 0
+    this.time = 0
     this.clearShots()
     for (const e of this.emitters) e.restart()
+  }
+
+  /**
+   * Shows the effect `seconds` into this play, worked out in steps of a frame
+   * from its start (same particles every time); while held there, moving
+   * forward goes on from where it is.
+   */
+  seek(seconds: number): void {
+    const to = Math.max(0, seconds)
+    if (!this.scrubbing || to < this.time - 1e-6) this.replay()
+    this.scrubbing = true
+    this.advance(to - this.time)
+  }
+
+  /** How long the timeline runs: a one-shot to its fade-out, a loop one cycle and its particles' lives. Capped at 10 s. */
+  timeline(): number {
+    const visible = this.emitters.filter((e) => e.emitter.renderMode !== 'none' && !e.isSub)
+    if (!visible.length) return 1
+    return Math.min(10, Math.max(0.5, ...visible.map((e) => e.emitter.duration + e.emitter.lifetime)))
   }
 
   /**
@@ -1209,9 +1288,10 @@ export class EffectPlayer {
   /** Runs the effect forward without drawing (thumbnails). */
   advance(seconds: number): void {
     // Steps of a 30th of a second, then what is left: exactly `seconds`, so frames at set times land on them.
-    for (let left = seconds; left > 1e-6; left -= 1 / 30) {
-      const step = Math.min(1 / 30, left)
+    for (let left = seconds; left > 1e-6; left -= FRAME) {
+      const step = Math.min(FRAME, left)
       for (const e of this.emitters) e.update(step)
+      this.time += step
     }
   }
 

@@ -155,3 +155,27 @@ describe('firing shots on top (spam like Unity)', () => {
   })
 })
 
+
+describe('timeline', () => {
+  it('shows the same particles when going back and forth on it', () => {
+    const root = new THREE.Group()
+    const s = sim({ startLifetime: k(1), startSpeed: { mode: 3 as const, scalar: 5, min: 1 }, rate: k(30), duration: 1 })
+    const player = new EmitterPlayer({ ...emitter('1', s), lifetime: 1 }, { blend: 'alpha', tint: [1, 1, 1, 1] })
+    root.add(player.mesh)
+    const effect = new EffectPlayer([player])
+    const at = () => {
+      const points: number[] = []
+      player.sample((p) => points.push(p.x, p.y, p.z))
+      return points
+    }
+    effect.seek(0.5)
+    const first = at()
+    expect(first.length).toBeGreaterThan(0)
+    expect(effect.time).toBeCloseTo(0.5)
+    effect.seek(0.2)
+    expect(effect.time).toBeCloseTo(0.2)
+    effect.seek(0.5)
+    expect(at()).toEqual(first)
+    expect(effect.timeline()).toBe(2)
+  })
+})

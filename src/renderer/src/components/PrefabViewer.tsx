@@ -5,7 +5,7 @@ import type { DependencyReport } from '@core/index'
 import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
 import { buildPrefab, dressPrefab, type PrefabBuild } from '../viewer/prefabBuild'
 import { buildEffect } from '../viewer/effectBuild'
-import type { EffectPlayer } from '../viewer/particlePlayer'
+import { FRAME, type EffectPlayer } from '../viewer/particlePlayer'
 import type { LiveContext } from './ModelViewer'
 
 interface Props {
@@ -36,6 +36,8 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
   const [wireframe, setWireframe] = useState(false)
   /** Particle controls, shown when the prefab has particle systems. */
   const [fx, setFx] = useState<{ paused: boolean; loop: boolean; speed: number }>()
+  /** Where the effect is on its timeline, in seconds, and how long that runs. */
+  const [clock, setClock] = useState({ time: 0, length: 1 })
   const callbacks = useRef({ onStats, onThumb, onLoading })
   callbacks.current = { onStats, onThumb, onLoading }
 
@@ -82,7 +84,23 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
         const previous = built.current
         previous?.stop?.()
         previous?.effect?.dispose()
-        built.current = { key, build, effect, stop: effect && owner.addUpdater((dt) => effect.update(dt)) }
+        let shown = -1
+        built.current = {
+          key,
+          build,
+          effect,
+          stop:
+            effect &&
+            owner.addUpdater((dt) => {
+              effect.update(dt)
+              // The timeline follows the play, one render per frame of it at most.
+              const at = Math.floor(effect.time / FRAME)
+              if (at !== shown) {
+                shown = at
+                setClock({ time: effect.time, length: effect.timeline() })
+              }
+            })
+        }
         // The camera takes in where particles fly, not only the meshes.
         owner.showGroup(build.group, effect?.measuredExtent())
         await dressPrefab(owner, build)
@@ -137,6 +155,17 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
           ? t('viewer.error', { message: error })
           : undefined
 
+  /** Holds the effect at `seconds` into its play (a frame of the timeline). */
+  const seek = (seconds: number) => {
+    const effect = built.current?.effect
+    if (!effect || !fx) return
+    if (!fx.paused) setEffect({ paused: true })
+    const length = effect.timeline()
+    effect.seek(Math.min(length, Math.max(0, Math.round(seconds / FRAME) * FRAME)))
+    setClock({ time: effect.time, length })
+  }
+  const frameNow = Math.round(clock.time / FRAME)
+
   /** Another play of the effect on top of the running ones, like spawning the prefab again (spam it like in Unity). */
   const fire = () => {
     const effect = built.current?.effect
@@ -151,7 +180,14 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
       // Focused (clicked) viewer: Space fires the effect again.
       tabIndex={fx ? 0 : undefined}
       onKeyDown={(e) => {
-        if (e.key !== ' ' || !fx || status !== 'ready') return
+        if (!fx || status !== 'ready') return
+        // Arrows step a frame back or on (held: keeps stepping); Space fires the effect again.
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          if ((e.target as HTMLElement).tagName === 'INPUT') return
+          e.preventDefault()
+          return seek((frameNow + (e.key === 'ArrowLeft' ? -1 : 1)) * FRAME)
+        }
+        if (e.key !== ' ') return
         e.preventDefault()
         if (!e.repeat) fire()
       }}
@@ -194,37 +230,61 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
             </button>
           </div>
           {fx && (
-            <div className="viewer-tools viewer-tools-bottom" role="toolbar" aria-label={t('particles.title')}>
-              <button
-                type="button"
-                className="viewer-btn"
-                aria-pressed={!fx.paused}
-                onClick={() => {
-                  // Play starts the effect over at once; pause holds it where it is.
-                  if (fx.paused) built.current?.effect?.restart()
-                  setEffect({ paused: !fx.paused })
-                }}
-              >
-                {fx.paused ? t('particles.play') : t('particles.pause')}
-              </button>
-              <button type="button" className="viewer-btn" title={t('particles.fireHint')} onClick={fire}>
-                {t('particles.fire')}
-              </button>
-              <button type="button" className="viewer-btn" onClick={() => built.current?.effect?.restart()}>
-                {t('particles.restart')}
-              </button>
-              <span className="viewer-sep" aria-hidden="true" />
-              <button type="button" className="viewer-btn" aria-pressed={fx.loop} title={t('particles.loopHint')} onClick={() => setEffect({ loop: !fx.loop })}>
-                {t('particles.loop')}
-              </button>
-              {/* Speed apart, on the right: one choice among three, drawn as a single control. */}
-              <div className="viewer-seg" role="group" aria-label={t('particles.speed')}>
-                <span className="viewer-seg-label">{t('particles.speed')}</span>
-                {[0.25, 0.5, 1].map((s) => (
-                  <button key={s} type="button" className="viewer-btn" aria-pressed={fx.speed === s} onClick={() => setEffect({ speed: s })}>
-                    {s}×
-                  </button>
-                ))}
+            // Timeline above the play controls, stacked from the bottom: a narrow viewer wraps the controls without covering it.
+            <div className="viewer-tools viewer-dock">
+              <div className="viewer-row viewer-timeline" role="group" aria-label={t('particles.timeline')}>
+                <button type="button" className="viewer-btn" title={t('particles.prevFrame')} aria-label={t('particles.prevFrame')} onClick={() => seek((frameNow - 1) * FRAME)}>
+                  ‹
+                </button>
+                <input
+                  type="range"
+                  className="viewer-scrub"
+                  min={0}
+                  max={clock.length}
+                  step={FRAME}
+                  value={Math.min(clock.time, clock.length)}
+                  aria-label={t('particles.timeline')}
+                  onChange={(e) => seek(Number(e.target.value))}
+                />
+                <button type="button" className="viewer-btn" title={t('particles.nextFrame')} aria-label={t('particles.nextFrame')} onClick={() => seek((frameNow + 1) * FRAME)}>
+                  ›
+                </button>
+                <span className="viewer-clock">
+                  {clock.time.toFixed(2)}s · {t('particles.frame', { frame: frameNow })}
+                </span>
+              </div>
+              <div className="viewer-row" role="toolbar" aria-label={t('particles.title')}>
+                <button
+                  type="button"
+                  className="viewer-btn"
+                  aria-pressed={!fx.paused}
+                  onClick={() => {
+                    // Play starts the effect over at once; pause holds it where it is.
+                    if (fx.paused) built.current?.effect?.restart()
+                    setEffect({ paused: !fx.paused })
+                  }}
+                >
+                  {fx.paused ? t('particles.play') : t('particles.pause')}
+                </button>
+                <button type="button" className="viewer-btn" title={t('particles.fireHint')} onClick={fire}>
+                  {t('particles.fire')}
+                </button>
+                <button type="button" className="viewer-btn" onClick={() => built.current?.effect?.restart()}>
+                  {t('particles.restart')}
+                </button>
+                <span className="viewer-sep" aria-hidden="true" />
+                <button type="button" className="viewer-btn" aria-pressed={fx.loop} title={t('particles.loopHint')} onClick={() => setEffect({ loop: !fx.loop })}>
+                  {t('particles.loop')}
+                </button>
+                {/* Speed apart, on the right: one choice among three, drawn as a single control. */}
+                <div className="viewer-seg" role="group" aria-label={t('particles.speed')}>
+                  <span className="viewer-seg-label">{t('particles.speed')}</span>
+                  {[0.25, 0.5, 1].map((s) => (
+                    <button key={s} type="button" className="viewer-btn" aria-pressed={fx.speed === s} onClick={() => setEffect({ speed: s })}>
+                      {s}×
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}

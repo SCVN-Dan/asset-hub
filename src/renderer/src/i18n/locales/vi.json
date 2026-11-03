@@ -605,6 +605,10 @@
   },
   "particles": {
     "title": "Particle",
+    "timeline": "Dòng thời gian",
+    "prevFrame": "Frame trước (←)",
+    "nextFrame": "Frame sau (→)",
+    "frame": "frame {{frame}}",
     "emitters": "Emitter",
     "peak": "Particle cùng lúc",
     "length": "Thời lượng",

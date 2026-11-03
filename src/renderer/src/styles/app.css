@@ -476,7 +476,11 @@ body.resizing * { cursor: inherit !important; }
 .emitter-list li > .small:nth-child(2) { grid-column: 1; overflow-wrap: anywhere; }
 .emitter-list li > .mono { grid-column: 2; grid-row: 1; align-self: center; }
 /* Particle controls along the bottom of the viewer; the hint moves above them. */
-.viewer-tools-bottom { top: auto; bottom: 28px; align-items: center; }
+.viewer-dock { top: auto; bottom: 28px; flex-direction: column; flex-wrap: nowrap; }
+.viewer-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.viewer-timeline { flex-wrap: nowrap; }
+.viewer-scrub { flex: 1; min-width: 60px; accent-color: var(--accent); }
+.viewer-clock { min-width: 92px; font-size: 11px; color: var(--text-2); font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px #000; text-align: right; }
 .viewer-sep { width: 1px; height: 16px; margin: 0 4px; background: var(--border-strong); }
 /* Speed: pushed to the right, its buttons joined into one control. */
 .viewer-seg { display: flex; align-items: center; margin-left: auto; }

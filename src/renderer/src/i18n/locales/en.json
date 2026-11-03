@@ -623,6 +623,10 @@
   },
   "particles": {
     "title": "Particles",
+    "timeline": "Timeline",
+    "prevFrame": "Previous frame (←)",
+    "nextFrame": "Next frame (→)",
+    "frame": "frame {{frame}}",
     "emitters": "Emitters",
     "peak": "Particles at once",
     "length": "Length",

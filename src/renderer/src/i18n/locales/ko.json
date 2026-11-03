@@ -596,6 +596,10 @@
   },
   "particles": {
     "title": "파티클",
+    "timeline": "타임라인",
+    "prevFrame": "이전 프레임 (←)",
+    "nextFrame": "다음 프레임 (→)",
+    "frame": "{{frame}} 프레임",
     "emitters": "이미터",
     "peak": "동시 파티클",
     "length": "길이",
