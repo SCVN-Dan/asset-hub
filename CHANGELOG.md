@@ -2,6 +2,14 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.10] — 2026-11-03
+
+### Added
+- **Effect timeline:** under an effect's play controls, drag to any moment of it or step a frame (1/30 s) at a time with ‹ › or the ←/→ keys; the time and frame number show next to it. Going back shows the same particles again.
+
+### Fixed
+- **Texture sheet animation on mesh particles** (e.g. Epic Toon FX's ToonPunchHeavy) plays its frames instead of showing the whole sheet.
+
 ## [0.1.9] — 2026-11-03
 
 ### Fixed
