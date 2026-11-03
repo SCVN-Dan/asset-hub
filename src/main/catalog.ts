@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'fs/promises'
 import { join } from 'path'
-import { groupCatalog, planScan, RepoCatalog, SourceError, whereIs, type CatalogAsset, type CatalogLocation, type RepoCatalogData, type RepoRef, type ScanTask, type TreeEntry } from '@core/index'
+import { catalogFacets, groupCatalog, listCatalog, planScan, RepoCatalog, SourceError, whereIs, type CatalogAsset, type CatalogFacets, type CatalogListing, type CatalogLocation, type RepoCatalogData, type RepoRef, type ScanTask, type TreeEntry } from '@core/index'
 import type { GitHubAssetSource } from '@core/github/source'
 import type { CatalogStatus, IpcError } from '@shared/ipc'
 import { writeAtomic } from './caches'
@@ -30,6 +30,8 @@ export class CatalogService {
   /** Bumped on every change, so grouped results can be reused until something new is indexed. */
   private version = 0
   private listed?: { key: string; version: number; result: Promise<CatalogAsset[]> }
+  /** Filter counts of the grouped results above, per repo filter (counting goes over every branch of every file). */
+  private facets = new Map<string, CatalogFacets>()
   private emitTimer?: NodeJS.Timeout
 
   constructor(
@@ -123,8 +125,18 @@ export class CatalogService {
       const version = this.version
       const result = Promise.all(names.map((r) => this.load(r))).then((catalogs) => groupCatalog(catalogs, this.typeOf, excludedFolders))
       this.listed = { key, version, result }
+      this.facets.clear()
     }
     return this.listed.result
+  }
+
+  /** `list`, on a repo and branch, made small enough for a page (see `listCatalog`). */
+  async listing(repos: readonly string[], excludedFolders: readonly string[], filter: { repo?: string; branch?: string }): Promise<CatalogListing> {
+    const assets = await this.list(repos, excludedFolders)
+    const facetKey = filter.repo ?? ''
+    let facets = this.facets.get(facetKey)
+    if (!facets) this.facets.set(facetKey, (facets = catalogFacets(assets, filter.repo)))
+    return listCatalog(assets, filter, facets)
   }
 
   /** Every saved repo's catalog, as stored (for a shared index). */

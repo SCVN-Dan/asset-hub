@@ -391,9 +391,15 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
   ipcMain.handle(IPC.catalogPause, () => wrap(async () => requireCatalog().pause()))
   ipcMain.handle(IPC.catalogResume, () => wrap(async () => requireCatalog().resume()))
   ipcMain.handle(IPC.catalogStatus, () => wrap(async () => requireCatalog().status()))
-  ipcMain.handle(IPC.catalogList, (_e, repo: unknown, excluded: unknown) =>
-    wrap(() => requireCatalog().list(typeof repo === 'string' ? [repo] : [], Array.isArray(excluded) ? excluded.map(String) : []))
-  )
+  ipcMain.handle(IPC.catalogList, (_e, repo: unknown, excluded: unknown, filter: unknown) => {
+    const f = (filter ?? {}) as { repo?: unknown; branch?: unknown }
+    return wrap(() =>
+      requireCatalog().listing(typeof repo === 'string' ? [repo] : [], Array.isArray(excluded) ? excluded.map(String) : [], {
+        ...(typeof f.repo === 'string' && f.repo ? { repo: f.repo } : {}),
+        ...(typeof f.branch === 'string' && f.branch ? { branch: f.branch } : {})
+      })
+    )
+  })
   ipcMain.handle(IPC.catalogWhere, (_e, sha: unknown) => wrap(() => requireCatalog().whereIs(String(sha))))
   ipcMain.handle(IPC.getStats, (_e, keys: unknown) => statsStore.getMany(Array.isArray(keys) ? keys.map(String).slice(0, 20000) : []))
   ipcMain.handle(IPC.saveStats, (_e, key: unknown, summary: unknown) => (typeof key === 'string' ? statsStore.save(key, summary) : undefined))

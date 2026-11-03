@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { parseAnimClip, type AnimClipInfo, type DependencyReport } from '@core/index'
 import { unwrap } from '../remoteSource'
-import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
+import { ViewGizmo } from './ViewGizmo'
+import { FbxViewer } from '../viewer/FbxViewer'
 import { GOOD_ENOUGH, loadRig, pickRig, rememberRig, rigCoverage, rigOrder, THUMB_POSE, toThreeClip, type Rig } from '../viewer/animPlayer'
 import { Dropdown } from './Dropdown'
 import type { LiveContext } from './ModelViewer'
@@ -141,7 +142,6 @@ export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, o
     }
   }
 
-  const view = (preset: ViewPreset) => viewer.current?.setView(preset)
   const overlay =
     status === 'loading'
       ? t('anim.findingRig')
@@ -166,8 +166,9 @@ export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, o
           {overlay}
         </div>
       )}
+      {status === 'ready' && <ViewGizmo viewer={viewer.current} />}
       {(status === 'ready' || status === 'norig' || (status === 'error' && !!info)) && (
-        <div className="viewer-tools" role="toolbar" aria-label={t('viewer.tools')}>
+        <div className="viewer-tools viewer-tools-top" role="toolbar" aria-label={t('viewer.tools')}>
           {status === 'ready' && (
             <>
               <button
@@ -194,11 +195,9 @@ export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, o
               >
                 {t('audio.loop')}
               </button>
-              {(['front', 'side', 'reset'] as const).map((p) => (
-                <button key={p} type="button" className="viewer-btn" onClick={() => view(p)}>
-                  {t(`viewer.view.${p}`)}
-                </button>
-              ))}
+              <button type="button" className="viewer-btn" onClick={() => viewer.current?.setView('reset')}>
+                {t('viewer.view.reset')}
+              </button>
             </>
           )}
           {searching ? (
@@ -230,9 +229,7 @@ export function AnimViewer({ live, path, report, models = [], onInfo, onThumb, o
               onChange={(value) => (value === OTHER ? setSearching(true) : void chooseRig(value))}
             />
           )}
-          <datalist id="anim-models">
-            {searching && models.map((m) => <option key={m} value={m} />)}
-          </datalist>
+          <datalist id="anim-models">{searching && models.map((m) => <option key={m} value={m} />)}</datalist>
         </div>
       )}
       {status === 'ready' && rig && <span className="viewer-hint">{t('anim.on', { name: rig.split('/').pop(), percent: Math.round((coverage[rig] ?? 0) * 100) })}</span>}

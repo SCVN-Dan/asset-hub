@@ -70,7 +70,7 @@ const api: AssetHubApi = {
     pause: () => ipcRenderer.invoke(IPC.catalogPause),
     resume: () => ipcRenderer.invoke(IPC.catalogResume),
     status: () => ipcRenderer.invoke(IPC.catalogStatus),
-    list: (repo, excludedFolders) => ipcRenderer.invoke(IPC.catalogList, repo, excludedFolders),
+    list: (repo, excludedFolders, filter) => ipcRenderer.invoke(IPC.catalogList, repo, excludedFolders, filter),
     whereIs: (sha) => ipcRenderer.invoke(IPC.catalogWhere, sha),
     onStatus: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, status: Parameters<typeof listener>[0]) => listener(status)
@@ -127,7 +127,7 @@ const api: AssetHubApi = {
       ipcRenderer.on(IPC.aiStatus, handler)
       return () => ipcRenderer.removeListener(IPC.aiStatus, handler)
     },
-    chatSend: (text, language) => ipcRenderer.invoke(IPC.aiChatSend, text, language),
+    chatSend: (text, language, images) => ipcRenderer.invoke(IPC.aiChatSend, text, language, images),
     chatStop: () => ipcRenderer.invoke(IPC.aiChatStop),
     chatReset: () => ipcRenderer.invoke(IPC.aiChatReset),
     onChat: (listener) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TreeEntry } from '../types'
-import { groupCatalog, planScan, RepoCatalog, whereIs } from './catalog'
+import { catalogFacets, groupCatalog, LISTED_BRANCHES, LISTED_LOCATIONS, listCatalog, planScan, RepoCatalog, whereIs } from './catalog'
 
 const file = (path: string, sha: string, size = 100): TreeEntry => ({ path, type: 'blob', sha, size })
 const typeOf = (path: string) => (path.toLowerCase().endsWith('.fbx') ? 'fbx' : undefined)
@@ -97,5 +97,34 @@ describe('RepoCatalog.merge', () => {
     // An older list does not replace a newer one, and its commits for gone branches are not taken.
     expect(mine.merge(stale)).toBe(0)
     expect(mine.branches.map((b) => b.commit)).toEqual(['c-main2'])
+  })
+})
+
+describe('listCatalog', () => {
+  function wide() {
+    const c = RepoCatalog.empty('org/wide')
+    const names = ['main', 'a', 'b', 'c', 'd', 'e']
+    c.setBranches(names.map((name, i) => ({ name, commit: `c${i}`, date: `2026-10-0${9 - i}T00:00:00Z` })), 'main', NOW)
+    // One file on every branch, at seven paths; another only on branch "e".
+    names.forEach((_n, i) => c.addCommit(`c${i}`, [...Array.from({ length: 7 }, (_x, k) => file(`P${k}/Big.fbx`, 'big')), ...(i === 5 ? [file('Only.fbx', 'only')] : [])]))
+    return groupCatalog([c], typeOf, [])
+  }
+
+  it('sends the first branches and locations only, with their totals', () => {
+    const { assets, facets } = listCatalog(wide())
+    const big = assets.find((a) => a.sha === 'big')!
+    expect(big.locations).toHaveLength(LISTED_LOCATIONS)
+    expect(big.locationTotal).toBe(7)
+    expect(big.branchCount).toBe(6)
+    expect(big.locations[0]).toMatchObject({ branches: ['main', 'a', 'b'].slice(0, LISTED_BRANCHES), branchTotal: 6 })
+    expect(facets.branches[0]).toEqual(['e', 8])
+  })
+
+  it('filters by branch, that branch first', () => {
+    const all = wide()
+    const { assets } = listCatalog(all, { branch: 'e' }, catalogFacets(all))
+    expect(assets.map((a) => a.sha).sort()).toEqual(['big', 'only'])
+    expect(assets.find((a) => a.sha === 'big')!.locations[0].branches[0]).toBe('e')
+    expect(listCatalog(all, { repo: 'org/none' }).assets).toEqual([])
   })
 })

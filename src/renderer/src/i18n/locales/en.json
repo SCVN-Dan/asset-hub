@@ -191,11 +191,10 @@
     "error": "Could not display this model: {{message}}",
     "tools": "View controls",
     "view": {
-      "front": "Front",
-      "side": "Side",
-      "top": "Top",
       "reset": "Reset"
     },
+    "gizmo": "View axes",
+    "lookFrom": "View from {{axis}}",
     "autoRotate": "Auto-rotate",
     "wireframe": "Wireframe",
     "animation": "Animation",
@@ -771,6 +770,9 @@
     "pet": "Show the AI pet in the corner"
   },
   "aiPet": {
+    "attach": "Attach an image (or paste / drop one)",
+    "removeImage": "Remove image",
+    "placeholderImage": "Ask about this image…",
     "title": "Assistant",
     "newChat": "New chat",
     "close": "Close",
@@ -835,9 +837,9 @@
     "none": "Nothing matches these filters"
   },
   "watch": {
-    "title": "Watching",
-    "start": "Watch this branch: new assets get pointed out",
-    "stop": "Stop watching",
+    "title": "Pinned branches",
+    "start": "Pin this branch to the sidebar: one click to come back, with its new assets counted",
+    "stop": "Unpin this branch",
     "new": "NEW",
     "banner": "{{count}}{{more}} new assets since you last looked",
     "onlyNew": "Only new assets",
@@ -849,6 +851,24 @@
     "unlisted": "Show clips without a model",
     "remove": "Turn off {{name}}"
   },
+  "menu": {
+    "copied": "Copied",
+    "noUnity": "No Unity editor open",
+    "many": "{{count}} assets selected",
+    "addChest": "Add to chest",
+    "removeChest": "Remove from chest",
+    "collection": "Add to collection",
+    "clearPick": "Clear selection",
+    "favorite": "Add to favourites",
+    "unfavorite": "Remove from favourites",
+    "copyPath": "Copy path",
+    "copyLink": "Copy link",
+    "github": "Open on GitHub",
+    "showFolder": "Show its folder",
+    "openFolder": "Show this folder",
+    "openBranch": "Open this branch",
+    "copyBranch": "Copy branch name"
+  },
   "actions": {
     "export": "Export",
     "chest": "Chest",
@@ -857,8 +877,8 @@
     "copyPath": "Path",
     "copied": "Copied",
     "link": "Link",
-    "watch": "Watch",
-    "watching": "Watching"
+    "watch": "Pin branch",
+    "watching": "Pinned"
   },
   "feedback": {
     "title": "Send feedback",

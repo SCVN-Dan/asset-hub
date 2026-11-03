@@ -31,8 +31,7 @@ export interface MaterialSlot {
  * colour and vertex colours still show. (A transparent one turned untextured
  * models black and see-through: rigs like Customer_Red.fbx vanished.)
  */
-export const BLANK_TEXTURE =
-  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'
+export const BLANK_TEXTURE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4//8/AAX+Av4N70a4AAAAAElFTkSuQmCC'
 /** In priority order: URP's _BaseMap wins over the legacy _MainTex that URP materials also keep. */
 const COLOR_ORDER = ['_basemap', '_basecolormap', '_albedo', '_maintex', '_diffuse']
 const COLOR_PROPS = new Set(COLOR_ORDER)
@@ -56,6 +55,8 @@ export class FbxViewer {
   private home = { position: new THREE.Vector3(), target: new THREE.Vector3(), radius: 1 }
   private frame = 0
   private disposed = false
+  /** A turn of the camera around its target under way (`lookFrom`): from and to directions, and how far along. */
+  private turn?: { from: THREE.Vector3; to: THREE.Vector3; t: number }
   /** Called every frame with the seconds since the last one (particle effects). */
   private readonly updaters = new Set<(dt: number) => void>()
 
@@ -72,6 +73,8 @@ export class FbxViewer {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.autoRotateSpeed = 2
+    // Dragging takes over from a turn to a view axis.
+    this.controls.addEventListener('start', () => (this.turn = undefined))
     this.resize = new ResizeObserver(() => this.fitCanvas())
     this.resize.observe(host)
     this.fitCanvas()
@@ -106,8 +109,7 @@ export class FbxViewer {
    * `applyMaterialSlots` ('*') and `setLook` dress. Switching shape keeps that material.
    */
   showShape(shape: PreviewShape): void {
-    const geometry =
-      shape === 'sphere' ? new THREE.SphereGeometry(0.5, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(0.7, 0.7, 0.7) : new THREE.PlaneGeometry(1, 1)
+    const geometry = shape === 'sphere' ? new THREE.SphereGeometry(0.5, 64, 32) : shape === 'cube' ? new THREE.BoxGeometry(0.7, 0.7, 0.7) : new THREE.PlaneGeometry(1, 1)
     const mesh = this.model?.children[0] as THREE.Mesh | undefined
     if (mesh?.isMesh) {
       mesh.geometry.dispose()
@@ -291,9 +293,42 @@ export class FbxViewer {
           : preset === 'top'
             ? new THREE.Vector3(0, d, 0.0001)
             : this.home.position.clone().sub(target)
+    this.turn = undefined
     this.camera.position.copy(target).add(pos)
     this.controls.target.copy(target)
     this.controls.update()
+  }
+
+  /** The camera's orientation now (the view gizmo follows it). */
+  get cameraQuaternion(): THREE.Quaternion {
+    return this.camera.quaternion
+  }
+
+  /** Turns the camera around its target, at the same distance, to look from direction `dir` (three.js space). */
+  lookFrom(dir: THREE.Vector3): void {
+    const to = dir.clone().normalize()
+    // Straight up or down, OrbitControls cannot tell which way is up: a hair off.
+    if (Math.abs(to.y) > 0.9999) to.set(0, Math.sign(to.y), 0.0001).normalize()
+    this.turn = { from: this.camera.position.clone().sub(this.controls.target).normalize(), to, t: 0 }
+  }
+
+  /** Which way the camera looks from (from the target to the camera), as a unit vector. */
+  get viewDirection(): THREE.Vector3 {
+    return this.camera.position.clone().sub(this.controls.target).normalize()
+  }
+
+  private stepTurn(dt: number): void {
+    const turn = this.turn
+    if (!turn) return
+    turn.t = Math.min(1, turn.t + dt / 0.25)
+    const k = 1 - Math.pow(1 - turn.t, 3)
+    const distance = this.camera.position.distanceTo(this.controls.target)
+    // Along the great circle between the two directions (opposite ones go round over the top).
+    const q = new THREE.Quaternion().setFromUnitVectors(turn.from, turn.to)
+    if (turn.from.dot(turn.to) < -0.9999) q.setFromAxisAngle(new THREE.Vector3().crossVectors(turn.from, new THREE.Vector3(0, 1, 0)).normalize(), Math.PI)
+    const dir = turn.from.clone().applyQuaternion(new THREE.Quaternion().slerp(q, k))
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, distance)
+    if (turn.t >= 1) this.turn = undefined
   }
 
   setAutoRotate(on: boolean): void {
@@ -422,6 +457,7 @@ export class FbxViewer {
     const dt = Math.min(this.clock.getDelta(), 0.1)
     this.mixer?.update(dt)
     this.updaters.forEach((fn) => fn(dt))
+    this.stepTurn(dt)
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }

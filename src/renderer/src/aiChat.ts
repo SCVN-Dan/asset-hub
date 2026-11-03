@@ -9,6 +9,8 @@ export interface ChatMessage {
   error?: string
   /** Marked wrong with 👎 (saved for testing). */
   reported?: boolean
+  /** Pictures the user attached to this message (data URLs). */
+  images?: string[]
   /** Reply buttons the pet offered with this answer; `other` adds one for typing an own answer. */
   choices?: { options: string[]; other: boolean }
 }
@@ -78,15 +80,15 @@ export function useAiChat(): ChatState {
   return useSyncExternalStore(subscribe, () => state)
 }
 
-export async function sendChat(text: string, language: string): Promise<void> {
+export async function sendChat(text: string, language: string, images: string[] = []): Promise<void> {
   const message = text.trim()
-  if (!message || state.busy) return
+  if ((!message && !images.length) || state.busy) return
   currentItem = undefined
   set({
     busy: true,
-    messages: [...state.messages, { id: nextId++, role: 'user', text: message }, { id: nextId++, role: 'assistant', text: '', state: 'pending' }]
+    messages: [...state.messages, { id: nextId++, role: 'user', text: message, ...(images.length ? { images } : {}) }, { id: nextId++, role: 'assistant', text: '', state: 'pending' }]
   })
-  const result = await window.api.ai.chatSend(message, language)
+  const result = await window.api.ai.chatSend(message, language, images)
   if (!result.ok) {
     updateAnswer((m) => ({ ...m, state: 'failed', error: result.message }))
     set({ busy: false })

@@ -4,7 +4,8 @@ import type { ModelStats } from '@core/checks/playable'
 import { extractFbxTextureNames, type DependencyReport, type MaterialRef } from '@core/index'
 import { unwrap } from '../remoteSource'
 import { Dropdown } from './Dropdown'
-import { FbxViewer, type MaterialSlot, type TextureFile, type ViewPreset } from '../viewer/FbxViewer'
+import { ViewGizmo } from './ViewGizmo'
+import { FbxViewer, type MaterialSlot, type TextureFile } from '../viewer/FbxViewer'
 import { DRAWABLE, fetchTextureFile, guessedSlots, materialSlotPaths, reportSlotPaths } from '../viewer/textures'
 
 export interface LiveContext {
@@ -153,8 +154,6 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
     }
   }, [status, report, prefabMaterial])
 
-  const view = (preset: ViewPreset) => viewer.current?.setView(preset)
-
   return (
     <div className="viewer">
       <div className="viewer-canvas" ref={host} />
@@ -165,12 +164,11 @@ export function ModelViewer({ live, path, report, prefabMaterial, onStats, onThu
       )}
       {status === 'ready' && (
         <>
-          <div className="viewer-tools" role="toolbar" aria-label={t('viewer.tools')}>
-            {(['front', 'side', 'top', 'reset'] as const).map((p) => (
-              <button key={p} type="button" className="viewer-btn" onClick={() => view(p)}>
-                {t(`viewer.view.${p}`)}
-              </button>
-            ))}
+          <ViewGizmo viewer={viewer.current} />
+          <div className="viewer-tools viewer-tools-top" role="toolbar" aria-label={t('viewer.tools')}>
+            <button type="button" className="viewer-btn" onClick={() => viewer.current?.setView('reset')}>
+              {t('viewer.view.reset')}
+            </button>
             <button
               type="button"
               className="viewer-btn"

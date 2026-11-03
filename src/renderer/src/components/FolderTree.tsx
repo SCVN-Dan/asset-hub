@@ -7,6 +7,8 @@ interface Props {
   root: FolderNode
   selected: string
   onSelect(path: string): void
+  /** Right-click on a folder. */
+  onMenu?(path: string, e: React.MouseEvent): void
 }
 
 /** Folders that start expanded: the first two levels. */
@@ -19,7 +21,7 @@ function initialOpen(root: FolderNode): Set<string> {
   return open
 }
 
-export function FolderTree({ root, selected, onSelect }: Props) {
+export function FolderTree({ root, selected, onSelect, onMenu }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(() => initialOpen(root))
 
@@ -42,6 +44,7 @@ export function FolderTree({ root, selected, onSelect }: Props) {
           style={{ paddingLeft: 8 + depth * 14 }}
           aria-current={selected === node.path}
           aria-expanded={hasChildren ? isOpen : undefined}
+          onContextMenu={onMenu && ((e) => onMenu(node.path, e))}
           onClick={() => {
             onSelect(node.path)
             if (hasChildren && (!isOpen || selected === node.path)) toggle(node.path)

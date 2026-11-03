@@ -185,11 +185,10 @@
     "error": "Không hiển thị được model: {{message}}",
     "tools": "Điều khiển góc nhìn",
     "view": {
-      "front": "Trước",
-      "side": "Bên",
-      "top": "Trên",
       "reset": "Đặt lại"
     },
+    "gizmo": "Trục hướng nhìn",
+    "lookFrom": "Nhìn từ {{axis}}",
     "autoRotate": "Tự xoay",
     "wireframe": "Wireframe",
     "animation": "Animation",
@@ -734,6 +733,9 @@
     "pet": "Hiện pet AI ở góc màn hình"
   },
   "aiPet": {
+    "attach": "Đính kèm ảnh (hoặc dán / kéo thả vào)",
+    "removeImage": "Bỏ ảnh",
+    "placeholderImage": "Hỏi về ảnh này…",
     "title": "Trợ lý",
     "newChat": "Cuộc trò chuyện mới",
     "close": "Đóng",
@@ -798,9 +800,9 @@
     "none": "Không có asset nào khớp bộ lọc"
   },
   "watch": {
-    "title": "Đang theo dõi",
-    "start": "Theo dõi branch này: báo khi có asset mới",
-    "stop": "Bỏ theo dõi",
+    "title": "Branch đã ghim",
+    "start": "Ghim branch này lên thanh bên trái: bấm một lần là quay lại, có đếm asset mới",
+    "stop": "Bỏ ghim branch này",
     "new": "MỚI",
     "banner": "{{count}}{{more}} asset mới từ lần xem trước",
     "onlyNew": "Chỉ hiện asset mới",
@@ -812,6 +814,24 @@
     "unlisted": "Hiện clip không tìm thấy model",
     "remove": "Tắt {{name}}"
   },
+  "menu": {
+    "copied": "Đã chép",
+    "noUnity": "Chưa mở Unity editor nào",
+    "many": "Đã chọn {{count}} asset",
+    "addChest": "Thêm vào rương",
+    "removeChest": "Bỏ khỏi rương",
+    "collection": "Thêm vào sưu tập",
+    "clearPick": "Bỏ chọn",
+    "favorite": "Thêm vào yêu thích",
+    "unfavorite": "Bỏ khỏi yêu thích",
+    "copyPath": "Chép đường dẫn",
+    "copyLink": "Chép link",
+    "github": "Mở trên GitHub",
+    "showFolder": "Mở thư mục chứa",
+    "openFolder": "Mở thư mục này",
+    "openBranch": "Mở branch này",
+    "copyBranch": "Chép tên branch"
+  },
   "actions": {
     "export": "Xuất",
     "chest": "Rương",
@@ -820,8 +840,8 @@
     "copyPath": "Đường dẫn",
     "copied": "Đã chép",
     "link": "Link",
-    "watch": "Theo dõi",
-    "watching": "Đang theo dõi"
+    "watch": "Ghim branch",
+    "watching": "Đã ghim"
   },
   "feedback": {
     "title": "Gửi phản hồi",

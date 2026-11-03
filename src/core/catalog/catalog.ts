@@ -130,6 +130,48 @@ export class RepoCatalog {
     }
   }
 
+  /**
+   * Adds this repo's files to `bySha` (see `groupCatalog`), one location per
+   * path and blob with the branches holding it. Works on the stored indexes:
+   * millions of file × branch pairs, so no strings are made per pair.
+   */
+  groupInto(bySha: Map<string, CatalogAsset>, typeOf: (path: string) => string | undefined, excludedFolders: readonly string[]): void {
+    const { paths, blobs, repo } = this.data
+    // Per path: its asset type, or null when excluded or not an asset (worked out once).
+    const typeAt: Array<string | null | undefined> = new Array(paths.length)
+    const assetAt: Array<CatalogAsset | undefined> = new Array(blobs.length)
+    const locations = new Map<number, CatalogLocation>()
+    for (const branch of this.data.branches) {
+      const flat = this.data.commits[branch.commit]
+      if (!flat) continue
+      for (let i = 0; i < flat.length; i += 2) {
+        const p = flat[i]
+        const b = flat[i + 1]
+        let type = typeAt[p]
+        if (type === undefined) type = typeAt[p] = isInExcludedFolder(paths[p], excludedFolders) ? null : (typeOf(paths[p]) ?? null)
+        if (type === null) continue
+        const key = p * blobs.length + b
+        let location = locations.get(key)
+        if (!location) {
+          let asset = assetAt[b]
+          if (!asset) {
+            const [sha, size] = blobs[b]
+            asset = bySha.get(sha)
+            if (!asset) {
+              asset = { id: sha, type, path: paths[p], name: '', sha, size: size < 0 ? undefined : size, lfs: size < 0, locations: [], branchCount: 0, repoCount: 0 }
+              bySha.set(sha, asset)
+            }
+            assetAt[b] = asset
+          }
+          location = { repo, path: paths[p], branches: [] }
+          locations.set(key, location)
+          asset.locations.push(location)
+        }
+        location.branches.push(branch.name)
+      }
+    }
+  }
+
   /** Branches and paths holding this blob, without walking every file. */
   locationsOf(sha: string): CatalogLocation[] {
     const blob = this.blobIndex.get(sha)
@@ -213,11 +255,15 @@ export interface CatalogLocation {
   path: string
   /** Default branch first, then most recently committed. */
   branches: string[]
+  /** In a listing (`listCatalog`), only the first branches are sent: how many there are in all. */
+  branchTotal?: number
 }
 
 /** A file found anywhere in the catalog; identical files (same blob SHA) are one entry. */
 export interface CatalogAsset extends Asset {
   locations: CatalogLocation[]
+  /** In a listing (`listCatalog`), only the first locations are sent: how many there are in all. */
+  locationTotal?: number
   branchCount: number
   repoCount: number
 }
@@ -225,36 +271,73 @@ export interface CatalogAsset extends Asset {
 /** Groups every file of the catalogs by content, leaving out excluded folders and unknown types. */
 export function groupCatalog(catalogs: readonly RepoCatalog[], typeOf: (path: string) => string | undefined, excludedFolders: readonly string[]): CatalogAsset[] {
   const bySha = new Map<string, CatalogAsset>()
-  const locationOf = new Map<string, CatalogLocation>()
-  for (const catalog of catalogs) {
-    for (const file of catalog.files()) {
-      if (isInExcludedFolder(file.path, excludedFolders)) continue
-      let asset = bySha.get(file.sha)
-      if (!asset) {
-        const type = typeOf(file.path)
-        if (!type) continue
-        asset = { id: file.sha, type, path: file.path, name: baseName(file.path), sha: file.sha, size: file.size, lfs: file.lfs, locations: [], branchCount: 0, repoCount: 0 }
-        bySha.set(file.sha, asset)
-      }
-      const key = `${file.sha}\n${catalog.repo}\n${file.path}`
-      let location = locationOf.get(key)
-      if (!location) {
-        location = { repo: catalog.repo, path: file.path, branches: [] }
-        locationOf.set(key, location)
-        asset.locations.push(location)
-      }
-      location.branches.push(file.branch)
-    }
-  }
+  for (const catalog of catalogs) catalog.groupInto(bySha, typeOf, excludedFolders)
   for (const asset of bySha.values()) {
-    asset.branchCount = new Set(asset.locations.flatMap((l) => l.branches.map((b) => `${l.repo}@${b}`))).size
     asset.repoCount = new Set(asset.locations.map((l) => l.repo)).size
+    // One location: its branches are all different. More: the same branch can hold the file at two paths.
+    asset.branchCount = asset.locations.length === 1 ? asset.locations[0].branches.length : new Set(asset.locations.flatMap((l) => l.branches.map((b) => `${l.repo}@${b}`))).size
     // The location on the most branches first: that is where the file "lives".
-    asset.locations.sort((a, b) => b.branches.length - a.branches.length)
+    if (asset.locations.length > 1) asset.locations.sort((a, b) => b.branches.length - a.branches.length)
     asset.path = asset.locations[0].path
     asset.name = baseName(asset.path)
   }
   return [...bySha.values()]
+}
+
+/** Repos and branches present in a listing, most files first, for its filters. */
+export interface CatalogFacets {
+  repos: Array<[string, number]>
+  branches: Array<[string, number]>
+}
+
+/** What the grid shows for a scope: the assets left by the repo / branch filters, and the filters' choices. */
+export interface CatalogListing {
+  assets: CatalogAsset[]
+  facets: CatalogFacets
+}
+
+/** Branches sent per location, and locations per asset, in a listing; the rest are read when one asset is opened (`whereIs`). */
+export const LISTED_BRANCHES = 3
+export const LISTED_LOCATIONS = 5
+
+/** Counts per repo (over every location) and per branch (of `repo` when given), most first. */
+export function catalogFacets(assets: readonly CatalogAsset[], repo?: string): CatalogFacets {
+  const repos = new Map<string, number>()
+  const branches = new Map<string, number>()
+  for (const a of assets)
+    for (const l of a.locations) {
+      repos.set(l.repo, (repos.get(l.repo) ?? 0) + 1)
+      if (!repo || l.repo === repo) for (const b of l.branches) branches.set(b, (branches.get(b) ?? 0) + 1)
+    }
+  const sorted = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  return { repos: sorted(repos), branches: sorted(branches) }
+}
+
+/**
+ * The assets of a grouped catalog on `filter`'s repo and branch, made small
+ * enough to send to a page: hundreds of thousands of files on thousands of
+ * branches would be hundreds of megabytes with every branch name. Locations
+ * in the filter come first, the filtered branch first in each; an asset keeps
+ * its first `LISTED_LOCATIONS` locations (and `locationTotal`), each its first
+ * `LISTED_BRANCHES` branches (and `branchTotal`).
+ */
+export function listCatalog(assets: readonly CatalogAsset[], filter: { repo?: string; branch?: string } = {}, facets = catalogFacets(assets, filter.repo)): CatalogListing {
+  const fits = (l: CatalogLocation) => (!filter.repo || l.repo === filter.repo) && (!filter.branch || l.branches.includes(filter.branch))
+  const out: CatalogAsset[] = []
+  for (const a of assets) {
+    const filtered = filter.repo || filter.branch
+    if (filtered && !a.locations.some(fits)) continue
+    const locations = filtered ? [...a.locations.filter(fits), ...a.locations.filter((l) => !fits(l))] : a.locations
+    out.push({
+      ...a,
+      locationTotal: a.locations.length,
+      locations: locations.slice(0, LISTED_LOCATIONS).map((l) => {
+        const branches = filter.branch && l.branches.includes(filter.branch) ? [filter.branch, ...l.branches.filter((b) => b !== filter.branch)] : l.branches
+        return { repo: l.repo, path: l.path, branches: branches.slice(0, LISTED_BRANCHES), branchTotal: l.branches.length }
+      })
+    })
+  }
+  return { assets: out, facets }
 }
 
 /** Every place a file with this content is, across the catalogs. */

@@ -13,19 +13,9 @@ const lastProject = () => {
   }
 }
 
-/**
- * "Import into Unity": the open Unity editors are listed (several projects can be
- * open); the button goes to the one used last, the arrow picks another. Without
- * an open editor it waits for one, refreshed when the app comes back to the front.
- */
-export function UnityButton({ disabled, onImport, compact }: { disabled?: boolean; onImport(editor: RunningUnity): void; compact?: boolean }) {
-  const { t } = useTranslation()
+/** The Unity editors open now, refreshed every 15 s and when the app comes back to the front. */
+export function useUnityEditors(): RunningUnity[] {
   const [editors, setEditors] = useState<RunningUnity[]>([])
-  const [menu, setMenu] = useState(false)
-  const box = useRef<HTMLDivElement>(null)
-  const list = useRef<HTMLDivElement>(null)
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-
   useEffect(() => {
     const refresh = () => void window.api.exporter.unityEditors().then(setEditors)
     refresh()
@@ -36,6 +26,34 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
       window.clearInterval(timer)
     }
   }, [])
+  return editors
+}
+
+/** The editor imports go to by default: the project used last, else the first open one. */
+export const preferredEditor = (editors: readonly RunningUnity[]) => editors.find((e) => e.projectPath === lastProject()) ?? editors[0]
+
+/** Remembers the project imported into, for next time. */
+export function rememberEditor(editor: RunningUnity): void {
+  try {
+    localStorage.setItem(LAST_KEY, editor.projectPath)
+  } catch {
+    // not remembered
+  }
+}
+
+/**
+ * "Import into Unity": the open Unity editors are listed (several projects can be
+ * open); the button goes to the one used last, the arrow picks another. Without
+ * an open editor it waits for one, refreshed when the app comes back to the front.
+ */
+export function UnityButton({ disabled, onImport, compact }: { disabled?: boolean; onImport(editor: RunningUnity): void; compact?: boolean }) {
+  const { t } = useTranslation()
+  const editors = useUnityEditors()
+  const [menu, setMenu] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+
   useEffect(() => {
     if (!menu) return
     const close = (e: PointerEvent) => !box.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node) && setMenu(false)
@@ -78,13 +96,9 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
       </button>
     )
 
-  const preferred = editors.find((e) => e.projectPath === lastProject()) ?? editors[0]
+  const preferred = preferredEditor(editors)
   const choose = (editor: RunningUnity) => {
-    try {
-      localStorage.setItem(LAST_KEY, editor.projectPath)
-    } catch {
-      // not remembered
-    }
+    rememberEditor(editor)
     setMenu(false)
     onImport(editor)
   }

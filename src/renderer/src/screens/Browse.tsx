@@ -4,6 +4,7 @@ import { displayName } from '@shared/displayName'
 import {
   AssetSearch,
   type CatalogAsset,
+  type CatalogFacets,
   buildFolderTree,
   findUnityProjectRoots,
   formatBytes,
@@ -28,14 +29,17 @@ import { Dropdown } from '../components/Dropdown'
 import { Picker } from '../components/Picker'
 import { ErrorNote } from '../components/ErrorNote'
 import { FolderTree } from '../components/FolderTree'
-import { BellIcon, FilterIcon, GearIcon, MessageIcon, RefreshIcon } from '../components/Icons'
+import { PinIcon, ChestIcon, CollectionIcon, CopyIcon, ExportIcon, ExternalIcon, FilterIcon, FolderIcon, GearIcon, LinkIcon, MessageIcon, RefreshIcon, StarIcon, UnityIcon } from '../components/Icons'
+import { useContextMenu, type MenuItem } from '../components/ContextMenu'
+import { preferredEditor, rememberEditor, useUnityEditors } from '../components/UnityButton'
+import { assetLink } from '@shared/deeplink'
 import { FeedbackDialog } from '../components/FeedbackDialog'
 import { LogoMark } from '../components/Logo'
 import { VersionBadge } from '../components/VersionBadge'
 import { flyToPack } from '../motion'
 import { SearchBox } from '../components/SearchBox'
 import { DRAWABLE } from '../viewer/formats'
-import { CatalogDetails, CatalogStatusLine, locationNote, ScopeTabs } from '../components/CatalogPanel'
+import { CatalogDetails, CatalogStatusLine, githubUrl, locationNote, ScopeTabs } from '../components/CatalogPanel'
 import { useCatalog, type SearchScope } from '../useCatalog'
 import { BUDGET_PRESETS, mergeStats, rankForPlayable, summaryIssues, type BudgetPreset, type SortMode, type StatsSummary } from '@core/checks/playable'
 import { useBudget } from '../budget'
@@ -88,6 +92,7 @@ interface Props {
 }
 
 const ALL = 'all'
+const NO_FACETS: CatalogFacets = { repos: [], branches: [] }
 /** Cards rendered per step while scrolling. */
 const PAGE = 60
 /** Models bigger than this are only rendered when opened, not for grid thumbnails. */
@@ -383,36 +388,18 @@ export function Browse({
   const merged = visible.length - shown.length
   const selected = visible.find((a) => a.id === selectedId)
 
-  const catalog = useCatalog(scope, repo, branch, excludedFolders, true)
   const [catalogRepo, setCatalogRepo] = useState('')
   const [catalogBranch, setCatalogBranch] = useState('')
   useEffect(() => {
     setCatalogRepo('')
     setCatalogBranch('')
   }, [scope])
+  // Filtered by repo and branch where the catalog is: every repo's results are too many to send whole.
+  const catalogFilter = useMemo(() => ({ repo: catalogRepo, branch: catalogBranch }), [catalogRepo, catalogBranch])
+  const catalog = useCatalog(scope, repo, branch, excludedFolders, true, catalogFilter)
   /** Repos and branches present in the results, most files first, for the filters. */
-  const catalogFacets = useMemo(() => {
-    const repos = new Map<string, number>()
-    const branches = new Map<string, number>()
-    for (const a of catalog.assets ?? [])
-      for (const l of a.locations) {
-        repos.set(l.repo, (repos.get(l.repo) ?? 0) + 1)
-        if (!catalogRepo || l.repo === catalogRepo) for (const b of l.branches) branches.set(b, (branches.get(b) ?? 0) + 1)
-      }
-    const sorted = (m: Map<string, number>) => [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    return { repos: sorted(repos), branches: sorted(branches) }
-  }, [catalog.assets, catalogRepo])
-  const catalogOfType = useMemo(
-    () =>
-      (catalog.assets ?? []).filter(
-        (a) =>
-          inTab(a, typeFilter) &&
-          (!catalogRepo && !catalogBranch
-            ? true
-            : a.locations.some((l) => (!catalogRepo || l.repo === catalogRepo) && (!catalogBranch || l.branches.includes(catalogBranch))))
-      ),
-    [catalog.assets, typeFilter, catalogRepo, catalogBranch, inTab]
-  )
+  const catalogFacets = catalog.facets ?? NO_FACETS
+  const catalogOfType = useMemo(() => (catalog.assets ?? []).filter((a) => inTab(a, typeFilter)), [catalog.assets, typeFilter, inTab])
   const catalogSearch = useMemo(() => new AssetSearch(catalogOfType, (a) => clipNames.get(a.sha) ?? []), [catalogOfType, clipNames])
   const catalogFound = useMemo(() => catalogSearch.search(query), [catalogSearch, query])
   const catalogShown = catalogFound.assets as CatalogAsset[]
@@ -830,6 +817,152 @@ export function Browse({
     setSelectedId(a.id)
   }
 
+  // Right-click menus: on cards (one, or the cards picked), watched branches and folders.
+  const contextMenu = useContextMenu()
+  const unityEditors = useUnityEditors()
+  const [notice, setNotice] = useState<string>()
+  useEffect(() => {
+    if (!notice) return
+    const timer = window.setTimeout(() => setNotice(undefined), 1600)
+    return () => window.clearTimeout(timer)
+  }, [notice])
+  const copy = (text: string) =>
+    void navigator.clipboard.writeText(text).then(
+      () => setNotice(t('menu.copied')),
+      () => setNotice(undefined)
+    )
+  /** "Import into Unity": straight into the one open editor (or the one used last), others in a submenu. */
+  const unityItems = (run: (editor: (typeof unityEditors)[number]) => void, disabled: boolean): MenuItem[] => {
+    if (!unityEditors.length) return [{ label: t('menu.noUnity'), icon: <UnityIcon size={14} />, disabled: true }]
+    const go = (e: (typeof unityEditors)[number]) => {
+      rememberEditor(e)
+      run(e)
+    }
+    const first = preferredEditor(unityEditors)
+    return [
+      { label: t('unity.importInto', { project: first.project }), icon: <UnityIcon size={14} />, disabled, onSelect: () => go(first) },
+      ...(unityEditors.length > 1
+        ? [{ label: t('unity.pick'), disabled, submenu: unityEditors.map((e) => ({ label: e.project, hint: e.version, checked: e === first ? true : undefined, onSelect: () => go(e) })) }]
+        : [])
+    ]
+  }
+  const collectionSubmenu = (items: CollectionItem[]): MenuItem[] =>
+    collections.map((c) => {
+      const all = items.every((it) => inCollection(c, it))
+      return {
+        label: c.id === FAVORITES ? t('collections.favorites') : c.name,
+        checked: all,
+        onSelect: () => {
+          let list = withFavorites(collections)
+          // All in already: taken out; else the missing ones are added.
+          for (const it of items) if (all || !inCollection(list.find((x) => x.id === c.id), it)) list = toggleItem(list, c.id, it)
+          onCollections(list)
+        }
+      }
+    })
+  const busy = exportState.status === 'running'
+  const cardMenu = (a: Asset, e: React.MouseEvent) => {
+    const many = picked.length > 1 && picked.includes(a.id)
+    if (many) {
+      const list = pickedAssets
+      return contextMenu.open(e, [
+        { label: t('menu.many', { count: list.length }), disabled: true },
+        '-',
+        { label: t('actions.export'), icon: <ExportIcon size={14} />, disabled: busy, onSelect: () => void runExport(list.map(packItem)) },
+        ...unityItems((editor) => void runExport(list.map(packItem), editor), busy),
+        {
+          label: t('menu.addChest'),
+          icon: <ChestIcon size={14} />,
+          onSelect: () => {
+            const add = list.filter((x) => !pack.some((i) => i.asset.id === x.id))
+            setPack((items) => [...items, ...add.map(packItem)])
+            add.forEach((x) => flyToPack(x.id))
+          }
+        },
+        { label: t('menu.collection'), icon: <CollectionIcon size={14} />, submenu: collectionSubmenu(list.map(itemOf)) },
+        '-',
+        { label: t('menu.clearPick'), onSelect: () => setPicked([]) }
+      ])
+    }
+    // Right-click selects the card, like a click.
+    if (a.id !== selectedId) pickCard(a, { toggle: false, range: false })
+    const path = root + a.path
+    const item = itemOf(a)
+    const inPack = pack.some((i) => i.asset.id === a.id)
+    const starred = favorites.has(`${repo}\n${path}`)
+    const file = registry.get(a.type)?.delivery === 'file'
+    const dir = a.path.split('/').slice(0, -1).join('/')
+    contextMenu.open(e, [
+      ...(file
+        ? []
+        : ([
+            { label: t('actions.export'), icon: <ExportIcon size={14} />, disabled: busy, onSelect: () => void runExport([packItem(a)]) },
+            ...unityItems((editor) => void runExport([packItem(a)], editor), busy),
+            { label: inPack ? t('menu.removeChest') : t('menu.addChest'), icon: <ChestIcon size={14} filled={inPack} />, onSelect: () => togglePack(a) },
+            '-'
+          ] as MenuItem[])),
+      { label: starred ? t('menu.unfavorite') : t('menu.favorite'), icon: <StarIcon size={14} filled={starred} />, onSelect: () => onCollections(toggleItem(collections, FAVORITES, item)) },
+      { label: t('menu.collection'), icon: <CollectionIcon size={14} />, submenu: collectionSubmenu([item]) },
+      '-',
+      { label: t('menu.copyPath'), icon: <CopyIcon size={14} />, onSelect: () => copy(path) },
+      { label: t('menu.copyLink'), icon: <LinkIcon size={14} />, onSelect: () => copy(assetLink({ repo, branch, path })) },
+      { label: t('menu.github'), icon: <ExternalIcon size={14} />, onSelect: () => void window.api.openExternal(githubUrl(repo, branch, path)) },
+      ...(dir && dir !== folder
+        ? ([
+            {
+              label: t('menu.showFolder'),
+              icon: <FolderIcon size={14} />,
+              hint: dir.split('/').pop(),
+              onSelect: () => {
+                setOpenCollection(undefined)
+                setFolder(dir)
+                onQuery('')
+              }
+            }
+          ] as MenuItem[])
+        : [])
+    ])
+  }
+  const folderMenu = (dir: string, e: React.MouseEvent) =>
+    contextMenu.open(e, [
+      {
+        label: t('menu.openFolder'),
+        icon: <FolderIcon size={14} />,
+        onSelect: () => {
+          setOpenCollection(undefined)
+          setFolder(dir)
+        }
+      },
+      '-',
+      { label: t('menu.copyPath'), icon: <CopyIcon size={14} />, onSelect: () => copy(root + dir) },
+      {
+        label: t('menu.github'),
+        icon: <ExternalIcon size={14} />,
+        onSelect: () => void window.api.openExternal(`https://github.com/${repo}/tree/${branch.split('/').map(encodeURIComponent).join('/')}/${(root + dir).split('/').map(encodeURIComponent).join('/')}`)
+      }
+    ])
+  const catalogMenu = (a: CatalogAsset, e: React.MouseEvent) => {
+    setCatalogSel(a.sha)
+    const at = a.locations[0]
+    const atBranch = at.branches[0]
+    const file = registry.get(a.type)?.delivery === 'file'
+    contextMenu.open(e, [
+      { label: t('catalog.open', { branch: atBranch }), icon: <ExternalIcon size={14} />, onSelect: () => openLocation(at.repo, atBranch, at.path) },
+      '-',
+      ...(file
+        ? []
+        : ([
+            { label: t('actions.export'), icon: <ExportIcon size={14} />, disabled: busy, onSelect: () => void exportFromCatalog(a) },
+            ...unityItems((editor) => void exportFromCatalog(a, editor), busy),
+            '-'
+          ] as MenuItem[])),
+      { label: t('menu.collection'), icon: <CollectionIcon size={14} />, submenu: collectionSubmenu([catalogItem(a)]) },
+      { label: t('menu.copyPath'), icon: <CopyIcon size={14} />, onSelect: () => copy(at.path) },
+      { label: t('menu.copyLink'), icon: <LinkIcon size={14} />, onSelect: () => copy(assetLink({ repo: at.repo, branch: atBranch, path: at.path })) },
+      { label: t('menu.github'), icon: <ExternalIcon size={14} />, onSelect: () => void window.api.openExternal(githubUrl(at.repo, atBranch, at.path)) }
+    ])
+  }
+
   // Viewed: an asset kept open for a moment (not every card the arrow keys pass through).
   const viewedKey = inCatalog ? catalogSelected && `${catalogSelected.sha}` : selected && `${repo}\n${branch}\n${root + selected.path}`
   useEffect(() => {
@@ -924,7 +1057,7 @@ export function Browse({
     if (!at) throw new Error('Not an asset ref; use one returned by search_assets')
     const l = latest.current
     const here = at.repo === l.repo && at.branch === l.branch ? l.assets.find((a) => l.root + a.path === at.path) : undefined
-    const indexed = here ? undefined : l.catalogAssets?.find((c) => c.locations.some((x) => x.repo === at.repo && x.path === at.path && x.branches.includes(at.branch)))
+    const indexed = here ? undefined : l.catalogAssets?.find((c) => c.locations.some((x) => x.repo === at.repo && x.path === at.path))
     return { ...at, asset: here ?? indexed, here: !!here }
   }
   /** Indexed assets of a repo (null: every repo), read without changing the view; kept for the session. */
@@ -933,7 +1066,10 @@ export function Browse({
     const key = repoName ?? '*'
     let list = aiCatalogs.current.get(key)
     if (!list) {
-      list = window.api.catalog.list(repoName, latest.current.excludedFolders).then(unwrap)
+      list = window.api.catalog
+        .list(repoName, latest.current.excludedFolders)
+        .then(unwrap)
+        .then((r) => r.assets)
       list.catch(() => aiCatalogs.current.delete(key))
       aiCatalogs.current.set(key, list)
     }
@@ -1155,7 +1291,7 @@ export function Browse({
           disabled={!branch || branchRepo !== repo}
           onClick={() => void toggleWatch()}
         >
-          <BellIcon filled={watchingHere} />
+          <PinIcon filled={watchingHere} />
           <span>{watchingHere ? t('actions.watching') : t('actions.watch')}</span>
         </button>
         <button
@@ -1202,7 +1338,21 @@ export function Browse({
               ))}
             </div>
           </div>
-          <WatchNav watched={watched} news={news} current={{ repo, branch }} onOpen={openBranch} onRemove={(w) => onWatched(watched.filter((x) => x !== w))} />
+          <WatchNav
+            watched={watched}
+            news={news}
+            current={{ repo, branch }}
+            onOpen={openBranch}
+            onRemove={(w) => onWatched(watched.filter((x) => x !== w))}
+            onMenu={(w, e) =>
+              contextMenu.open(e, [
+                { label: t('menu.openBranch'), icon: <PinIcon size={14} />, onSelect: () => openBranch(w.repo, w.branch) },
+                { label: t('menu.copyBranch'), icon: <CopyIcon size={14} />, onSelect: () => copy(w.branch) },
+                '-',
+                { label: t('watch.stop'), danger: true, onSelect: () => onWatched(watched.filter((x) => x !== w)) }
+              ])
+            }
+          />
           <RecentNav lists={recentLists} open={openCollection} onOpen={setOpenCollection} />
           <CollectionsNav
             collections={collections}
@@ -1213,7 +1363,7 @@ export function Browse({
           <SideGroup id="folders" title={t('browse.folders')} className="folders-nav">
             {/* Mount only once the branch is loaded so the initial expansion sees real folders. */}
             {!inCatalog && tree.status === 'ready' && (
-              <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={(f) => { setFolder(f); setOpenCollection(undefined) }} />
+              <FolderTree key={`${repo}@${branch}:${root}:${typeFilter}`} root={folderRoot} selected={folder} onSelect={(f) => { setFolder(f); setOpenCollection(undefined) }} onMenu={folderMenu} />
             )}
           </SideGroup>
           {!inCatalog && hiddenCount > 0 && (
@@ -1386,6 +1536,7 @@ export function Browse({
                     thumb={thumbs[a.sha]}
                     selected={a.sha === catalogSel}
                     onSelect={() => setCatalogSel(a.sha)}
+                    onContextMenu={(e) => catalogMenu(a, e)}
                     note={locationNote(a, scope, t)}
                     generating={thumbQueue.busy.has(a.sha)}
                     stats={modelStats[a.sha]}
@@ -1498,6 +1649,7 @@ export function Browse({
                     copies={mergeCopies ? copiesBySha.get(a.sha)?.length : undefined}
                     selected={a.id === selectedId || (!!selected && mergeCopies && selected.sha === a.sha)}
                     onSelect={(how) => pickCard(a, how)}
+                    onContextMenu={(e) => cardMenu(a, e)}
                     picked={picked.length > 1 && picked.includes(a.id)}
                     fresh={newHere.has(root + a.path)}
                     starred={favorites.has(`${repo}\n${root + a.path}`)}
@@ -1569,6 +1721,12 @@ export function Browse({
         />
         )}
       </div>
+      {contextMenu.element}
+      {notice && (
+        <div className="menu-notice" role="status">
+          {notice}
+        </div>
+      )}
       {shortcutsOpen && <ShortcutHelp onClose={() => setShortcutsOpen(false)} />}
       {feedbackOpen && (
         <FeedbackDialog

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelStats } from '@core/checks/playable'
 import type { DependencyReport } from '@core/index'
-import { FbxViewer, type ViewPreset } from '../viewer/FbxViewer'
+import { ViewGizmo } from './ViewGizmo'
+import { FbxViewer } from '../viewer/FbxViewer'
 import { buildPrefab, dressPrefab, type PrefabBuild } from '../viewer/prefabBuild'
 import { buildEffect } from '../viewer/effectBuild'
 import { FRAME, type EffectPlayer } from '../viewer/particlePlayer'
@@ -139,7 +140,6 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
     }
   }, [report])
 
-  const view = (preset: ViewPreset) => viewer.current?.setView(preset)
   const setEffect = (patch: Partial<NonNullable<typeof fx>>) => {
     const next = { paused: false, loop: true, speed: 1, ...fx, ...patch }
     const effect = built.current?.effect
@@ -200,12 +200,11 @@ export function PrefabViewer({ live, path, report, onStats, onThumb, onLoading }
       )}
       {status === 'ready' && (
         <>
-          <div className="viewer-tools" role="toolbar" aria-label={t('viewer.tools')}>
-            {(['front', 'side', 'top', 'reset'] as const).map((p) => (
-              <button key={p} type="button" className="viewer-btn" onClick={() => view(p)}>
-                {t(`viewer.view.${p}`)}
-              </button>
-            ))}
+          <ViewGizmo viewer={viewer.current} />
+          <div className="viewer-tools viewer-tools-top" role="toolbar" aria-label={t('viewer.tools')}>
+            <button type="button" className="viewer-btn" onClick={() => viewer.current?.setView('reset')}>
+              {t('viewer.view.reset')}
+            </button>
             <button
               type="button"
               className="viewer-btn"

@@ -185,11 +185,10 @@
     "error": "이 모델을 표시할 수 없습니다: {{message}}",
     "tools": "보기 컨트롤",
     "view": {
-      "front": "정면",
-      "side": "측면",
-      "top": "위",
       "reset": "초기화"
     },
+    "gizmo": "보기 축",
+    "lookFrom": "{{axis}} 방향에서 보기",
     "autoRotate": "자동 회전",
     "wireframe": "와이어프레임",
     "animation": "애니메이션",
@@ -725,6 +724,9 @@
     "pet": "화면 구석에 AI 펫 표시"
   },
   "aiPet": {
+    "attach": "이미지 첨부 (붙여넣기 / 끌어놓기도 가능)",
+    "removeImage": "이미지 제거",
+    "placeholderImage": "이 이미지에 대해 물어보세요…",
     "title": "어시스턴트",
     "newChat": "새 대화",
     "close": "닫기",
@@ -789,9 +791,9 @@
     "none": "필터와 일치하는 에셋이 없습니다"
   },
   "watch": {
-    "title": "지켜보는 중",
-    "start": "이 브랜치 지켜보기: 새 에셋을 알려줍니다",
-    "stop": "지켜보기 중지",
+    "title": "고정한 브랜치",
+    "start": "이 브랜치를 사이드바에 고정: 한 번에 돌아오고 새 에셋 수도 표시됩니다",
+    "stop": "브랜치 고정 해제",
     "new": "NEW",
     "banner": "지난번 이후 새 에셋 {{count}}{{more}}개",
     "onlyNew": "새 에셋만",
@@ -803,6 +805,24 @@
     "unlisted": "모델 없는 클립 표시",
     "remove": "{{name}} 끄기"
   },
+  "menu": {
+    "copied": "복사됨",
+    "noUnity": "열린 Unity 에디터 없음",
+    "many": "에셋 {{count}}개 선택됨",
+    "addChest": "상자에 담기",
+    "removeChest": "상자에서 빼기",
+    "collection": "컬렉션에 추가",
+    "clearPick": "선택 해제",
+    "favorite": "즐겨찾기에 추가",
+    "unfavorite": "즐겨찾기에서 제거",
+    "copyPath": "경로 복사",
+    "copyLink": "링크 복사",
+    "github": "GitHub에서 열기",
+    "showFolder": "폴더 보기",
+    "openFolder": "이 폴더 보기",
+    "openBranch": "이 브랜치 열기",
+    "copyBranch": "브랜치 이름 복사"
+  },
   "actions": {
     "export": "내보내기",
     "chest": "상자",
@@ -811,8 +831,8 @@
     "copyPath": "경로",
     "copied": "복사됨",
     "link": "링크",
-    "watch": "지켜보기",
-    "watching": "지켜보는 중"
+    "watch": "브랜치 고정",
+    "watching": "고정됨"
   },
   "feedback": {
     "title": "피드백 보내기",

@@ -128,11 +128,11 @@ export const CollectionIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
-/** Watching a branch: a bell that rings when assets are added. */
-export const BellIcon = ({ size = 16, filled }: ToggleIconProps) => (
+/** A pinned branch: a push pin. */
+export const PinIcon = ({ size = 16, filled }: ToggleIconProps) => (
   <svg {...base(size)}>
-    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" fill={filled ? 'currentColor' : 'none'} />
-    <path d="M10 20.5a2 2 0 0 0 4 0" />
+    <path d="M9 3h6l-1 6 4 4H6l4-4z" fill={filled ? 'currentColor' : 'none'} />
+    <path d="M12 13v8" />
   </svg>
 )
 

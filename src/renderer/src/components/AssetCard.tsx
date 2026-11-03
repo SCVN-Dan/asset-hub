@@ -31,9 +31,11 @@ interface Props {
   starred?: boolean
   /** Added to a watched branch since it was last marked seen. */
   fresh?: boolean
+  /** Right-click: the card's actions. */
+  onContextMenu?(e: React.MouseEvent): void
 }
 
-export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, picked, onVisible, note, stats, starred, fresh }: Props) {
+export function AssetCard({ asset, handler, thumb, generating, copies, selected, onSelect, picked, onVisible, note, stats, starred, fresh, onContextMenu }: Props) {
   const { t } = useTranslation()
   const ref = useRef<HTMLButtonElement>(null)
   const visibleRef = useRef(onVisible)
@@ -69,6 +71,7 @@ export function AssetCard({ asset, handler, thumb, generating, copies, selected,
       aria-pressed={selected}
       data-picked={picked || undefined}
       onClick={(e) => onSelect({ toggle: e.metaKey || e.ctrlKey, range: e.shiftKey })}
+      onContextMenu={onContextMenu}
       onMouseEnter={startMotion}
       onMouseLeave={() => setHover(false)}
       onFocus={startMotion}

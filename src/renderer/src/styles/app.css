@@ -130,7 +130,10 @@ button { cursor: pointer; }
 /* Watched branches: the eye, the sidebar list with new counts, the NEW badge and the banner. */
 .watch-btn[aria-pressed='true'] { color: var(--accent); border-color: var(--accent); }
 .watch-row { display: flex; align-items: center; gap: 2px; }
-.watch-row .tab { flex: 1; min-width: 0; }
+.watch-row .tab { flex: 1; min-width: 0; height: auto; min-height: var(--control-sm); padding-top: 4px; padding-bottom: 4px; }
+.watch-label { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; text-align: left; }
+.watch-repo, .watch-branch { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-branch { font-size: 11px; color: var(--muted); }
 .watch-count { margin-left: auto; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: 700 11px var(--sans, inherit); }
 .watch-remove { width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; }
 .watch-row:hover .watch-remove, .watch-remove:focus-visible { opacity: 1; }
@@ -183,9 +186,9 @@ button { cursor: pointer; }
 .section-summary { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .section-head:hover .label-caps, .section-head:hover .section-chevron { color: var(--text); }
 /* Viewer controls show while the pointer (or focus) is on the viewer; the picture stays clean otherwise. */
-.viewer .viewer-tools, .viewer .viewer-hint, .viewer .viewer-clips { opacity: 0; transition: opacity 0.15s; }
-.viewer:hover .viewer-tools, .viewer:hover .viewer-hint, .viewer:hover .viewer-clips, .viewer:focus-within .viewer-tools, .viewer:focus-within .viewer-clips { opacity: 1; }
-@media (hover: none) { .viewer .viewer-tools, .viewer .viewer-clips { opacity: 1; } }
+.viewer .viewer-tools, .viewer .viewer-hint, .viewer .viewer-clips, .viewer .view-gizmo { opacity: 0; transition: opacity 0.15s; }
+.viewer:hover .viewer-tools, .viewer:hover .viewer-hint, .viewer:hover .viewer-clips, .viewer:hover .view-gizmo, .viewer:focus-within .viewer-tools, .viewer:focus-within .viewer-clips, .viewer:focus-within .view-gizmo { opacity: 1; }
+@media (hover: none) { .viewer .viewer-tools, .viewer .viewer-clips, .viewer .view-gizmo { opacity: 1; } }
 /* Quick filter chips above the grid. */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 3px 11px; border-radius: 999px; border: 1px solid var(--border-strong); background: transparent; color: var(--text-2); font-size: 12px; cursor: pointer; }
@@ -327,6 +330,11 @@ body.resizing * { cursor: inherit !important; }
 .viewer-canvas canvas:active { cursor: grabbing; }
 .viewer-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; text-align: center; color: var(--muted); font-size: 13px; background: rgba(14, 19, 27, 0.6); }
 .viewer-tools { position: absolute; top: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+.viewer-tools-top { right: 100px; }
+.view-gizmo { position: absolute; top: 6px; right: 8px; overflow: visible; }
+.view-gizmo-ball { cursor: pointer; outline: none; }
+.view-gizmo-ball:focus-visible circle { stroke: #fff; stroke-width: 1.5; }
+.view-gizmo-label { font-size: 11px; font-weight: 700; pointer-events: none; user-select: none; }
 .viewer-btn { height: var(--control-xs); padding: 0 9px; border-radius: 6px; border: 1px solid var(--border-strong); background: rgba(14, 19, 27, 0.78); color: var(--text-2); font-size: 12px; }
 .viewer-btn:hover { color: var(--text); }
 .viewer-btn[aria-pressed='true'] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
@@ -696,3 +704,25 @@ body.resizing * { cursor: inherit !important; }
 .ai-pet-input .input { flex: 1; min-width: 0; height: 34px; }
 .ai-pet-input .btn { height: 34px; }
 @media (prefers-reduced-motion: reduce) { .ai-pet-badge circle.lit, .ai-pet-avatar, .ai-pet-bubble, .ai-typing i { animation: none; } }
+
+/* Right-click menus */
+.context-menu { position: fixed; z-index: 1000; min-width: 200px; max-width: 320px; padding: 4px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border-strong); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; }
+.context-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text); font-size: 13px; text-align: left; cursor: default; }
+.context-item:hover:not(:disabled), .context-item:focus-visible, .context-item[aria-expanded='true'] { background: var(--accent-soft); outline: none; }
+.context-item:disabled { color: var(--muted); }
+.context-item.danger { color: var(--danger); }
+.context-check { display: inline-grid; place-items: center; width: 16px; flex: none; color: var(--text-2); font-size: 12px; }
+.context-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-hint { color: var(--muted); font-size: 11px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.context-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.menu-notice { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 1001; padding: 8px 16px; border-radius: 999px; background: var(--panel); border: 1px solid var(--accent); color: var(--text); font-size: 13px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); pointer-events: none; }
+
+/* AI chat: attached pictures */
+.ai-pet-bubble[data-dragging] { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.ai-attach { flex: none; }
+.ai-attachments { display: flex; gap: 6px; padding: 0 12px 6px; flex-wrap: wrap; }
+.ai-attachment { position: relative; width: 52px; height: 52px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-strong); background: var(--well); }
+.ai-attachment img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ai-attachment button { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, 0.7); color: #fff; font-size: 13px; line-height: 18px; cursor: pointer; }
+.ai-msg-images { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.ai-msg-images img { max-width: 120px; max-height: 90px; border-radius: 6px; object-fit: cover; display: block; }

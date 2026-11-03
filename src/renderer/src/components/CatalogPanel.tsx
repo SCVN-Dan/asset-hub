@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RunningUnity } from '@shared/ipc'
 import { UnityButton } from './UnityButton'
@@ -165,6 +165,24 @@ interface DetailsProps {
 /** Right panel for a result found in other branches / repos. */
 export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpen, onExport, onImportToUnity }: DetailsProps) {
   const { t } = useTranslation()
+  /** Every branch of every location: listings carry only the first few of each. */
+  const [full, setFull] = useState<{ sha: string; locations: CatalogLocation[] }>()
+  const sha = asset?.sha
+  const trimmed = !!asset && ((asset.locationTotal ?? 0) > asset.locations.length || asset.locations.some((l) => (l.branchTotal ?? l.branches.length) > l.branches.length))
+  // In the listing's scope: a file listed in one repo (one repo's search) stays in that repo.
+  const onlyRepo = asset?.repoCount === 1 ? asset.locations[0]?.repo : undefined
+  useEffect(() => {
+    if (!sha || !trimmed) return
+    let cancelled = false
+    void window.api.catalog.whereIs(sha).then((r) => {
+      if (cancelled || !r.ok) return
+      const locations = r.data.filter((l) => !onlyRepo || l.repo === onlyRepo).sort((a, b) => b.branches.length - a.branches.length)
+      if (locations.length) setFull({ sha, locations })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [sha, trimmed, onlyRepo])
   if (!asset) {
     return (
       <aside className="details" aria-label={t('details.label')}>
@@ -206,7 +224,7 @@ export function CatalogDetails({ asset, thumb, stats, delivery, exporting, onOpe
       </div>
       <section className="section">
         <span className="label-caps">{t('catalog.locations')}</span>
-        <LocationList locations={asset.locations} showRepo={asset.repoCount > 1} onOpen={onOpen} />
+        <LocationList locations={full?.sha === asset.sha ? full.locations : asset.locations} showRepo={asset.repoCount > 1} onOpen={onOpen} />
       </section>
     </aside>
   )

@@ -41,6 +41,12 @@ function instructions(language: Language): string {
  * `app-server` in a home of its own, signed in with the user's ChatGPT account
  * through the browser. No API key; the account's plan pays for it.
  */
+/** Images sent with a chat message: data URLs of PNG, JPEG, WebP or GIF. */
+const IMAGE_URL = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/
+const MAX_IMAGES = 4
+/** About 6 MB of image per picture (base64 text). */
+const MAX_IMAGE_CHARS = 8_000_000
+
 export function registerAiIpc(options: { toolsDir: string; codexHome: string }): void {
   const supported = process.platform === 'darwin' && process.arch === 'arm64'
   let running: Promise<{ client: CodexClient; stop(): void }> | undefined
@@ -209,10 +215,12 @@ export function registerAiIpc(options: { toolsDir: string; codexHome: string }):
     return read()
   })
 
-  ipcMain.handle(IPC.aiChatSend, async (_event, text: unknown, language: unknown): Promise<{ ok: true } | { ok: false; message: string }> => {
+  ipcMain.handle(IPC.aiChatSend, async (_event, text: unknown, language: unknown, images: unknown): Promise<{ ok: true } | { ok: false; message: string }> => {
     try {
       const message = String(text ?? '').trim()
-      if (!message) return { ok: true }
+      // Pictures the user attached (screenshots, references): data URLs of common image types, a few and not too big.
+      const pictures = (Array.isArray(images) ? images : []).filter((u): u is string => typeof u === 'string' && IMAGE_URL.test(u) && u.length <= MAX_IMAGE_CHARS).slice(0, MAX_IMAGES)
+      if (!message && !pictures.length) return { ok: true }
       if ((await read()).state !== 'connected') throw new Error('ChatGPT is not connected')
       const client = await start()
       if (!chat) {
@@ -227,7 +235,7 @@ export function registerAiIpc(options: { toolsDir: string; codexHome: string }):
       }
       const turn = await client.request<{ turn: { id: string } }>('turn/start', {
         threadId: chat.threadId,
-        input: [{ type: 'text', text: message, text_elements: [] }],
+        input: [{ type: 'text', text: message || '(See the attached image.)', text_elements: [] }, ...pictures.map((url) => ({ type: 'image', url }))],
         // Chat wants quick answers more than deep reasoning.
         effort: 'low'
       })

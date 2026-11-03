@@ -63,6 +63,27 @@ for (let y = 0; y < 8; y++)
     // "…": a message waiting, three 2×2 dots across the middle.
     if ((x - 3.5) ** 2 + (y - 3.5) ** 2 <= 4.2 ** 2) BADGE_DOTS.push([x, y, (y === 3 || y === 4) && x % 3 !== 2])
 
+/** Pictures attached to one message, at most. */
+const MAX_IMAGES = 4
+/** Longest side an attached picture is sent at (larger ones are scaled down: the model sees about this much). */
+const IMAGE_SIDE = 1568
+
+/** An image file as a data URL the AI can read: scaled down to `IMAGE_SIDE`, as WebP (keeps transparency). */
+async function imageData(file: Blob): Promise<string | undefined> {
+  try {
+    const bitmap = await createImageBitmap(file)
+    const k = Math.min(1, IMAGE_SIDE / Math.max(bitmap.width, bitmap.height))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(bitmap.width * k))
+    canvas.height = Math.max(1, Math.round(bitmap.height * k))
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+    return canvas.toDataURL('image/webp', 0.9)
+  } catch {
+    return undefined
+  }
+}
+
 /** A reaction (found, error, sad) shows this long once the bubble is closed. */
 const REACTION_MS = 8000
 /** The pet dozes off after this long without anything happening. */
@@ -79,6 +100,10 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
   const [status, setStatus] = useState<AiStatus>()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState('')
+  /** Pictures waiting to go with the next message. */
+  const [images, setImages] = useState<string[]>([])
+  const [dragging, setDragging] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
   const log = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const root = useRef<HTMLDivElement>(null)
@@ -140,15 +165,25 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
   if (!enabled || status?.state !== 'connected') return null
 
   const send = () => {
-    if (!draft.trim() || busy) return
-    void sendChat(draft, language)
+    if ((!draft.trim() && !images.length) || busy) return
+    void sendChat(draft, language, images)
     setDraft('')
+    setImages([])
+  }
+  /** Adds image files (picked, pasted or dropped), up to `MAX_IMAGES`. */
+  const attach = async (files: Iterable<File>) => {
+    const list = [...files].filter((f) => f.type.startsWith('image/')).slice(0, MAX_IMAGES)
+    if (!list.length) return false
+    const urls = (await Promise.all(list.map(imageData))).filter((u): u is string => !!u)
+    setImages((prev) => [...prev, ...urls].slice(0, MAX_IMAGES))
+    input.current?.focus()
+    return true
   }
 
   const now = Date.now()
   const expression = petExpression({
     open,
-    typing: !!draft.trim(),
+    typing: !!draft.trim() || images.length > 0,
     busy,
     working: !!activity,
     last: last && last.state !== 'pending' ? { state: last.state, reported: last.reported, choices: !!last.choices, text: !!last.text } : undefined,
@@ -159,7 +194,23 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
   return (
     <div ref={root} className="ai-pet" data-busy={busy || undefined} onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}>
       {open && (
-        <div className="ai-pet-bubble" role="dialog" aria-label={t('aiPet.title')}>
+        <div
+          className="ai-pet-bubble"
+          role="dialog"
+          aria-label={t('aiPet.title')}
+          data-dragging={dragging || undefined}
+          onDragOver={(e) => {
+            if (![...e.dataTransfer.items].some((i) => i.kind === 'file')) return
+            e.preventDefault()
+            setDragging(true)
+          }}
+          onDragLeave={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault()
+            setDragging(false)
+            void attach(e.dataTransfer.files)
+          }}
+        >
           <div className="ai-pet-head">
             <strong>{t('aiPet.title')}</strong>
             <span style={{ flex: 1 }} />
@@ -182,7 +233,16 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
                 <Fragment key={m.id}>
                   <div className={`ai-msg ai-msg-${m.role}`} data-state={m.state}>
                     {m.role === 'user' ? (
-                      m.text
+                      <>
+                        {m.images && (
+                          <span className="ai-msg-images">
+                            {m.images.map((src, k) => (
+                              <img key={k} src={src} alt="" />
+                            ))}
+                          </span>
+                        )}
+                        {m.text}
+                      </>
                     ) : m.text ? (
                       <Answer text={m.text} />
                     ) : m.state === 'pending' ? (
@@ -211,6 +271,18 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
               ))}
             </div>
           )}
+          {images.length > 0 && (
+            <div className="ai-attachments">
+              {images.map((src, k) => (
+                <span key={k} className="ai-attachment">
+                  <img src={src} alt="" />
+                  <button type="button" aria-label={t('aiPet.removeImage')} title={t('aiPet.removeImage')} onClick={() => setImages((prev) => prev.filter((_, j) => j !== k))}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           <form
             className="ai-pet-input"
             onSubmit={(e) => {
@@ -218,13 +290,50 @@ export function AiPet({ language, enabled }: { language: string; enabled: boolea
               send()
             }}
           >
-            <input ref={input} className="input" value={draft} placeholder={t('aiPet.placeholder')} maxLength={2000} onChange={(e) => setDraft(e.target.value)} />
+            <button
+              type="button"
+              className="ai-pet-icon ai-attach"
+              title={t('aiPet.attach')}
+              aria-label={t('aiPet.attach')}
+              disabled={images.length >= MAX_IMAGES}
+              onClick={() => picker.current?.click()}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M21.4 11.1l-8.5 8.5a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+              </svg>
+            </button>
+            <input
+              ref={picker}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
+              hidden
+              onChange={(e) => {
+                if (e.target.files) void attach(e.target.files)
+                e.target.value = ''
+              }}
+            />
+            <input
+              ref={input}
+              className="input"
+              value={draft}
+              placeholder={t(images.length ? 'aiPet.placeholderImage' : 'aiPet.placeholder')}
+              maxLength={2000}
+              onChange={(e) => setDraft(e.target.value)}
+              onPaste={(e) => {
+                const files = [...e.clipboardData.files]
+                if (files.some((f) => f.type.startsWith('image/'))) {
+                  e.preventDefault()
+                  void attach(files)
+                }
+              }}
+            />
             {busy ? (
               <button type="button" className="btn" onClick={stopChat}>
                 {t('aiPet.stop')}
               </button>
             ) : (
-              <button type="submit" className="btn btn-primary" disabled={!draft.trim()}>
+              <button type="submit" className="btn btn-primary" disabled={!draft.trim() && !images.length}>
                 {t('aiPet.send')}
               </button>
             )}

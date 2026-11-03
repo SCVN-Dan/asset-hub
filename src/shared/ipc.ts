@@ -1,4 +1,4 @@
-import type { CatalogAsset, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { CatalogListing, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
 import type { AiToolResult } from './aiTools'
@@ -332,8 +332,11 @@ export interface AssetHubApi {
     pause(): Promise<IpcResult<CatalogStatus>>
     resume(): Promise<IpcResult<CatalogStatus>>
     status(): Promise<IpcResult<CatalogStatus>>
-    /** Indexed assets of `repo` (every indexed repo when null), identical files grouped. */
-    list(repo: string | null, excludedFolders: string[]): Promise<IpcResult<CatalogAsset[]>>
+    /**
+     * Indexed assets of `repo` (every indexed repo when null), identical files grouped, on `filter`'s
+     * repo and branch, with the filters' choices. Each location carries its first few branches only.
+     */
+    list(repo: string | null, excludedFolders: string[], filter?: { repo?: string; branch?: string }): Promise<IpcResult<CatalogListing>>
     /** Every repo, branch and path holding a file with this blob SHA. */
     whereIs(sha: string): Promise<IpcResult<CatalogLocation[]>>
     onStatus(listener: (status: CatalogStatus) => void): () => void
@@ -383,8 +386,11 @@ export interface AssetHubApi {
     cancelConnect(): Promise<AiStatus>
     disconnect(): Promise<AiStatus>
     onStatus(listener: (status: AiStatus) => void): () => void
-    /** Sends a message in the current conversation (`language`: the app's, for the answer); the answer streams through onChat. */
-    chatSend(text: string, language: string): Promise<{ ok: true } | { ok: false; message: string }>
+    /**
+     * Sends a message in the current conversation (`language`: the app's, for the answer), with up to 4 attached
+     * images as data URLs (PNG, JPEG, WebP, GIF); the answer streams through onChat.
+     */
+    chatSend(text: string, language: string, images?: string[]): Promise<{ ok: true } | { ok: false; message: string }>
     chatStop(): Promise<void>
     /** Starts a new conversation. */
     chatReset(): Promise<void>

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { CatalogAsset } from '@core/index'
+import type { CatalogAsset, CatalogFacets } from '@core/index'
 import type { CatalogStatus } from '@shared/ipc'
 import { unwrap } from './remoteSource'
 import { useSharedImports } from './useSharedIndex'
@@ -9,17 +9,30 @@ export type SearchScope = 'branch' | 'repo' | 'all'
 
 /** Results are re-read at most this often while branches are being indexed. */
 const REFRESH_MS = 3000
+/** …and never more than this share of the time: reading every repo's results takes seconds. */
+const REFRESH_SHARE = 0.1
 
 /**
  * The cross-branch catalog for a scope: starts indexing when the scope is
  * opened, and re-reads the results as branches get listed.
  */
-export function useCatalog(scope: SearchScope, repo: string, branch: string, excludedFolders: readonly string[], enabled: boolean) {
+export function useCatalog(
+  scope: SearchScope,
+  repo: string,
+  branch: string,
+  excludedFolders: readonly string[],
+  enabled: boolean,
+  /** The results' repo and branch filters (applied where the catalog is). */
+  filter: { repo: string; branch: string }
+) {
   const [status, setStatus] = useState<CatalogStatus>({ state: 'idle', done: 0, total: 0 })
   const [assets, setAssets] = useState<CatalogAsset[]>()
+  const [facets, setFacets] = useState<CatalogFacets>()
   const [error, setError] = useState<unknown>()
   const [version, setVersion] = useState(0)
   const lastRead = useRef(0)
+  /** How long the last read took, to space out the next ones. */
+  const readTime = useRef(0)
   const active = enabled && scope !== 'branch' && (scope === 'all' || !!repo)
   const target = scope === 'repo' ? repo : null
   const imports = useSharedImports()
@@ -50,7 +63,7 @@ export function useCatalog(scope: SearchScope, repo: string, branch: string, exc
   // New branches listed: read the results again, but not on every step.
   useEffect(() => {
     if (!active) return
-    const wait = Math.max(0, lastRead.current + REFRESH_MS - Date.now())
+    const wait = Math.max(0, lastRead.current + Math.max(REFRESH_MS, readTime.current / REFRESH_SHARE) - Date.now())
     const timer = setTimeout(() => setVersion((v) => v + 1), status.state === 'running' ? wait : 0)
     return () => clearTimeout(timer)
   }, [active, status.done, status.state])
@@ -58,12 +71,17 @@ export function useCatalog(scope: SearchScope, repo: string, branch: string, exc
   useEffect(() => {
     if (!active || !version) return
     let cancelled = false
-    lastRead.current = Date.now()
-    window.api.catalog.list(target, [...excludedFolders]).then(
+    const started = Date.now()
+    lastRead.current = started
+    window.api.catalog.list(target, [...excludedFolders], { repo: filter.repo, branch: filter.branch }).then(
       (r) => {
         if (cancelled) return
         try {
-          setAssets(unwrap(r))
+          const listing = unwrap(r)
+          setAssets(listing.assets)
+          setFacets(listing.facets)
+          // Counted once the page has taken the results in too (searching them, laying out the grid).
+          setTimeout(() => (readTime.current = Date.now() - started))
         } catch (err) {
           setError(err)
         }
@@ -73,11 +91,12 @@ export function useCatalog(scope: SearchScope, repo: string, branch: string, exc
     return () => {
       cancelled = true
     }
-  }, [active, target, version, excludedFolders])
+  }, [active, target, version, excludedFolders, filter.repo, filter.branch])
 
   return {
     status,
     assets: active ? assets : undefined,
+    facets: active ? facets : undefined,
     error: active ? error : undefined,
     pause: () => void window.api.catalog.pause().then((r) => r.ok && setStatus(r.data)),
     resume: () => void window.api.catalog.resume().then((r) => r.ok && setStatus(r.data))
