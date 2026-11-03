@@ -2,6 +2,14 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.1.9] — 2026-11-03
+
+### Fixed
+- **Import to Unity** no longer lists the same project twice: Unity's background import workers are skipped, so each open editor shows once.
+- The **Unity editor list** is kept inside the window (above the button, or below when there is no room) instead of being cut off.
+- In **Feedback**, a long repo, branch and asset path wraps inside the dialog.
+- A disabled primary button keeps its colour on hover instead of its label vanishing.
+
 ## [0.1.8] — 2026-11-02
 
 ### Changed
