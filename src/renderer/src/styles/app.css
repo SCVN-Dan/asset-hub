@@ -78,6 +78,8 @@ button { cursor: pointer; }
 .btn-small[aria-pressed='true'] { background: var(--accent-soft); border-color: var(--accent); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn:disabled:hover { background: transparent; }
+/* A primary button keeps its fill when disabled: without it, its dark label on the dark panel vanished on hover. */
+.btn-primary:disabled:hover { background: var(--accent); }
 .progress { width: 100%; height: 8px; accent-color: var(--accent); }
 .error-note { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 12px 14px; border-radius: var(--radius); background: var(--danger-bg); border: 1px solid var(--danger-border); color: var(--danger-text); font-size: 13px; word-break: break-word; }
 .input, .select { height: var(--control); padding: 0 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -197,6 +199,10 @@ button { cursor: pointer; }
 .shortcut-card dt, .shortcut-card dd { margin: 0; }
 .feedback-card { width: min(480px, calc(100vw - 32px)); }
 .feedback-kinds { display: flex; gap: 6px; }
+/* A long repo, branch and asset path wraps inside the dialog; the box stays by the first line. */
+.check.feedback-where { display: flex; align-items: flex-start; min-width: 0; }
+.feedback-where input { flex: none; margin-top: 2px; }
+.feedback-where span { min-width: 0; overflow-wrap: anywhere; }
 .feedback-body { height: auto; padding: 10px 12px; resize: vertical; font: inherit; line-height: 1.5; }
 .shortcut-card kbd { padding: 2px 8px; border-radius: 6px; border: 1px solid var(--border-strong); background: var(--panel-2); font: 600 12px var(--mono); }
 .multi-bar .link-btn { white-space: nowrap; }
@@ -210,8 +216,8 @@ button { cursor: pointer; }
 .unity-button { position: relative; display: inline-flex; }
 .unity-button > .btn:first-child:not(:last-child) { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .unity-more { padding: 0 8px; border-left: 0; border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.unity-menu { position: absolute; z-index: 50; bottom: calc(100% + 6px); left: 0; min-width: 240px; max-width: 360px; display: flex; flex-direction: column; padding: 4px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--panel); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
-.unity-menu-item { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.unity-menu { position: fixed; z-index: 1000; top: 0; left: 0; min-width: min(240px, calc(100vw - 16px)); max-width: min(360px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; display: flex; flex-direction: column; padding: 4px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--panel); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5); }
+.unity-menu-item { display: flex; min-width: 0; overflow-wrap: anywhere; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .unity-menu-item:hover, .unity-menu-item[aria-current] { background: var(--accent-soft); }
 .setting-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .setting-actions:empty { display: none; }

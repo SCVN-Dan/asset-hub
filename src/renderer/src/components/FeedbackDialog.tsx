@@ -61,9 +61,9 @@ export function FeedbackDialog({ context, onClose }: Props) {
             <input className="input" autoFocus value={title} maxLength={120} placeholder={t('feedback.titlePlaceholder')} onChange={(e) => setTitle(e.target.value)} />
             <textarea className="input feedback-body" value={body} rows={6} placeholder={t(`feedback.bodyPlaceholder.${kind}`)} onChange={(e) => setBody(e.target.value)} />
             {where && (
-              <label className="check small">
+              <label className="check small feedback-where">
                 <input type="checkbox" checked={withContext} onChange={(e) => setWithContext(e.target.checked)} />
-                {t('feedback.withContext', { where })}
+                <span>{t('feedback.withContext', { where })}</span>
               </label>
             )}
             <span className="muted small">{t('feedback.note')}</span>

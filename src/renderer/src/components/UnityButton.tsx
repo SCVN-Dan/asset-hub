@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { RunningUnity } from '@shared/ipc'
 import { ChevronDownIcon, UnityIcon } from './Icons'
@@ -22,6 +23,8 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
   const [editors, setEditors] = useState<RunningUnity[]>([])
   const [menu, setMenu] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  const list = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
 
   useEffect(() => {
     const refresh = () => void window.api.exporter.unityEditors().then(setEditors)
@@ -35,9 +38,30 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
   }, [])
   useEffect(() => {
     if (!menu) return
-    const close = (e: PointerEvent) => !box.current?.contains(e.target as Node) && setMenu(false)
+    const close = (e: PointerEvent) => !box.current?.contains(e.target as Node) && !list.current?.contains(e.target as Node) && setMenu(false)
+    const shut = () => setMenu(false)
     window.addEventListener('pointerdown', close)
-    return () => window.removeEventListener('pointerdown', close)
+    window.addEventListener('resize', shut)
+    window.addEventListener('blur', shut)
+    return () => {
+      window.removeEventListener('pointerdown', close)
+      window.removeEventListener('resize', shut)
+      window.removeEventListener('blur', shut)
+    }
+  }, [menu])
+  // The list sits on the window, not in the button's panel: kept inside the window's
+  // edges (above the button, or below when there is no room), never cut off.
+  useLayoutEffect(() => {
+    if (!menu) return setPos(null)
+    const anchor = box.current?.getBoundingClientRect()
+    const el = list.current
+    if (!anchor || !el) return
+    const gap = 6
+    const edge = 8
+    const left = Math.max(edge, Math.min(anchor.left, window.innerWidth - el.offsetWidth - edge))
+    const above = anchor.top - el.offsetHeight - gap
+    const top = above >= edge ? above : Math.min(anchor.bottom + gap, window.innerHeight - el.offsetHeight - edge)
+    setPos({ left, top: Math.max(edge, top) })
   }, [menu])
 
   if (!editors.length)
@@ -82,8 +106,9 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
           <ChevronDownIcon size={10} />
         </button>
       )}
-      {menu && (
-        <div className="unity-menu" role="menu">
+      {menu &&
+        createPortal(
+          <div className="unity-menu" role="menu" ref={list} style={pos ? { left: pos.left, top: pos.top } : { visibility: 'hidden' }}>
           {editors.map((e) => (
             <button key={e.pid} type="button" role="menuitem" className="unity-menu-item" aria-current={e.pid === preferred.pid || undefined} title={e.projectPath} onClick={() => choose(e)}>
               <span>
@@ -93,8 +118,9 @@ export function UnityButton({ disabled, onImport, compact }: { disabled?: boolea
               {e.version && <span className="muted small">{e.version}</span>}
             </button>
           ))}
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

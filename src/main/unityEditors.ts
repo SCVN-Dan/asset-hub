@@ -20,13 +20,15 @@ const run = (cmd: string, args: string[]) =>
 /**
  * Editors from `ps` lines ("<pid> <command line>"). The project comes from
  * -projectPath, which Unity Hub always passes; a path may hold spaces, so it
- * runs up to the next " -flag". Lines of other programs are skipped.
+ * runs up to the next " -flag". Lines of other programs are skipped, and so
+ * are Unity's own background workers (AssetImportWorker…, run -batchMode on
+ * the same project), so each open editor shows once.
  */
 export function parseUnityProcesses(psOutput: string): Array<{ pid: number; projectPath: string; version?: string }> {
   const found: Array<{ pid: number; projectPath: string; version?: string }> = []
   for (const line of psOutput.split('\n')) {
     const m = /^\s*(\d+)\s+(.*\/Unity\.app\/Contents\/MacOS\/Unity)(\s.*)?$/.exec(line)
-    if (!m) continue
+    if (!m || /\s-batchmode(\s|$)/i.test(m[3] ?? '')) continue
     const project = /\s-projectpath\s+(.+?)(?=\s+-[A-Za-z]|$)/i.exec(m[3] ?? '')?.[1]?.trim().replace(/^"(.*)"$/, '$1')
     if (!project) continue
     const version = /\/Editor\/([^/]+)\/Unity\.app\//.exec(m[2])?.[1]

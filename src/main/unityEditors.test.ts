@@ -8,6 +8,7 @@ describe('parseUnityProcesses', () => {
       ' 9001 /Applications/Unity/Hub/Editor/6000.0.1f1/Unity.app/Contents/MacOS/Unity -projectPath "/Users/a/Crab Life/"',
       '  77 /Applications/Unity Hub.app/Contents/MacOS/Unity Hub',
       '  78 /Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/MacOS/Unity -batchmode',
+      '  80 /Applications/Unity/Hub/Editor/2022.3.19f1/Unity.app/Contents/MacOS/Unity -adb2 -batchMode -noUpm -name AssetImportWorker0 -projectPath /Users/a/Projects/Luna Pizza -logFile Logs/AssetImportWorker0.log',
       '  79 /bin/zsh -c grep Unity.app/Contents/MacOS/Unity'
     ].join('\n')
     expect(parseUnityProcesses(ps)).toEqual([
