@@ -105,6 +105,15 @@ export const ExportIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
+/** One file saved as it is: a page with a down arrow. */
+export const DownloadIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5" />
+    <path d="M12 11v6m-3-3 3 3 3-3" />
+  </svg>
+)
+
 /** The chest (the app's export list), as in the logo: a domed lid over a box with a clasp. */
 export const ChestIcon = ({ size = 16, filled }: ToggleIconProps) => (
   <svg {...base(size)}>

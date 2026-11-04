@@ -576,6 +576,17 @@
     "otherModel": "Other model…",
     "searchModel": "Type to find a model"
   },
+  "bundle": {
+    "waiting": "Waiting for the dependencies…",
+    "zipTitlePrefab": "The prefab as one .glb (models placed as in Unity), its textures and open_in_blender.py, which rebuilds its materials in Blender",
+    "zip": "Get .zip",
+    "zipTitle": "The .fbx with its textures and open_in_blender.py, which rebuilds its Unity materials in Blender",
+    "saved_one": "Saved {{name}} ({{size}}, {{count}} texture).",
+    "saved_other": "Saved {{name}} ({{size}}, {{count}} textures).",
+    "blenderTitle": "Open in Blender with its Unity materials rebuilt (colour, normal, metallic, smoothness, occlusion, emission, transparency)",
+    "opening": "Opening…",
+    "opened": "Opened in Blender"
+  },
   "download": {
     "button": "Download",
     "saving": "Saving…",

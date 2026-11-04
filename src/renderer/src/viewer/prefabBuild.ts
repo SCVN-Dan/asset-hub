@@ -139,7 +139,7 @@ function assignMeshes(tpl: ModelTemplate, refs: ReadonlyMap<string, readonly str
  * mesh where the prefab puts it, with its materials. Textures are fetched
  * here and applied by the viewer (`slots`, `looks`).
  */
-export async function buildPrefab(live: LiveContext, path: string, report: DependencyReport, background = false): Promise<PrefabBuild> {
+export async function buildPrefab(live: LiveContext, path: string, report: DependencyReport, background = false, withTextures = true): Promise<PrefabBuild> {
   const guidPaths = report.guidPaths ?? {}
   const read = (p: string) => window.api.assets.readFile(live.repo, live.branch, p, background).then(unwrap)
   const readText = (p: string) => read(p).then(decode)
@@ -293,6 +293,7 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
       const source = assigned.get(modelPath)?.get(m.mesh.fileID) ?? (tpl.meshes.length === 1 ? tpl.meshes[0] : undefined)
       if (source) {
         const mesh = new THREE.Mesh(source.geometry, source.material)
+        mesh.name = source.name || obj.name
         mesh.scale.setScalar(tpl.factor)
         dress(mesh, m.materials)
         obj.add(mesh)
@@ -314,13 +315,14 @@ export async function buildPrefab(live: LiveContext, path: string, report: Depen
   const byGuid = new Map(report.materials.flatMap((m) => (m.guid ? [[m.guid, m] as const] : [])))
   const looks = new Map<string, MaterialLook>()
   await Promise.all(
-    used.map(async (guid) => {
+    (withTextures ? used : []).map(async (guid) => {
       const text = await readOptional(guidPaths[guid])
       if (text) looks.set(guid, parseMaterialLook(text))
     })
   )
   const wanted = used.flatMap((guid) => (byGuid.get(guid)?.textures ?? []).filter((t) => t.path && DRAWABLE.test(t.path)).map((t) => ({ guid, prop: t.prop ?? '', path: t.path! })))
-  const paths = [...new Set(wanted.map((w) => w.path))].slice(0, MAX_TEXTURES)
+  // Without textures (an export that brings its own): the shapes and the materials' names only.
+  const paths = withTextures ? [...new Set(wanted.map((w) => w.path))].slice(0, MAX_TEXTURES) : []
   const files = new Map<string, TextureFile>()
   await Promise.all(
     paths.map(async (p) => {

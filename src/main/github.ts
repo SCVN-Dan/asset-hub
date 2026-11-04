@@ -1,12 +1,14 @@
 import { mkdir, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { app, BrowserWindow, clipboard, dialog, ipcMain, net, protocol, shell } from 'electron'
-import { createDefaultRegistry, SourceError, type FactKind, type RepoRef } from '@core/index'
+import { blenderMaterial, blenderScript, bundleFileNames, bundleTexturePaths, createDefaultRegistry, SourceError, type BundleMaterial, type FactKind, type RepoRef } from '@core/index'
 import { GitHubClient, type FetchLike } from '@core/github/client'
 import { GitHubAssetSource } from '@core/github/source'
 import { IPC, type AuthMethod, type CatalogStatus, type AuthStatus, type ExportRequest, type IpcError, type IpcResult } from '@shared/ipc'
 import { AuthError, AuthStore, ghLogout, ghWebLogin, readGhToken, setManagedGh, type GhLoginPrompt } from './auth'
 import { exportUnityPackage } from './exporter'
+import { findBlender, openInBlender, sweepBlenderTemp } from './blender'
+import { zipFiles } from './zip'
 import { isUnityProject } from './targetProject'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { listRunningUnity, openInProcess } from './unityEditors'
@@ -360,6 +362,75 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       await writeFile(choice.filePath, bytes)
       saved.add(choice.filePath)
       return { canceled: false, path: choice.filePath, bytes: bytes.byteLength }
+    })
+  )
+  ipcMain.handle(IPC.findBlender, () => findBlender().then((p) => !!p, () => false))
+  // A model with its textures and a Blender script that rebuilds its materials: saved as one .zip, or opened in Blender.
+  // A prefab comes as the GLB the renderer exported (`glb`); an FBX is read from the repo.
+  ipcMain.handle(IPC.modelBundle, (event, repo: unknown, branch: unknown, path: unknown, rawMaterials: unknown, mode: unknown, glb: unknown) =>
+    wrapForeground(async () => {
+      const src = requireSession()
+      const [r, b, model] = [String(repo), String(branch), String(path)]
+      const materials: BundleMaterial[] = (Array.isArray(rawMaterials) ? rawMaterials : []).flatMap((m) =>
+        m && typeof m.target === 'string'
+          ? [
+              {
+                target: m.target,
+                ...(typeof m.name === 'string' ? { name: m.name } : {}),
+                ...(typeof m.mat === 'string' ? { mat: m.mat } : {}),
+                ...(typeof m.shader === 'string' ? { shader: m.shader } : {}),
+                textures: (Array.isArray(m.textures) ? m.textures : []).filter((t: { prop?: unknown; path?: unknown }) => typeof t?.prop === 'string' && typeof t?.path === 'string')
+              }
+            ]
+          : []
+      )
+      const prefabGlb = glb instanceof Uint8Array ? glb : undefined
+      const stem = (model.split('/').pop() || 'model').replace(/\.[^.]+$/, '')
+      const modelName = prefabGlb ? `${stem}.glb` : model.split('/').pop() || 'model.fbx'
+      const textures = bundleTexturePaths(materials)
+      const names = bundleFileNames([`/${modelName}`, ...textures])
+      let blender: string | undefined
+      let target: string | undefined
+      if (mode === 'blender') {
+        blender = await findBlender()
+        if (!blender) throw new Error('Blender is not installed')
+      } else {
+        const win = BrowserWindow.fromWebContents(event.sender)
+        const options = { defaultPath: join(app.getPath('downloads'), `${stem}.zip`), filters: [{ name: 'ZIP', extensions: ['zip'] }] }
+        const choice = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+        if (choice.canceled || !choice.filePath) return { canceled: true }
+        target = choice.filePath
+      }
+      // The model must come; a texture or .mat that fails to download is left out.
+      // Read from the cache when there, never added to it: these files are only passed on.
+      const optional = (p: string) => src.readFile(r, b, p, { keep: false }).catch(() => undefined)
+      const [modelBytes, texBytes, matTexts] = await Promise.all([
+        prefabGlb ?? src.readFile(r, b, model, { keep: false }),
+        Promise.all(textures.map(optional)),
+        Promise.all(materials.map((m) => (m.mat ? optional(m.mat).then((d) => d && new TextDecoder().decode(d)) : undefined)))
+      ])
+      const got = new Map(textures.flatMap((p, i) => (texBytes[i] ? [[p, texBytes[i]!] as const] : [])))
+      const fileOf = (p: string) => (got.has(p) ? names.get(p) : undefined)
+      const specs = materials.map((m, i) => blenderMaterial(m, matTexts[i], fileOf))
+      const all = [
+        { name: names.get(`/${modelName}`)!, data: modelBytes },
+        ...[...got].map(([p, data]) => ({ name: names.get(p)!, data })),
+        // Opened from the temporary folder, the script deletes it once everything is in Blender.
+        { name: 'open_in_blender.py', data: new TextEncoder().encode(blenderScript(names.get(`/${modelName}`)!, specs, { cleanup: !target })) }
+      ]
+      if (target) {
+        const zip = zipFiles(all)
+        await writeFile(target, zip)
+        saved.add(target)
+        return { canceled: false, path: target, bytes: zip.byteLength, textures: got.size }
+      }
+      const temp = join(app.getPath('temp'), 'asset-hub-blender')
+      await sweepBlenderTemp(temp)
+      const dir = join(temp, `${stem}-${Date.now().toString(36)}`)
+      await mkdir(dir, { recursive: true })
+      await Promise.all(all.map((f) => writeFile(join(dir, f.name), f.data)))
+      openInBlender(blender!, join(dir, 'open_in_blender.py'))
+      return { canceled: false, path: dir, textures: got.size }
     })
   )
   ipcMain.handle(IPC.showItemInFolder, (_e, path: unknown) => {

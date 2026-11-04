@@ -558,6 +558,16 @@
     "otherModel": "Model khác…",
     "searchModel": "Gõ để tìm model"
   },
+  "bundle": {
+    "waiting": "Đang chờ dependencies…",
+    "zipTitlePrefab": "Prefab gộp thành một file .glb (model đặt đúng vị trí như trong Unity), kèm texture và open_in_blender.py (dựng lại material trong Blender)",
+    "zip": "Tải .zip",
+    "zipTitle": "File .fbx kèm texture và open_in_blender.py (dựng lại material Unity trong Blender)",
+    "saved_other": "Đã lưu {{name}} ({{size}}, {{count}} texture).",
+    "blenderTitle": "Mở trong Blender, dựng lại material Unity (màu, normal, metallic, smoothness, AO, emission, trong suốt)",
+    "opening": "Đang mở…",
+    "opened": "Đã mở Blender"
+  },
   "download": {
     "button": "Tải về",
     "saving": "Đang lưu…",

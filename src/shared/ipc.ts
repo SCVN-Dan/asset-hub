@@ -1,4 +1,4 @@
-import type { CatalogListing, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
+import type { BundleMaterial, CatalogListing, CatalogLocation, DependencyReport, FactKind, PrefabMaterialsResult, PrefabScope, RepoRef, SourceErrorCode, TreeEntry } from '@core/index'
 import type { StatsSummary } from '@core/checks/playable'
 import type { Settings } from './settings'
 import type { AiToolResult } from './aiTools'
@@ -49,6 +49,8 @@ export const IPC = {
   importToUnity: 'export:to-unity',
   showItemInFolder: 'shell:show-item',
   saveFile: 'assets:save-file',
+  modelBundle: 'assets:model-bundle',
+  findBlender: 'blender:find',
   catalogScan: 'catalog:scan',
   catalogPause: 'catalog:pause',
   catalogResume: 'catalog:resume',
@@ -318,6 +320,14 @@ export interface AssetHubApi {
     findPrefabMaterials(repo: string, branch: string, path: string, root: string, scope: PrefabScope, excludedFolders: string[]): Promise<IpcResult<PrefabMaterialsResult>>
     /** Asks where to save, then writes the file itself (real contents for LFS files). */
     saveFile(repo: string, branch: string, path: string): Promise<IpcResult<{ canceled: boolean; path?: string; bytes?: number }>>
+    /**
+     * A model with its textures and a script that rebuilds its materials in Blender: `zip` asks where to save
+     * one .zip; `blender` writes them to a temporary folder and opens them in Blender. A prefab passes the
+     * GLB it was exported as (`glb`, materials named by .mat GUID); an FBX is read from the repo.
+     */
+    modelBundle(repo: string, branch: string, path: string, materials: BundleMaterial[], mode: 'zip' | 'blender', glb?: Uint8Array): Promise<IpcResult<{ canceled: boolean; path?: string; bytes?: number; textures?: number }>>
+    /** Blender is installed (where the model bundle can open it). */
+    blenderInstalled(): Promise<boolean>
     /** Bytes read so far by findPrefabMaterials. */
     onPrefabProgress(listener: (progress: { done: number; total: number }) => void): () => void
     /** Blob SHAs of the branch's assets of a kind known by reading them (effects, sprites, TextMeshPro fonts); reads files not seen before. */

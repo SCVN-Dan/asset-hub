@@ -43,3 +43,4 @@ export function createDefaultRegistry(): HandlerRegistry {
 }
 export * from './catalog/catalog'
 export * from './checks/playable'
+export * from './export/modelBundle'

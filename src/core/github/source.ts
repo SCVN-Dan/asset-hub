@@ -283,12 +283,15 @@ export class GitHubAssetSource implements AssetSource {
     return entries.filter((e) => e.type === 'blob' && isAsset(e))
   }
 
-  /** Contents of a file on the branch, from the blob cache when possible. */
-  async readFile(repo: string, branch: string, path: string): Promise<Uint8Array> {
+  /**
+   * Contents of a file on the branch, from the blob cache when possible.
+   * `keep: false` reads what is cached but does not add to it (files only passed on, as by an export).
+   */
+  async readFile(repo: string, branch: string, path: string, { keep = true }: { keep?: boolean } = {}): Promise<Uint8Array> {
     const snap = await this.snapshot(repo, branch)
     const entry = snap.byPath.get(path)
     if (!entry || entry.type !== 'blob') throw new SourceError('notFound', `${path} is not in ${repo}@${branch}`)
-    return this.readEntry(repo, entry)
+    return this.readEntry(repo, entry, keep)
   }
 
   /** Best file for each name, nearest to `nearPath`, within the Unity project's Assets. */
@@ -727,17 +730,19 @@ export class GitHubAssetSource implements AssetSource {
     return this.snapshots.get(`${repo}@${branch}`)!
   }
 
-  private readEntry(repo: string, entry: TreeEntry): Promise<Uint8Array> {
+  private readEntry(repo: string, entry: TreeEntry, keep = true): Promise<Uint8Array> {
     const key = entry.lfsOid ?? entry.sha
-    let read = this.reads.get(key)
+    // A read that keeps nothing is not shared with one that should fill the cache.
+    const flight = keep ? key : `${key}#pass`
+    let read = this.reads.get(flight)
     if (!read) {
-      read = this.downloadEntry(repo, entry, key).finally(() => this.reads.delete(key))
-      this.reads.set(key, read)
+      read = this.downloadEntry(repo, entry, key, keep).finally(() => this.reads.delete(flight))
+      this.reads.set(flight, read)
     }
     return read
   }
 
-  private async downloadEntry(repo: string, entry: TreeEntry, key: string): Promise<Uint8Array> {
+  private async downloadEntry(repo: string, entry: TreeEntry, key: string, keep = true): Promise<Uint8Array> {
     const cache = this.options.blobCache
     const hit = await cache?.get(key).catch(() => undefined)
     if (hit) return hit
@@ -749,7 +754,7 @@ export class GitHubAssetSource implements AssetSource {
       if (pointer) bytes = await this.client.getLfsObject(repo, pointer.oid, pointer.size)
     }
     // The cache is an optimisation: a failed write must not fail the read.
-    await cache?.set(key, bytes).catch(() => undefined)
+    if (keep) await cache?.set(key, bytes).catch(() => undefined)
     return bytes
   }
 

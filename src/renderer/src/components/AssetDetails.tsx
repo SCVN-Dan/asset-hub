@@ -21,6 +21,7 @@ import { tmpFontStats, type LoadedTmpFont } from '../viewer/tmpFont'
 import { particleStats } from '../viewer/particleThumb'
 import { fontStats, type LoadedFont } from '../viewer/font'
 import { DownloadButton } from './DownloadButton'
+import { ModelBundleButtons } from './ModelBundleButtons'
 
 // Viewers drawing with three.js load when first opened: the app starts without the 3D engine.
 const ModelViewer = lazy(() => import('./ModelViewer').then((m) => ({ default: m.ModelViewer })))
@@ -816,6 +817,7 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
               <span>{inPack ? t('actions.inChest') : t('actions.chest')}</span>
             </button>
             <UnityButton compact disabled={exporting} onImport={onImportToUnity} />
+            {(handler.id === 'fbx' || handler.id === 'prefab') && <ModelBundleButtons kind={handler.id} live={live} path={live.root + asset.path} report={report} prefabMaterial={prefabMaterial} />}
             {collectionActions}
           </div>
         )}

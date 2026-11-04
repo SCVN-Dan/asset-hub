@@ -259,6 +259,18 @@ describe('GitHubAssetSource file access', () => {
     expect(calls.length).toBe(before)
   })
 
+  it('reads without keeping when asked: from the cache if there, never added to it', async () => {
+    const { src, calls } = make()
+    await src.readFile('o/r', 'main', 'p/Assets/T.png', { keep: false })
+    const before = calls.length
+    await src.readFile('o/r', 'main', 'p/Assets/T.png', { keep: false })
+    expect(calls.length).toBeGreaterThan(before)
+    await src.readFile('o/r', 'main', 'p/Assets/T.png')
+    const kept = calls.length
+    await src.readFile('o/r', 'main', 'p/Assets/T.png', { keep: false })
+    expect(calls.length).toBe(kept)
+  })
+
   it('resolves an FBX through the GUID index', async () => {
     const { src } = make()
     await src.listTree('o/r', 'main')

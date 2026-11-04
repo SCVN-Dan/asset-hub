@@ -549,6 +549,16 @@
     "otherModel": "다른 모델…",
     "searchModel": "입력해서 모델 찾기"
   },
+  "bundle": {
+    "waiting": "의존성 확인 중…",
+    "zipTitlePrefab": "프리팹을 하나의 .glb로(모델은 Unity와 같은 위치), 텍스처와 Blender에서 머티리얼을 다시 만드는 open_in_blender.py",
+    "zip": ".zip 받기",
+    "zipTitle": ".fbx와 텍스처, Blender에서 Unity 머티리얼을 다시 만드는 open_in_blender.py",
+    "saved_other": "{{name}} 저장됨 ({{size}}, 텍스처 {{count}}개).",
+    "blenderTitle": "Unity 머티리얼(색상, 노멀, 메탈릭, 스무스니스, AO, 이미션, 투명)을 다시 만든 상태로 Blender에서 열기",
+    "opening": "여는 중…",
+    "opened": "Blender에서 열림"
+  },
   "download": {
     "button": "다운로드",
     "saving": "저장 중…",
