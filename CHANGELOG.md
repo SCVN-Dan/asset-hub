@@ -2,6 +2,15 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [0.2.1] — 2026-11-04
+
+### Added
+- **FBX and prefabs to Blender:** an FBX or prefab now has **Get .zip** and **Blender** next to Export. Get .zip saves the model with its textures and `open_in_blender.py`; Blender (shown when it is installed) opens it straight away. A prefab comes as one .glb with every model where Unity places it.
+- **Unity materials rebuilt in Blender:** colour tint, metallic and smoothness (from the map or the numbers), HDRP mask maps, occlusion, normal strength, emission, cutout and transparent surfaces, and unlit shaders. Materials are named after their .mat, and textures are packed into the .blend when it is saved.
+
+### Changed
+- Exporting to Blender does not fill the app's cache: files already cached are reused, the rest are not kept, and the temporary copy Blender opens deletes itself once loaded.
+
 ## [0.2.0] — 2026-11-03
 
 ### Added
