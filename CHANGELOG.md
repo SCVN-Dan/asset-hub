@@ -2,6 +2,15 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.1] — 2026-11-05
+
+### Changed
+- **Updates by itself at launch:** when a newer version is out, the app downloads it, checks it and restarts into it on its own — usually about 1 MB and a few seconds. The version button shows the progress, and tries again if something went wrong. (From 1.0.0, press the button once more to get here.)
+- **Faster the first time a branch is opened:** the VFX tab finds a large repo's effects about five times faster (32 s instead of nearly 3 minutes for 1,580 effects), with the first cards still after a few seconds; an asset's full dependencies show in about 8 s instead of 30 s.
+
+### Fixed
+- Updates downloaded the whole app every time instead of only what changed.
+
 ## [1.0.0] — 2026-11-05
 
 The first full release: browse every repo and branch, preview models, prefabs and effects, check their dependencies, take them to Unity or Blender, or ask the assistant.
