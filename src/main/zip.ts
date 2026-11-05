@@ -1,7 +1,16 @@
 import { crc32, deflateRawSync } from 'zlib'
 
-/** A .zip of a few files (deflated; stored when that is not smaller). */
-export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array }>): Buffer {
+/** MS-DOS time and date, as zip entries keep them (local time, 2-second steps). */
+function dosDateTime(d: Date): { time: number; date: number } {
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()
+  }
+}
+
+/** A .zip of a few files (deflated; stored when that is not smaller), dated `when`. */
+export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array }>, when = new Date()): Buffer {
+  const { time, date } = dosDateTime(when)
   const parts: Buffer[] = []
   const central: Buffer[] = []
   let offset = 0
@@ -16,6 +25,8 @@ export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array }
     head.writeUInt16LE(20, 4)
     head.writeUInt16LE(0x0800, 6) // UTF-8 names
     head.writeUInt16LE(stored ? 0 : 8, 8)
+    head.writeUInt16LE(time, 10)
+    head.writeUInt16LE(date, 12)
     head.writeUInt32LE(crc, 14)
     head.writeUInt32LE(body.length, 18)
     head.writeUInt32LE(file.data.length, 22)
@@ -26,6 +37,8 @@ export function zipFiles(files: ReadonlyArray<{ name: string; data: Uint8Array }
     entry.writeUInt16LE(20, 6)
     entry.writeUInt16LE(0x0800, 8)
     entry.writeUInt16LE(stored ? 0 : 8, 10)
+    entry.writeUInt16LE(time, 12)
+    entry.writeUInt16LE(date, 14)
     entry.writeUInt32LE(crc, 16)
     entry.writeUInt32LE(body.length, 20)
     entry.writeUInt32LE(file.data.length, 24)

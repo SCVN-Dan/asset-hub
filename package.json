@@ -13,7 +13,7 @@
     "test": "vitest run",
     "postinstall": "node scripts/dev-app-name.mjs",
     "dist": "electron-vite build && electron-builder --mac dmg",
-    "dist:web": "electron-vite build && electron-builder --mac zip && node scripts/make-web-installer.mjs",
+    "dist:web": "electron-vite build && electron-builder --mac zip && node scripts/make-update-files.mjs && node scripts/make-web-installer.mjs",
     "release": "node scripts/publish-release.mjs",
     "usage": "node scripts/usage-report.mjs"
   },

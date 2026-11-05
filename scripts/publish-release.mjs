@@ -9,7 +9,17 @@ import { join } from 'node:path'
 
 const root = new URL('..', import.meta.url).pathname
 const { version, releaseRepo } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-const files = ['Asset-Hub-arm64.zip', 'Asset-Hub-arm64.zip.sha256', 'Asset-Hub-Installer.dmg'].map((f) => join(root, 'release', f))
+// The .zip stays for installers and app versions that only know it (0.2.1 and before); the rest is
+// what newer ones prefer (scripts/make-update-files.mjs).
+const files = [
+  'Asset-Hub-arm64.zip',
+  'Asset-Hub-arm64.zip.sha256',
+  'Asset-Hub-arm64.tar.xz',
+  'Asset-Hub-arm64.tar.xz.sha256',
+  'Asset-Hub-arm64.delta.tar.xz',
+  'Asset-Hub-arm64.manifest.json',
+  'Asset-Hub-Installer.dmg'
+].map((f) => join(root, 'release', f))
 const missing = files.filter((f) => !existsSync(f))
 if (missing.length) throw new Error(`Missing (run npm run dist:web): ${missing.join(', ')}`)
 

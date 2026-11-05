@@ -11,19 +11,30 @@ on run
 	try
 		-- Built for Apple Silicon (M1–M4) only.
 		if (do shell script "uname -m") is not "arm64" then error "Asset Hub runs on Macs with Apple silicon (M1, M2, M3, M4). This Mac has an Intel chip."
-		set zipName to "Asset-Hub-arm64.zip"
-		set zipURL to baseURL & zipName
+		-- The .tar.xz (about 30% smaller) when the release has one, else the .zip every release has.
+		set zipName to "Asset-Hub-arm64.tar.xz"
+		set packed to "xz"
 
-		display dialog "This installer downloads the latest Asset Hub (about 100 MB) from GitHub and installs it in your Applications folder." buttons {"Cancel", "Install"} default button "Install" cancel button "Cancel" with title "Install Asset Hub" with icon note
+		display dialog "This installer downloads the latest Asset Hub (about 60 MB) from GitHub and installs it in your Applications folder." buttons {"Cancel", "Install"} default button "Install" cancel button "Cancel" with title "Install Asset Hub" with icon note
 
 		set work to do shell script "mktemp -d -t assethub"
-		set zipPath to work & "/" & zipName
 
 		-- Size first, for the progress bar; then the download runs in the background while it is watched.
 		set progress total steps to 100
 		set progress completed steps to 0
 		set progress description to "Connecting to GitHub…"
-		set total to (do shell script "curl -fsIL " & quoted form of zipURL & " | awk 'tolower($1)==\"content-length:\" {n=$2} END {gsub(/\\r/,\"\",n); print n+0}'") as integer
+		set sizeOf to " | awk 'tolower($1)==\"content-length:\" {n=$2} END {gsub(/\\r/,\"\",n); print n+0}'"
+		set total to 0
+		try
+			set total to (do shell script "curl -fsIL " & quoted form of (baseURL & zipName) & sizeOf) as integer
+		end try
+		if total is 0 then
+			set zipName to "Asset-Hub-arm64.zip"
+			set packed to "zip"
+			set total to (do shell script "curl -fsIL " & quoted form of (baseURL & zipName) & sizeOf) as integer
+		end if
+		set zipURL to baseURL & zipName
+		set zipPath to work & "/" & zipName
 		-- A dropped connection is retried up to 3 times, resuming where it stopped (-C -). curl's own
 		-- message goes to curl.log; the exit code is written aside and renamed into place, so "status"
 		-- never exists half-written.
@@ -61,7 +72,11 @@ on run
 		end try
 		set appPath to dest & "/" & appName & ".app"
 		do shell script "osascript -e 'tell application \"" & appName & "\" to quit' > /dev/null 2>&1; true"
-		do shell script "rm -rf " & quoted form of appPath & " && ditto -x -k " & quoted form of zipPath & " " & quoted form of dest
+		if packed is "xz" then
+			do shell script "rm -rf " & quoted form of appPath & " && tar -xJf " & quoted form of zipPath & " -C " & quoted form of dest
+		else
+			do shell script "rm -rf " & quoted form of appPath & " && ditto -x -k " & quoted form of zipPath & " " & quoted form of dest
+		end if
 		do shell script "xattr -dr com.apple.quarantine " & quoted form of appPath & " 2>/dev/null; true"
 		do shell script "rm -rf " & quoted form of work
 		set progress completed steps to 100
