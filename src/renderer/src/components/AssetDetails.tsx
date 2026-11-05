@@ -669,18 +669,24 @@ export function AssetDetails({ asset, handler, live, onThumb, onReport, inPack, 
       if (cancelled || !result.ok || !result.data.prefabs.length) return
       setPrefab({ status: 'known', result: result.data })
     })
-    // Shown in steps: what is known at once, then nearby files, then the whole branch if still needed.
-    const NEXT = { instant: 'quick', quick: 'full', full: undefined } as const
+    // Shown in steps: what is known at once, then nearby files and the whole branch side by side.
+    // The whole-branch answer reads every .meta in one download and often arrives first (about 10 s on a
+    // large repo, while nearby lookups take 20-30 s), so it no longer waits for the nearby one; once it is
+    // there, a later nearby answer is dropped.
+    let complete = false
     const load = (mode: 'instant' | 'quick' | 'full'): Promise<void> =>
       window.api.assets.resolve(live.repo, live.branch, repoPath, live.root, mode).then(
         (result) => {
-          if (cancelled) return
+          if (cancelled || complete) return
           try {
             const report = unwrap(result)
+            if (!report.partial) complete = true
             setDeps({ status: 'ready', report })
             onReport(repoPath, report)
-            const next = NEXT[mode]
-            if (report.partial && next) void load(next)
+            if (mode === 'instant' && report.partial) {
+              void load('quick')
+              void load('full')
+            }
           } catch (error) {
             // A failed later step keeps the earlier answer on screen.
             if (mode === 'instant') setDeps({ status: 'error', error })

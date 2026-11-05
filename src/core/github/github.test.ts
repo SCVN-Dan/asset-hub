@@ -488,3 +488,40 @@ describe('assertReadOnly', () => {
       expect(() => assertReadOnly(url, method, body)).toThrow(/read-only/)
   })
 })
+
+describe('reading many files', () => {
+  const prefabs = Array.from({ length: 5 }, (_, i) => ({ path: `p/Assets/FX${i}.prefab`, type: 'blob', sha: `pf${i}`, size: 10 * 1024 * 1024 }))
+  function make(log: string[]) {
+    const { fetch } = fakeFetch((url) => {
+      if (url.includes('/git/ref/heads/')) return { json: { object: { sha: 'c1' } } }
+      if (url.includes('/git/trees/')) return { json: { truncated: false, tree: prefabs } }
+      return { status: 404, json: {} }
+    })
+    const store = new Map<string, unknown>()
+    const cache: CommitCache = { get: async (k, r, c) => store.get(`${k}/${r}/${c}`) as never, set: async (k, r, c, v) => void store.set(`${k}/${r}/${c}`, v) }
+    return new GitHubAssetSource(new GitHubClient('t', fetch), {
+      shouldResolveLfs: () => false,
+      cache,
+      prefetchBlobs: async (_repo, oids) => void log.push(`prefetch ${oids.join(',')}`),
+      readBlobsBulk: async (_repo, oids) => {
+        log.push(`read ${oids.join(',')}`)
+        return new Map(oids.map((o) => [o, new TextEncoder().encode('%YAML 1.1\n')]))
+      }
+    })
+  }
+
+  it('reads a first chunk, downloads the rest in one go, then reads it in chunks', async () => {
+    const log: string[] = []
+    const src = make(log)
+    await src.knownAssets('o/r', 'main', 'effects')
+    // The first chunk is read straight away (results show early), then the rest comes in one download.
+    expect(log[0]).toBe('read pf0,pf1,pf2')
+    expect(log[1]).toBe('prefetch pf3,pf4')
+    expect(log.filter((l) => l.startsWith('prefetch'))).toHaveLength(1)
+    // 24 MB chunks of 10 MB files: still read in several steps, for progress.
+    expect(log.filter((l) => l.startsWith('read')).length).toBeGreaterThan(1)
+    log.length = 0
+    await src.knownAssets('o/r', 'main', 'effects')
+    expect(log).toEqual([])
+  })
+})

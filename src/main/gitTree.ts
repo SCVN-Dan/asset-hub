@@ -106,16 +106,36 @@ export async function readBlobsWithGit(cacheDir: string, repo: string, oids: rea
   return serially(repoDir(cacheDir, repo), () => readBlobsLocked(cacheDir, repo, oids, env))
 }
 
+/**
+ * Fetches the blobs not on disk yet in one request: each git fetch costs seconds
+ * whatever its size, so many blobs are best fetched together before reading them.
+ */
+export async function prefetchBlobsWithGit(cacheDir: string, repo: string, oids: readonly string[], token: string): Promise<void> {
+  const env = gitEnv(token)
+  await serially(repoDir(cacheDir, repo), async () => {
+    const dir = await ensureRepo(cacheDir, repo, env)
+    await fetchMissing(dir, oids, env)
+  })
+}
+
+/** Objects in the cache repo. */
+async function localObjects(dir: string, env: NodeJS.ProcessEnv): Promise<Set<string>> {
+  return new Set((await git(['cat-file', '--batch-all-objects', '--batch-check=%(objectname)'], env, dir)).toString().split('\n').filter(Boolean))
+}
+
+/** One fetch for every object of `oids` not on disk. */
+async function fetchMissing(dir: string, oids: readonly string[], env: NodeJS.ProcessEnv): Promise<void> {
+  const before = await localObjects(dir, env)
+  const missing = oids.filter((o) => !before.has(o))
+  if (missing.length) await git(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--filter=blob:none', 'origin', '--stdin'], env, dir, missing.join('\n') + '\n')
+}
+
 async function readBlobsLocked(cacheDir: string, repo: string, oids: readonly string[], env: NodeJS.ProcessEnv): Promise<Map<string, Buffer>> {
   const dir = await ensureRepo(cacheDir, repo, env)
   // In a partial clone, asking for a missing object makes git fetch it on its
   // own, one request each. Only ever ask for objects already on disk.
-  const local = async () =>
-    new Set((await git(['cat-file', '--batch-all-objects', '--batch-check=%(objectname)'], env, dir)).toString().split('\n').filter(Boolean))
-  const before = await local()
-  const missing = oids.filter((o) => !before.has(o))
-  if (missing.length) await git(['fetch', '--quiet', '--no-tags', '--no-write-fetch-head', '--filter=blob:none', 'origin', '--stdin'], env, dir, missing.join('\n') + '\n')
-  const have = await local()
+  await fetchMissing(dir, oids, env)
+  const have = await localObjects(dir, env)
   const wanted = oids.filter((o) => have.has(o))
   return wanted.length ? parseCatFileBatch(await git(['cat-file', '--batch'], env, dir, wanted.join('\n') + '\n')) : new Map()
 }

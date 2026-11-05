@@ -38,6 +38,12 @@ export interface GitHubSourceOptions {
   backgroundGitFallback?(repo: string, commitSha: string): Promise<TreeEntry[]>
   /** Fast path for many small blobs at once (e.g. one git fetch); falls back to GraphQL when absent or failing. */
   readBlobsBulk?(repo: string, oids: readonly string[]): Promise<Map<string, Uint8Array>>
+  /**
+   * Downloads these blobs ahead in one go (one git fetch), so reading them in chunks
+   * afterwards is local. Each fetch costs seconds whatever its size: 3,000 prefabs
+   * take about 11 s in one fetch and about 3 minutes in 35.
+   */
+  prefetchBlobs?(repo: string, oids: readonly string[]): Promise<void>
 }
 
 export interface IndexProgress {
@@ -456,7 +462,9 @@ export class GitHubAssetSource implements AssetSource {
     // What earlier scans found shows at once; the rest as each chunk is read.
     onProgress?.({ done, total, found: found(entries, facts) })
     const dec = new TextDecoder()
-    for (let i = 0; i < todo.length; ) {
+    for (let i = 0, chunks = 0; i < todo.length; chunks++) {
+      // The first chunk is read on its own, so results show within seconds; the rest is downloaded in one go.
+      if (chunks === 1) await this.prefetch(repo, todo.slice(i))
       const chunk: TreeEntry[] = []
       for (let bytes = 0; i < todo.length && (bytes === 0 || bytes < PREFAB_CHUNK); i++) {
         chunk.push(todo[i])
@@ -575,6 +583,8 @@ export class GitHubAssetSource implements AssetSource {
     let done = 0
     onProgress?.({ done, total })
     const dec = new TextDecoder()
+    // A nearby search stops early: it reads as it goes. The others read every candidate.
+    if (scope !== 'near') await this.prefetch(repo, candidates.map((r) => r.e))
     const chunkBytes = scope === 'near' ? NEAR_CHUNK : PREFAB_CHUNK
     // Best affinity among prefabs (cached or read) that already use the model.
     let bestFound = Math.max(-1, ...ranked.filter((r) => known[r.e.sha]?.[modelGuid]?.length).map((r) => r.score))
@@ -690,6 +700,12 @@ export class GitHubAssetSource implements AssetSource {
   }
 
   /** Text of many files by blob SHA: one bulk read when possible, else GraphQL. */
+  /** Downloads `entries` ahead when the source can (see `prefetchBlobs`); a failure only means reading them the slow way. */
+  private async prefetch(repo: string, entries: readonly TreeEntry[]): Promise<void> {
+    if (!this.options.prefetchBlobs || entries.length < 2) return
+    await this.options.prefetchBlobs(repo, [...new Set(entries.filter((e) => !e.lfs).map((e) => e.sha))]).catch(() => undefined)
+  }
+
   private async readManyTexts(repo: string, snap: Snapshot, entries: readonly TreeEntry[], dec: TextDecoder): Promise<Map<string, string>> {
     const out = new Map<string, string>()
     if (this.options.readBlobsBulk) {

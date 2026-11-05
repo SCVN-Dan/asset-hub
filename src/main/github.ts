@@ -12,7 +12,7 @@ import { zipFiles } from './zip'
 import { isUnityProject } from './targetProject'
 import { installGh, readInstalledGh } from './ghInstaller'
 import { listRunningUnity, openInProcess } from './unityEditors'
-import { hasGit, listTreeWithGit, readBlobsWithGit } from './gitTree'
+import { hasGit, listTreeWithGit, prefetchBlobsWithGit, readBlobsWithGit } from './gitTree'
 import { CacheJanitor, FileBlobCache, FileCommitCache, StatsStore, THUMB_SCHEME, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
 import { SharedIndexService } from './sharedIndex'
@@ -92,6 +92,10 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       readBlobsBulk: async (repo, oids) => {
         if (!(await hasGit())) throw new Error('git is not available')
         return readBlobsWithGit(options.cacheDir(), repo, oids, token.trim())
+      },
+      prefetchBlobs: async (repo, oids) => {
+        if (!(await hasGit())) return
+        await prefetchBlobsWithGit(options.cacheDir(), repo, oids, token.trim())
       }
     })
     session?.catalog.stop()
