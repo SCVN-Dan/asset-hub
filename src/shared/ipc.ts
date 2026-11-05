@@ -82,7 +82,12 @@ export const IPC = {
 /** Error codes that can cross IPC; the UI shows `errors.<code>`. */
 export type AppErrorCode = SourceErrorCode | 'ghNotFound' | 'ghNotLoggedIn' | 'emptyToken' | 'ghInstallFailed'
 
-export type InstallProgress = { stage: 'download'; received: number; total: number } | { stage: 'verify' } | { stage: 'extract' }
+export type InstallProgress =
+  | { stage: 'download'; received: number; total: number }
+  | { stage: 'verify' }
+  | { stage: 'extract' }
+  /** An update the app started by itself failed; the user can try again from the button. */
+  | { stage: 'failed'; message: string }
 
 /** The AI assistant's connection to ChatGPT (through Codex, installed by the app). */
 export interface AiStatus {

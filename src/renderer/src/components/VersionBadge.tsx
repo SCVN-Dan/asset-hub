@@ -4,7 +4,8 @@ import type { InstallProgress, UpdateInfo } from '@shared/ipc'
 
 /**
  * The app's version beside its name and, when the release repo has a later
- * one (asked once per launch), a button that installs it and restarts.
+ * one (asked once per launch), its progress: the app installs it by itself at
+ * launch and restarts. Should that fail, the button tries again.
  */
 export function VersionBadge() {
   const { t } = useTranslation()
@@ -16,7 +17,21 @@ export function VersionBadge() {
   useEffect(() => {
     void window.api.update.check().then(setInfo)
   }, [])
-  useEffect(() => window.api.update.onProgress(setProgress), [])
+  // Progress of an install, started by the app at launch or by the button.
+  useEffect(
+    () =>
+      window.api.update.onProgress((p) => {
+        if (p.stage === 'failed') {
+          setFailure(p.message)
+          setBusy(false)
+          setProgress(undefined)
+          return
+        }
+        setBusy(true)
+        setProgress(p)
+      }),
+    []
+  )
 
   const latest = info?.latest
   const install = async () => {

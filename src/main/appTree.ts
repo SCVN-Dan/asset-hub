@@ -1,9 +1,22 @@
 // The app's own copy of scripts/appTree.mjs (main is bundled; the build scripts run as plain Node).
 // appTree.test.ts checks both give the same answer.
 import { createHash } from 'crypto'
-import { createReadStream } from 'fs'
-import { lstat, readdir, readlink } from 'fs/promises'
+import * as nodeFs from 'fs'
 import { join } from 'path'
+
+/**
+ * Inside Electron, `fs` reads .asar archives as folders: the app's own app.asar would be
+ * listed file by file instead of as the one file it is. Electron's `original-fs` reads it
+ * as a file; plain Node (the tests, the build scripts) has no asar support and uses `fs`.
+ */
+const fs: typeof nodeFs = (() => {
+  try {
+    return process.versions.electron ? (require('original-fs') as typeof nodeFs) : nodeFs
+  } catch {
+    return nodeFs
+  }
+})()
+const { lstat, readdir, readlink } = fs.promises
 
 export type TreeEntry = { path: string; type: 'file'; size: number; mode: number; sha256: string } | { path: string; type: 'link'; target: string }
 
@@ -39,7 +52,7 @@ export async function appTree(root: string): Promise<TreeEntry[]> {
 export function fileSha256(file: string): Promise<string> {
   return new Promise((done, fail) => {
     const hash = createHash('sha256')
-    createReadStream(file)
+    fs.createReadStream(file)
       .on('data', (chunk) => hash.update(chunk))
       .on('end', () => done(hash.digest('hex')))
       .on('error', fail)

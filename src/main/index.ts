@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron'
 import { join, resolve } from 'path'
-import { IPC } from '@shared/ipc'
+import { IPC, type InstallProgress } from '@shared/ipc'
 import { DEFAULT_CACHE_LIMIT_GB, DEFAULT_EXCLUDED_FOLDERS } from '@shared/settings'
 import { registerGitHubIpc } from './github'
 import { checkForUpdate, installUpdate } from './updater'
@@ -157,16 +157,30 @@ app.whenReady().then(() => {
   // Codex keeps its ChatGPT sign-in and settings here, apart from any Codex the user runs themselves.
   registerAiIpc({ toolsDir: join(userData, 'tools'), codexHome: join(userData, 'codex') })
   ipcMain.handle(IPC.updateCheck, () => checkForUpdate().catch(() => null))
-  ipcMain.handle(IPC.updateInstall, async (event, version: unknown) => {
-    try {
-      await installUpdate(String(version), (progress) => {
-        if (!event.sender.isDestroyed()) event.sender.send(IPC.updateProgress, progress)
+  // One install at a time, whether the app started it at launch or the user pressed the button.
+  const sendProgress = (progress: InstallProgress) =>
+    BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.updateProgress, progress))
+  let installing: Promise<{ ok: true } | { ok: false; message: string }> | undefined
+  const install = (version: string) =>
+    (installing ??= installUpdate(version, sendProgress).then(
+      () => ({ ok: true as const }),
+      (err: unknown) => {
+        installing = undefined
+        return { ok: false as const, message: err instanceof Error ? err.message : String(err) }
+      }
+    ))
+  ipcMain.handle(IPC.updateInstall, (_event, version: unknown) => install(String(version)))
+  // Updates itself at launch: a newer release is downloaded, checked and swapped in, then the app opens again
+  // (about 1 MB on the same Electron). Copies run beside the installed app (ASSETHUB_USER_DATA) do not,
+  // unless ASSETHUB_AUTO_UPDATE is set (to test updating).
+  if (!process.env.ASSETHUB_USER_DATA || process.env.ASSETHUB_AUTO_UPDATE)
+    void checkForUpdate()
+      .then(async (info) => {
+        if (!info.latest || !info.canInstall) return
+        const result = await install(info.latest)
+        if (!result.ok) sendProgress({ stage: 'failed', message: result.message })
       })
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, message: err instanceof Error ? err.message : String(err) }
-    }
-  })
+      .catch(() => undefined)
   ipcMain.handle(IPC.openExternal, async (_event, url: unknown) => {
     if (typeof url === 'string' && url.startsWith('https://')) await shell.openExternal(url)
   })
