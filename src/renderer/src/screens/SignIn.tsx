@@ -304,8 +304,11 @@ export function SignIn({ language, onLanguage, onToken, onGh, onEnter, autoEnter
             {t('signin.tokenLink')}
           </button>
         )}
-        <span className="lobby-version">
-          <VersionBadge />
+        <span className="lobby-sign">
+          <span className="lobby-credit">made by Dan</span>
+          <span className="lobby-version">
+            <VersionBadge />
+          </span>
         </span>
       </footer>
 

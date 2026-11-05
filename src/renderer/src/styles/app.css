@@ -610,7 +610,11 @@ body.resizing * { cursor: inherit !important; }
 .lobby-sound { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; background: rgba(14, 19, 27, 0.75); border: 1px solid var(--border); color: var(--text-2); cursor: pointer; }
 .lobby-sound:hover { color: #fff; }
 .lobby-sound[aria-pressed='false'] { color: var(--muted); }
-.lobby-version { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+/* Bottom right: who made it, over the version (and its update pill); faint, for whoever looks closely. */
+.lobby-sign { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.lobby-credit { font-family: var(--mono); font-size: 9px; letter-spacing: 0.06em; color: var(--muted); opacity: 0.32; transition: opacity 0.3s; }
+.lobby-credit:hover { opacity: 0.8; }
+.lobby-version { display: flex; align-items: center; gap: 12px; }
 .lobby-langs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(14, 19, 27, 0.75); border: 1px solid var(--border); }
 .lobby-lang { height: 30px; min-width: 44px; padding: 0 12px; border-radius: 999px; border: 0; background: transparent; color: var(--text-2); font: 600 12px var(--display); letter-spacing: 0.06em; cursor: pointer; }
 .lobby-lang:hover { color: #fff; }
