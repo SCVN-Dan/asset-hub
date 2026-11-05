@@ -2,6 +2,18 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.0] — 2026-11-05
+
+The first full release: browse every repo and branch, preview models, prefabs and effects, check their dependencies, take them to Unity or Blender, or ask the assistant.
+
+### Changed
+- **Smaller downloads:** the installer downloads about 54 MB instead of 83 MB. From this version on, an update usually downloads only the app's own files (about 1 MB) instead of the whole app; it is checked file by file against the release before it replaces anything, and falls back to the full download otherwise.
+- The app is 16 MB smaller on disk: Chromium's software fallback for 3D (SwiftShader) is left out, as every Apple silicon Mac draws 3D on its GPU.
+- The lobby shows who made the app, faintly, above the version.
+
+### Fixed
+- Files in a **Get .zip** download carry the time they were made instead of a date in 1979.
+
 ## [0.2.1] — 2026-11-04
 
 ### Added
