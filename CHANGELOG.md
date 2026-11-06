@@ -2,6 +2,11 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.5] — 2026-11-06
+
+### Fixed
+- **Prefabs and effects open sooner the first time on a branch:** a prefab no longer waits for a texture that is not in the branch (about 50 s down to under 20 s on a large repository). With the shared index, what one teammate's app has worked out about a branch they opened is shared too, so the same prefab opens in about 15 s on a Mac that never opened it, instead of about 45 s.
+
 ## [1.0.4] — 2026-11-06
 
 ### Added
