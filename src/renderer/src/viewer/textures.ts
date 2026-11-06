@@ -1,5 +1,5 @@
 import { imageSize } from '@core/checks/playable'
-import { baseName, decodePsd, guessTextureRole, isPsd, parseTextureMeta, type DependencyReport, type MaterialRef, type TextureImport } from '@core/index'
+import { baseName, decodePsd, decodeTiff, guessTextureRole, isPsd, isTiff, parseTextureMeta, type DependencyReport, type MaterialRef, type TextureImport } from '@core/index'
 import { unwrap } from '../remoteSource'
 import type { LiveContext } from '../components/ModelViewer'
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader.js'
@@ -10,8 +10,9 @@ import { DRAWABLE } from './formats'
 export { DRAWABLE }
 const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }
 
+/** PSD and TIFF (which browsers cannot read) decoded by us, as PNG for the browser. */
 async function psdToPng(bytes: Uint8Array): Promise<Blob | undefined> {
-  const img = decodePsd(bytes)
+  const img = isTiff(bytes) ? await decodeTiff(bytes) : decodePsd(bytes)
   if (!img) return undefined
   const canvas = document.createElement('canvas')
   canvas.width = img.width
@@ -51,7 +52,7 @@ export async function fetchTextureFile(live: LiveContext, path: string, backgrou
   try {
     const [bytes, source] = await Promise.all([window.api.assets.readFile(live.repo, live.branch, path, background).then(unwrap), alphaSourceOf(live, path, background).catch(() => undefined)])
     // Judged by content: .psd files, and PSD files saved with a .png name, become PNG for the browser.
-    let blob = isPsd(bytes) ? await psdToPng(bytes) : new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[path.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream' })
+    let blob = isPsd(bytes) || isTiff(bytes) ? await psdToPng(bytes) : new Blob([bytes as Uint8Array<ArrayBuffer>], { type: MIME[path.split('.').pop()!.toLowerCase()] ?? 'application/octet-stream' })
     if (blob && (source === 'gray' || source === 'none')) {
       const bitmap = await applyAlphaSource(await createImageBitmap(blob), source)
       const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
@@ -113,6 +114,7 @@ export interface DecodedImage {
 /** Format by content (a PSD saved as .png is still a PSD), else by extension. */
 function formatOf(path: string, bytes: Uint8Array): string {
   if (isPsd(bytes)) return 'PSD'
+  if (isTiff(bytes)) return 'TIFF'
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return 'PNG'
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'JPEG'
   return (path.split('.').pop() ?? '').toUpperCase()
@@ -130,13 +132,17 @@ function sampleAlpha(bitmap: ImageBitmap): boolean {
   return false
 }
 
-/** Decodes PNG / JPEG / GIF / BMP / WebP through the browser, PSD and TGA through our own decoders. */
+/** Decodes PNG / JPEG / GIF / BMP / WebP through the browser, PSD, TIFF and TGA through our own decoders. */
 export async function decodeImage(path: string, bytes: Uint8Array, alphaSource?: AlphaSource): Promise<DecodedImage> {
   const format = formatOf(path, bytes)
   let bitmap: ImageBitmap
   if (format === 'PSD') {
     const img = decodePsd(bytes)
     if (!img) throw new Error('Unsupported PSD')
+    bitmap = await createImageBitmap(new ImageData(img.data as Uint8ClampedArray<ArrayBuffer>, img.width, img.height))
+  } else if (format === 'TIFF') {
+    const img = await decodeTiff(bytes)
+    if (!img) throw new Error('Unsupported TIFF (CMYK, floating point or JPEG inside)')
     bitmap = await createImageBitmap(new ImageData(img.data as Uint8ClampedArray<ArrayBuffer>, img.width, img.height))
   } else if (format === 'TGA') {
     // parse() returns raw pixel data (typed as a texture in three's typings).
