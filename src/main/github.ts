@@ -239,8 +239,10 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
     })
   )
 
-  ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string, mode: unknown) =>
-    wrapForeground(() =>
+  // Grid thumbnails resolve in the background: counted as foreground, four of them running at once
+  // kept every background read (their own models and textures) waiting, and no card was ever drawn.
+  ipcMain.handle(IPC.resolveAsset, (event, repo: string, branch: string, path: string, root: string, mode: unknown, background: unknown) =>
+    (background === true ? wrap : wrapForeground)(() =>
       requireSession().resolve(
         String(repo),
         String(branch),

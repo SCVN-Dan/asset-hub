@@ -14,7 +14,7 @@ import { fetchMaterialTextures, materialSlots, materialStats } from './materialP
 export async function renderMaterialThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats: StatsSummary }> {
   const [bytes, report] = await Promise.all([
     window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
-    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick').then(unwrap)
+    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true).then(unwrap)
   ])
   const material = report.materials[0]
   const textures = await fetchMaterialTextures(live, material, true)

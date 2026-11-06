@@ -315,7 +315,8 @@ export interface AssetHubApi {
      * `instant` answers with what is known already, `quick` also searches nearby
      * files (both may be `partial`); `full` waits for the branch's GUID index.
      */
-    resolve(repo: string, branch: string, path: string, root: string, mode?: 'instant' | 'quick' | 'full'): Promise<IpcResult<DependencyReport>>
+    /** `background` (grid thumbnails): not counted as what the user waits on, so other background reads are not held up by it. */
+    resolve(repo: string, branch: string, path: string, root: string, mode?: 'instant' | 'quick' | 'full', background?: boolean): Promise<IpcResult<DependencyReport>>
     /** `background` reads (grid thumbnails) wait while the user is loading something. */
     readFile(repo: string, branch: string, path: string, background?: boolean): Promise<IpcResult<Uint8Array>>
     findByNames(repo: string, branch: string, names: string[], nearPath: string, root: string): Promise<IpcResult<Record<string, string | null>>>

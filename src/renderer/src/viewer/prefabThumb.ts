@@ -26,13 +26,17 @@ function labelCard(label: string): string {
 }
 
 /**
- * Grid thumbnail of a prefab: its models put together with their materials,
- * using GUIDs known nearby (`quick`). Measured like a model; effects are
- * filmed through their run (`motion`, played on hover) with the busiest
- * frame as the card, and measured by particles.
+ * Grid thumbnail of a prefab: its models put together with their materials.
+ * Measured like a model; effects are filmed through their run (`motion`,
+ * played on hover) with the busiest frame as the card, and measured by particles.
+ *
+ * Dependencies come from the branch's GUID index (`full`): it is built once for the branch (one
+ * download of every .meta, about 10 s on a large repo, started when the branch opens) and then
+ * answers every card at once. Nearby lookups (`quick`) took 20-30 s per prefab on a cold cache,
+ * four at a time, and no card showed for over 45 s.
  */
 export async function renderPrefabThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats?: StatsSummary; motion?: string }> {
-  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick'))
+  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true))
   const build = await buildPrefab(live, path, report, true)
   try {
     const fx = report.particles?.length ? report : undefined

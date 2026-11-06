@@ -270,6 +270,8 @@ const DEG = Math.PI / 180
 const GRAVITY = 9.81
 const toLinear = (v: number) => Math.pow(v, 2.2)
 
+/** Longest an emitter is played ahead for prewarm (seconds): enough for any particle lifetime worth showing. */
+const PREWARM_MAX = 12
 /** One frame of the timeline and of runs done without drawing: a 30th of a second. */
 export const FRAME = 1 / 30
 
@@ -674,7 +676,11 @@ export class EmitterPlayer {
     this.delay = evalMinMax(this.sim.startDelay, 0, rnd())
     if (this.sim.prewarm && this.looping && !this.isSub) {
       this.delay = 0
-      for (let t = 0; t < this.sim.duration; t += 1 / 30) this.step(1 / 30)
+      // Unity plays one whole cycle ahead; what is on screen afterwards are the particles of its last
+      // lifetime, so that much (and a little more) looks the same. Some effects loop over 100000 s:
+      // a whole cycle was 3 million steps, five seconds and more each time the effect started over.
+      const warm = Math.min(this.sim.duration, Math.max(1, this.emitter.lifetime * 1.5), PREWARM_MAX)
+      for (let t = 0; t < warm; t += 1 / 30) this.step(1 / 30)
     }
     this.upload()
   }

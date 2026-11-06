@@ -42,7 +42,7 @@ const api: AssetHubApi = {
     watchCheck: (repo, branch, seen) => ipcRenderer.invoke(IPC.watchCheck, repo, branch, seen)
   },
   assets: {
-    resolve: (repo, branch, path, root, mode) => ipcRenderer.invoke(IPC.resolveAsset, repo, branch, path, root, mode),
+    resolve: (repo, branch, path, root, mode, background) => ipcRenderer.invoke(IPC.resolveAsset, repo, branch, path, root, mode, background),
     readFile: (repo, branch, path, background) => ipcRenderer.invoke(IPC.readFile, repo, branch, path, background),
     saveFile: (repo, branch, path) => ipcRenderer.invoke(IPC.saveFile, repo, branch, path),
     modelBundle: (repo, branch, path, materials, mode, glb) => ipcRenderer.invoke(IPC.modelBundle, repo, branch, path, materials, mode, glb),

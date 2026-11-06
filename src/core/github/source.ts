@@ -353,12 +353,15 @@ export class GitHubAssetSource implements AssetSource {
   private async withExtra(repo: string, snap: Snapshot, ctx: DepContext, nearPath: string, mode: 'instant' | 'quick' | 'full'): Promise<DepContext> {
     if (!snap.extra) {
       const bySha = (await this.sharedCache(SHA_KIND, repo)) as Record<string, string>
-      snap.extra = new LazyGuids(
-        snap.entries.filter((e) => e.type === 'blob' && EXTRA_META.test(e.path) && !INDEXED.test(e.path)),
-        bySha,
-        // One bulk git read when possible: a full search may read every model's .meta.
-        (entries) => this.readManyTexts(repo, snap, entries, new TextDecoder())
-      )
+      const all = snap.entries.filter((e) => e.type === 'blob' && EXTRA_META.test(e.path) && !INDEXED.test(e.path))
+      let warmed: Promise<void> | undefined
+      snap.extra = new LazyGuids(all, bySha, async (entries) => {
+        // A search through many of them (a GUID not found nearby) goes through every model's .meta,
+        // 160 at a time: each its own git fetch of about 3.5 s, and several searches at once read the
+        // same ones. Downloaded once, together, the first time; every read after that is local.
+        if (entries.length >= 100) await (warmed ??= this.prefetch(repo, all.filter((e) => !(e.sha in bySha))))
+        return this.readManyTexts(repo, snap, entries, new TextDecoder())
+      })
     }
     const extra = snap.extra
     const asked = new Set<string>()

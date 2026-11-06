@@ -32,7 +32,7 @@ export async function renderThumbnail(live: LiveContext, path: string): Promise<
   const [bytes, report] = await Promise.all([
     window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
     // Without its materials the model is still drawn and measured, as before.
-    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'quick').then(unwrap, () => undefined)
+    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true).then(unwrap, () => undefined)
   ])
   const names = extractFbxTextureNames(bytes)
   const found = names.length ? unwrap(await window.api.assets.findByNames(live.repo, live.branch, names, path, live.root)) : {}

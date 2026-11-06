@@ -55,7 +55,7 @@ export async function renderAnimThumbnail(live: LiveContext, path: string): Prom
   const [bytes, report] = await Promise.all([
     window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
     // Rig candidates need no GUID lookups.
-    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'instant').then(unwrap)
+    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'instant', true).then(unwrap)
   ])
   const info = parseAnimClip(new TextDecoder().decode(bytes))
   const stats: StatsSummary = { triangles: 0, vertices: 0, bones: 0, clips: 1, materials: 0, fileBytes: bytes.byteLength, textureBytes: 0, maxTextureSize: 0, clipLength: info.length, source: 'viewer', animThumb: ANIM_THUMB_VERSION }
