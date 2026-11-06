@@ -7,11 +7,103 @@ import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment
 // its hinge, pours light out, and flies the camera down into the light — the
 // white-out (CSS, see app.css "lobby") hands over to the hub.
 
+/**
+ * How far the lid swings open (radians, about 93°). Its overshoot goes about 7% further (1.73), and the
+ * sword behind the chest is first touched at 1.83: wider (it was 1.95) and the lid passed through the blade.
+ */
+const LID_OPEN = 1.62
+
 /** Seconds into the opening when each part starts; the hub takes over at `end`. */
 const T = { shake: 0, lid: 0.6, light: 0.75, beams: 1.0, sparks: 1.1, camera: 1.45, end: 2.9 }
 
 /** Asset type colours (app.css --type-*): one gem each. */
 const GEM_COLORS = ['#ffae1f', '#ee5a86', '#4a98f7', '#9479f5', '#25bfa3', '#f5d547', '#6fd38a', '#ff7429']
+
+/**
+ * The gems' colours, one set picked at random each time the lobby opens. Only the gems change: the
+ * background, the floor and every light keep their original colours ("classic" is the original set).
+ */
+export interface LobbyTheme {
+  name: string
+  /** Gems drifting round the chest (eight; the sparks thrown out when it opens take these too), and the ones on the gold (five). */
+  gems: readonly string[]
+  inside: readonly string[]
+}
+
+export const LOBBY_THEMES: readonly LobbyTheme[] = [
+  { name: 'classic', gems: GEM_COLORS, inside: ['#e8352b', '#4a98f7', '#25bfa3', '#9479f5', '#ee5a86'] },
+  { name: 'dusk', gems: ['#ffae1f', '#ee5a86', '#b07cff', '#ff7aa8', '#f5d547', '#8f6bf0', '#ffc46b', '#e85ab8'], inside: ['#ee5a86', '#b07cff', '#f5d547', '#8f6bf0', '#ff7aa8'] },
+  { name: 'lagoon', gems: ['#25bfa3', '#4ad8e8', '#ffae1f', '#4a98f7', '#6fd38a', '#f5d547', '#38b6ff', '#ff8a5c'], inside: ['#25bfa3', '#4a98f7', '#4ad8e8', '#6fd38a', '#ff8a5c'] },
+  { name: 'ember', gems: ['#ff7429', '#e8352b', '#ffae1f', '#f5d547', '#ff5a5a', '#ffc46b', '#ee5a86', '#ff9f45'], inside: ['#e8352b', '#ff7429', '#f5d547', '#ee5a86', '#ffc46b'] },
+  { name: 'grove', gems: ['#6fd38a', '#25bfa3', '#ffae1f', '#a5e05a', '#f5d547', '#3fbf7f', '#ffc46b', '#4ad8a8'], inside: ['#6fd38a', '#25bfa3', '#f5d547', '#a5e05a', '#e8352b'] }
+]
+
+/**
+ * Where the camera looks from, as turns round the chest from the original view: degrees to the left (-)
+ * or right (+), and up (+) or down (-). Same target and distance, so the chest is framed the same; the
+ * sword stands behind the chest's right side, so views stay in front of it, never behind. Each was
+ * checked against the original in a screenshot; turning further left (-26°) hid the sword behind the lid.
+ */
+export const LOBBY_VIEWS: ReadonlyArray<readonly [number, number]> = [
+  [0, 0],
+  [-14, 2],
+  [12, 4],
+  [-6, 8]
+]
+
+const VIEW_KEY = 'assethub.lobby.view'
+const THEME_KEY = 'assethub.lobby.theme'
+const LAST_KEY = 'assethub.lobby.last'
+
+/**
+ * A different look from last time, at random. `assethub.lobby.theme` in localStorage pins one
+ * (by name), for trying a look out.
+ */
+function pickTheme(): LobbyTheme {
+  const read = (key: string) => {
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }
+  const pinned = LOBBY_THEMES.find((t) => t.name === read(THEME_KEY))
+  if (pinned) return pinned
+  const choices = LOBBY_THEMES.filter((t) => t.name !== read(LAST_KEY))
+  const theme = choices[Math.floor(Math.random() * choices.length)] ?? LOBBY_THEMES[0]
+  try {
+    localStorage.setItem(LAST_KEY, theme.name)
+  } catch {
+    // A look is still picked; it may repeat next time.
+  }
+  return theme
+}
+
+/** A view at random (`assethub.lobby.view` in localStorage pins one, by index). */
+function pickView(): readonly [number, number] {
+  try {
+    const pinned = localStorage.getItem(VIEW_KEY)
+    if (pinned !== null && LOBBY_VIEWS[Number(pinned)]) return LOBBY_VIEWS[Number(pinned)]
+  } catch {
+    // Random below.
+  }
+  return LOBBY_VIEWS[Math.floor(Math.random() * LOBBY_VIEWS.length)]
+}
+
+/** The original camera position turned round `target` by a view (see `LOBBY_VIEWS`). */
+function viewFrom(original: THREE.Vector3, target: THREE.Vector3, [yaw, pitch]: readonly [number, number]): THREE.Vector3 {
+  const offset = original.clone().sub(target)
+  const spherical = new THREE.Spherical().setFromVector3(offset)
+  spherical.theta += THREE.MathUtils.degToRad(yaw)
+  spherical.phi = THREE.MathUtils.clamp(spherical.phi - THREE.MathUtils.degToRad(pitch), 0.35, Math.PI / 2 - 0.08)
+  return new THREE.Vector3().setFromSpherical(spherical).add(target)
+}
+
+/** A small seeded random generator, so one launch's scatter is consistent wherever it is used. */
+function seeded(seed: number): () => number {
+  let s = Math.max(1, Math.floor(seed)) % 2147483647
+  return () => (s = (s * 16807) % 2147483647) / 2147483647
+}
 
 const ease = {
   inOut: (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2),
@@ -120,6 +212,8 @@ export class LobbyScene {
   private readonly env: THREE.Texture
   private readonly pedestalGlow: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>
   private readonly gems: Array<{ mesh: THREE.Mesh; base: THREE.Vector3; phase: number }> = []
+  /** The band's two ends hanging from its knot: they sway a little with the chest (more while it shakes). */
+  private readonly knotEnds: Array<{ pivot: THREE.Object3D; base: number; phase: number }> = []
   private readonly sparks: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>
   private readonly sparkVel: Float32Array
   /** Blings (four-pointed sparkles) on the gold inside, showing through the lifted lid while START is hovered. */
@@ -136,15 +230,19 @@ export class LobbyScene {
   private readonly still: boolean
   /** Idle framing: the chest sits in the upper part, over the title and the button. */
   /** A three-quarter view from a little above: the lid's dome and a side show, not just the front. */
-  private readonly idlePos = new THREE.Vector3(3.4, 4.6, 10.6)
   /** The chest's middle, sword and pedestal included, and how tall that is. */
   private readonly idleTarget = new THREE.Vector3(0, 1.45, 0)
+  /** The original view (3.4, 4.6, 10.6), turned by this opening's pick of `LOBBY_VIEWS`. */
+  private readonly idlePos = viewFrom(new THREE.Vector3(3.4, 4.6, 10.6), this.idleTarget, pickView())
   private readonly chestHeight = 3.9
   /** Where on the canvas the chest goes (the page's room for it): centre and height in px. */
   private slot?: { centerY: number; height: number }
   /** One gentle arc from wherever the camera is when the chest opens down to just over the light (see `open`). */
   private path?: THREE.QuadraticBezierCurve3
   private readonly pathEnd = new THREE.Vector3(0, 2.2, 0.15)
+  /** This opening's gem colours and the seed of its scatter (see `LobbyTheme`). */
+  private readonly theme = pickTheme()
+  private readonly scatter = seeded(1 + Math.random() * 2147483000)
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.still = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -225,7 +323,7 @@ export class LobbyScene {
     const tint = new THREE.Color()
     for (let i = 0; i < count; i++) {
       positions.set([0, -50, 0], i * 3)
-      tint.set(i % 3 === 0 ? '#fff3c4' : GEM_COLORS[i % GEM_COLORS.length])
+      tint.set(i % 3 === 0 ? '#fff3c4' : this.theme.gems[i % this.theme.gems.length])
       colors.set([tint.r, tint.g, tint.b], i * 3)
       const a = Math.random() * Math.PI * 2
       const spread = 0.6 + Math.random() * 1.6
@@ -361,30 +459,8 @@ export class LobbyScene {
         rivet.position.set(x, y, D / 2 + 0.07)
       }
     }
-    // The red scarf ringing the rim, a light stripe along it, its knot trailing on the right.
-    for (const z of [D / 2, -D / 2]) {
-      const bar = this.part(round(W + 0.16, 0.26, 0.17, 0.06), '#e8352b', this.chest, ramp)
-      bar.position.set(0, H, z)
-    }
-    for (const x of [W / 2, -W / 2]) {
-      const bar = this.part(round(0.17, 0.26, D + 0.16, 0.06), '#e8352b', this.chest, ramp)
-      bar.position.set(x, H, 0)
-    }
-    const stripeMat = new THREE.MeshToonMaterial({ color: '#ff7a63', gradientMap: ramp })
-    const stripeFront = new THREE.Mesh(new THREE.BoxGeometry(W + 0.17, 0.05, 0.02), stripeMat)
-    stripeFront.position.set(0, H + 0.06, D / 2 + 0.087)
-    this.chest.add(stripeFront)
-    for (const x of [W / 2 + 0.087, -W / 2 - 0.087]) {
-      const stripeSide = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.05, D + 0.17), stripeMat)
-      stripeSide.position.set(x, H + 0.06, 0)
-      this.chest.add(stripeSide)
-    }
-    const knot = this.part(new THREE.SphereGeometry(0.13, 16, 12), '#e8352b', this.chest, ramp)
-    knot.position.set(W / 2 + 0.12, H, 0.45)
-    const tail = this.part(new THREE.ConeGeometry(0.2, 0.62, 4), '#c92a22', this.chest, ramp)
-    tail.position.set(W / 2 + 0.2, H - 0.36, 0.5)
-    tail.rotation.set(0, Math.PI / 4, Math.PI + 0.25)
-    tail.scale.set(1, 1, 0.45)
+    // A red cloth band round the rim, knotted on the right.
+    this.buildBand(ramp, W, H, D)
     // The lock: a rounded gold plate with a keyhole.
     const lock = this.part(round(0.48, 0.58, 0.16, 0.07), '#f5a12e', this.chest, ramp)
     lock.position.set(0, H - 0.12, D / 2 + 0.1)
@@ -425,7 +501,7 @@ export class LobbyScene {
     this.lid.add(shine)
 
     // The ice sword standing behind the chest's right side, tilted right as in the logo, its blade above the lid —
-    // far enough back that the lid swings open clear of it.
+    // far enough back that the lid swings open clear of it (see LID_OPEN).
     const sword = new THREE.Group()
     // The blade in one piece, straight edges to a point, bevelled so its facets catch the light.
     const outlineShape = new THREE.Shape()
@@ -461,6 +537,74 @@ export class LobbyScene {
     this.chest.add(sword)
   }
 
+  /**
+   * The cloth band round the chest's rim: one flat strip hugging the walls with rounded corners (it
+   * also covers the seam under the lid), knotted on the right side: a bunched knot of the same cloth
+   * with a piece of the band wrapped across it, and two soft ends hanging from it (on pivots, so the
+   * loop can sway them: `knotEnds`).
+   */
+  private buildBand(ramp: THREE.Texture, W: number, H: number, D: number): void {
+    const cloth = new THREE.MeshToonMaterial({ color: '#e8352b', gradientMap: ramp, side: THREE.DoubleSide })
+    const shade = new THREE.MeshToonMaterial({ color: '#c92a22', gradientMap: ramp, side: THREE.DoubleSide })
+    const BAND = 0.24
+    const OUT = 0.05
+    /** A rounded rectangle centred on the chest, `half` its half sizes, as a 2D path (x, z). */
+    const rounded = (hw: number, hd: number, rc: number) => {
+      const p = new THREE.Shape()
+      p.moveTo(-hw + rc, -hd)
+      p.lineTo(hw - rc, -hd)
+      p.quadraticCurveTo(hw, -hd, hw, -hd + rc)
+      p.lineTo(hw, hd - rc)
+      p.quadraticCurveTo(hw, hd, hw - rc, hd)
+      p.lineTo(-hw + rc, hd)
+      p.quadraticCurveTo(-hw, hd, -hw, hd - rc)
+      p.lineTo(-hw, -hd + rc)
+      p.quadraticCurveTo(-hw, -hd, -hw + rc, -hd)
+      return p
+    }
+    // The band: the ring between the walls and just outside them, extruded up to the band's height.
+    const ring = rounded(W / 2 + OUT, D / 2 + OUT, 0.12)
+    ring.holes.push(rounded(W / 2 - 0.02, D / 2 - 0.02, 0.06) as unknown as THREE.Path)
+    const bandGeo = new THREE.ExtrudeGeometry(ring, { depth: BAND, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 2, curveSegments: 10 })
+    bandGeo.rotateX(Math.PI / 2)
+    bandGeo.translate(0, H + BAND / 2, 0)
+    this.chest.add(new THREE.Mesh(bandGeo, cloth))
+
+    // The knot, on the band on the right side, facing out.
+    const knot = new THREE.Group()
+    knot.position.set(W / 2 + OUT + 0.06, H, 0.4)
+    knot.rotation.y = Math.PI / 2
+    this.chest.add(knot)
+    // The two ends behind the knot: soft strips that hang, curl out a little and end on a slant.
+    for (const [side, length] of [[-1, 0.5], [1, 0.4]] as const) {
+      const geo = new THREE.PlaneGeometry(0.17, length, 1, 14)
+      geo.translate(0, -length / 2, 0)
+      const pos = geo.attributes.position as THREE.BufferAttribute
+      for (let k = 0; k < pos.count; k++) {
+        const y = pos.getY(k)
+        const t = -y / length
+        // Bellying out from the chest as it falls, a slight twist, and the tip cut at a slant.
+        pos.setZ(k, 0.1 * Math.sin(t * Math.PI * 0.9) + pos.getX(k) * 0.25 * t)
+        if (t > 0.98) pos.setY(k, y + side * pos.getX(k) * 0.35)
+      }
+      geo.computeVertexNormals()
+      const pivot = new THREE.Group()
+      pivot.position.set(side * 0.05, -0.06, -0.02)
+      pivot.rotation.z = side * 0.2
+      knot.add(pivot)
+      pivot.add(new THREE.Mesh(geo, side < 0 ? cloth : shade))
+      this.knotEnds.push({ pivot, base: side * 0.2, phase: side < 0 ? 0 : 1.3 })
+    }
+    // The knot itself: cloth bunched into a soft lump, the band wrapped tight across its middle.
+    const lump = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 14), cloth)
+    lump.scale.set(1.25, 0.95, 0.7)
+    knot.add(lump)
+    const wrap = new THREE.Mesh(new RoundedBoxGeometry(0.11, 0.3, 0.24, 3, 0.04), shade)
+    wrap.rotation.z = 0.35
+    wrap.position.z = 0.01
+    knot.add(wrap)
+  }
+
   /** The treasure inside: a mound of gold, coins strewn over it at odd tilts, a few gems — below the rim, so the chest has depth. */
   private buildGold(ramp: THREE.Texture, innerW: number, innerD: number, H: number): void {
     const a = innerW / 2 - 0.02
@@ -485,8 +629,8 @@ export class LobbyScene {
     const m = new THREE.Matrix4()
     const q = new THREE.Quaternion()
     const e = new THREE.Euler()
-    let seed = 7
-    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647)
+    // Strewn differently each time.
+    const rand = this.scatter
     for (let i = 0; i < COINS; i++) {
       // Denser towards the middle, where the heap is.
       const r = Math.sqrt(rand()) * 0.95
@@ -519,7 +663,9 @@ export class LobbyScene {
     }
     this.scene.add(spilled)
     const gemGeo = new THREE.OctahedronGeometry(0.12, 0)
-    for (const [color, x, z] of [['#e8352b', -0.45, 0.1], ['#4a98f7', 0.35, -0.15], ['#25bfa3', 0.05, 0.25], ['#9479f5', -0.15, -0.3], ['#ee5a86', 0.62, 0.2]] as const) {
+    const spots = [[-0.45, 0.1], [0.35, -0.15], [0.05, 0.25], [-0.15, -0.3], [0.62, 0.2]] as const
+    for (const [i, [x, z]] of spots.entries()) {
+      const color = this.theme.inside[i % this.theme.inside.length]
       const gem = new THREE.Mesh(gemGeo, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.5, roughness: 0.2, flatShading: true }))
       gem.position.set(x, surface(x, z) + 0.06, z)
       gem.rotation.set(0.4, x * 3, 0.2)
@@ -548,20 +694,22 @@ export class LobbyScene {
 
   private buildGems(): void {
     const geo = new THREE.OctahedronGeometry(1, 0)
-    GEM_COLORS.forEach((color, i) => {
-      // Offset so none drifts across the sword.
-      const a = (i / GEM_COLORS.length) * Math.PI * 2 + 0.95
-      const radius = 3.2 + (i % 3) * 0.9
+    // The colours in a different order each time, and each gem a little nearer or further, higher or lower.
+    const colors = [...this.theme.gems].sort(() => this.scatter() - 0.5)
+    colors.forEach((color, i) => {
+      // Offset so none drifts across the sword (the angles stay; only radius and height vary).
+      const a = (i / colors.length) * Math.PI * 2 + 0.95
+      const radius = 3.2 + (i % 3) * 0.9 + (this.scatter() - 0.5) * 0.4
       // Ones that come round to the front keep to the sides, never across the chest.
       const x = Math.cos(a) * radius
       const z = Math.sin(a) * radius * 0.6 - 1.6
-      const base = new THREE.Vector3(z > -0.4 ? Math.sign(x || 1) * Math.max(Math.abs(x), 2.7) : x, 1 + ((i * 37) % 5) * 0.55, z)
+      const base = new THREE.Vector3(z > -0.4 ? Math.sign(x || 1) * Math.max(Math.abs(x), 2.7) : x, 1 + Math.floor(this.scatter() * 5) * 0.55, z)
       // Cut facets in full colour, lit from within a little so they read as gems, not plastic.
       const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0.45, roughness: 0.18, metalness: 0.05, flatShading: true }))
       mesh.scale.set(0.15 + (i % 4) * 0.04, (0.15 + (i % 4) * 0.04) * 1.35, 0.15 + (i % 4) * 0.04)
       mesh.position.copy(base)
       this.scene.add(mesh)
-      this.gems.push({ mesh, base, phase: i * 1.7 })
+      this.gems.push({ mesh, base, phase: i * 1.7 + this.scatter() * 0.6 })
     })
   }
 
@@ -579,6 +727,9 @@ export class LobbyScene {
     }
     this.pedestalGlow.material.opacity = 0.55 + Math.sin(idle * 2) * 0.2
     this.chest.position.y = Math.sin(idle * 1.6) * 0.05
+    // The band's ends swing gently, out of step, harder while the chest rattles (hover) or opens.
+    const swing = 0.07 + this.hover * 0.12 + (t >= 0 && t < T.lid + 0.4 ? 0.18 : 0)
+    for (const end of this.knotEnds) end.pivot.rotation.z = end.base + Math.sin(idle * 2.1 + end.phase) * swing
 
     // Hovering START: a little rattle and hop, the lid lifting off its rim with light and blings inside.
     this.hover += ((t < 0 && !this.still ? this.hoverTarget : 0) - this.hover) * 0.12
@@ -617,7 +768,7 @@ export class LobbyScene {
       const s = phase(t, T.shake, T.lid)
       this.chest.rotation.z = s < 1 ? Math.sin(t * 46) * 0.035 * (1 - s * 0.4) : 0
       this.chest.position.x = s < 1 ? Math.sin(t * 61) * 0.025 : 0
-      this.lid.rotation.x = -1.95 * ease.outBack(phase(t, T.lid, 0.7))
+      this.lid.rotation.x = -LID_OPEN * ease.outBack(phase(t, T.lid, 0.7))
       const light = ease.out(phase(t, T.light, 0.8))
       this.inner.material.opacity = light
       this.chestLight.intensity = light * 7
