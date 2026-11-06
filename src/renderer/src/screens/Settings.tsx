@@ -9,6 +9,7 @@ import { Dropdown } from '../components/Dropdown'
 import { ChevronLeftIcon } from '../components/Icons'
 import { LangToggle } from '../components/LangToggle'
 import { useSharedIndex } from '../useSharedIndex'
+import { useStoredFlag } from '../useStoredState'
 
 interface Props {
   settings: AppSettings
@@ -198,7 +199,8 @@ function AiSetting({ settings, onChange }: { settings: AppSettings; onChange(pat
 export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props) {
   const { t } = useTranslation()
   const [folders, setFolders] = useState(settings.excludedFolders.join(', '))
-  const [signOutGh, setSignOutGh] = useState(true)
+  // Kept between launches, like the other ticks.
+  const [signOutGh, setSignOutGh] = useStoredFlag('assethub.signOut.gh', true)
   useEffect(() => setFolders(settings.excludedFolders.join(', ')), [settings.excludedFolders])
 
   const chooseCache = async () => {
@@ -245,6 +247,15 @@ export function Settings({ settings, auth, onChange, onSignOut, onBack }: Props)
         <div>
           <LangToggle value={settings.language} onChange={(language: Language) => onChange({ language })} />
         </div>
+      </section>
+
+      <section className="setting">
+        <h2>{t('settings.lobby')}</h2>
+        <label className="check">
+          <input type="checkbox" checked={settings.skipLobby === true} onChange={(e) => onChange({ skipLobby: e.target.checked })} />
+          {t('settings.skipLobby')}
+        </label>
+        <span className="muted small">{t('settings.skipLobbyNote')}</span>
       </section>
 
       <BudgetSetting settings={settings} onChange={onChange} />

@@ -156,6 +156,9 @@
     "sharedIndexImported": "브랜치 목록 {{commits}}개, 정보 {{facts}}개, 수치 {{stats}}개, 썸네일 {{thumbs}}개를 가져왔습니다.",
     "sharedIndexExported": "브랜치 목록 {{commits}}개, 정보 {{facts}}개, 수치 {{stats}}개, 새 썸네일 {{thumbs}}개를 기록했습니다.",
     "sharedIndexFailed": "공유 인덱스 오류: {{error}}",
+    "lobby": "로비",
+    "skipLobby": "이미 로그인되어 있으면 로비 건너뛰기",
+    "skipLobbyNote": "3D 상자 없이 바로 허브로 들어갑니다. 로그인이 필요할 때는 로비가 표시됩니다.",
     "usage": "사용 통계",
     "usageStats": "팀에 사용 통계 보내기",
     "usageNote": "GitHub 이름, 앱 사용 시간, 작업 횟수(연 브랜치, 본 에셋 유형, 검색, 내보내기, 오류)를 보냅니다. 검색어나 파일 내용은 절대 보내지 않습니다. 개선 방향을 정하는 데 도움이 됩니다."

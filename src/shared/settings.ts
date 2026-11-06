@@ -45,6 +45,8 @@ export interface Settings {
   watched?: WatchedBranch[]
   /** Usage notes sent to the team's feedback repo (absent: on). */
   usageStats?: boolean
+  /** Signed in from last time: straight into the hub, without the 3D lobby (absent: off). */
+  skipLobby?: boolean
 }
 
 export const EXPORT_LAYOUTS: readonly PackageLayout[] = ['byType', 'grouped', 'source']
@@ -60,6 +62,23 @@ export function isLanguage(value: unknown): value is Language {
 }
 
 /** Merges untrusted stored/IPC data over defaults, dropping anything invalid. */
+/** Every setting this version knows; anything else in the file was written by another version. */
+export const SETTINGS_KEYS = [
+  'language', 'cacheDir', 'cacheLimitGB', 'excludedFolders', 'lastRepo', 'lastBranch', 'budgetPreset', 'customBudget',
+  'exportLayout', 'targetProject', 'sharedIndexDir', 'collections', 'aiPet', 'recent', 'watched', 'usageStats', 'skipLobby'
+] as const satisfies ReadonlyArray<keyof Settings>
+
+/**
+ * Settings this version does not know, as they are in the file: an older and a newer copy of the app
+ * share it (the installed app and one being tried, or the days around an update), and neither may
+ * erase the other's choices when it saves its own.
+ */
+export function unknownSettings(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object') return {}
+  const known = new Set<string>(SETTINGS_KEYS)
+  return Object.fromEntries(Object.entries(raw).filter(([k]) => !known.has(k)))
+}
+
 export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
   const input = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
   const folders = Array.isArray(input.excludedFolders)
@@ -80,6 +99,7 @@ export function sanitizeSettings(raw: unknown, defaults: Settings): Settings {
     ...(sanitizeCollections(input.collections) ? { collections: sanitizeCollections(input.collections) } : {}),
     ...(typeof input.aiPet === 'boolean' ? { aiPet: input.aiPet } : {}),
     ...(typeof input.usageStats === 'boolean' ? { usageStats: input.usageStats } : {}),
+    ...(typeof input.skipLobby === 'boolean' ? { skipLobby: input.skipLobby } : {}),
     ...(input.recent && typeof input.recent === 'object'
       ? {
           recent: {

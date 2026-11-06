@@ -162,6 +162,9 @@
     "sharedIndexImported": "Took in {{commits}} branch listings, {{facts}} facts, {{stats}} measurements, {{thumbs}} thumbnails.",
     "sharedIndexExported": "Wrote {{commits}} branch listings, {{facts}} facts, {{stats}} measurements and {{thumbs}} new thumbnails.",
     "sharedIndexFailed": "Shared index failed: {{error}}",
+    "lobby": "Lobby",
+    "skipLobby": "Skip the lobby when already signed in",
+    "skipLobbyNote": "Opens straight into the hub, without the 3D chest. The lobby still shows to sign in.",
     "usage": "Usage statistics",
     "usageStats": "Send usage statistics to the team",
     "usageNote": "Your GitHub name, time spent in the app, and counts of what you do (branches opened, asset types viewed, searches, exports, errors). Never search text or file contents. Helps us decide what to improve."

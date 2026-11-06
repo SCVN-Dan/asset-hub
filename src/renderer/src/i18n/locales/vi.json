@@ -156,6 +156,9 @@
     "sharedIndexImported": "Đã nhập {{commits}} danh sách branch, {{facts}} dữ kiện, {{stats}} thông số, {{thumbs}} thumbnail.",
     "sharedIndexExported": "Đã ghi {{commits}} danh sách branch, {{facts}} dữ kiện, {{stats}} thông số và {{thumbs}} thumbnail mới.",
     "sharedIndexFailed": "Lỗi chỉ mục dùng chung: {{error}}",
+    "lobby": "Lobby",
+    "skipLobby": "Bỏ qua lobby khi đã đăng nhập",
+    "skipLobbyNote": "Vào thẳng hub, không qua rương 3D. Khi cần đăng nhập thì lobby vẫn hiện.",
     "usage": "Thống kê sử dụng",
     "usageStats": "Gửi thống kê sử dụng cho team",
     "usageNote": "Tên GitHub, thời gian dùng app và số lần thao tác (branch đã mở, loại asset đã xem, tìm kiếm, xuất, lỗi). Không bao giờ gửi nội dung tìm kiếm hay file. Giúp team biết cần cải thiện gì."

@@ -60,6 +60,7 @@ import { Popover } from '../components/Popover'
 import { SideGroup } from '../components/Section'
 import { WatchNav } from '../components/WatchNav'
 import type { WatchedBranch } from '@shared/settings'
+import { useStoredFlag } from '../useStoredState'
 
 interface Props {
   source: AssetSource
@@ -216,16 +217,17 @@ export function Browse({
   /** Model measurements by blob SHA, for ranking. */
   const [modelStats, setModelStats] = useState<Record<string, StatsSummary>>({})
   const [sortMode, setSortMode] = useState<SortMode>('relevance')
-  const [onlyFits, setOnlyFits] = useState(false)
+  // Ticks kept between launches (Filters and chest options).
+  const [onlyFits, setOnlyFits] = useStoredFlag('assethub.filter.onlyFits', false)
   /** Saved thumbnails are known; only then is it worth rendering missing ones. */
   const [thumbsLoaded, setThumbsLoaded] = useState(false)
-  const [mergeCopies, setMergeCopies] = useState(true)
+  const [mergeCopies, setMergeCopies] = useStoredFlag('assethub.filter.mergeCopies', true)
   const [limit, setLimit] = useState(PAGE)
   const sentinel = useRef<HTMLDivElement>(null)
   const [pack, setPack] = useState<PackItem[]>([])
-  const [skipByName, setSkipByName] = useState(false)
-  const [reuseExisting, setReuseExisting] = useState(true)
-  const [stripScripts, setStripScripts] = useState(true)
+  const [skipByName, setSkipByName] = useStoredFlag('assethub.chest.skipByName', false)
+  const [reuseExisting, setReuseExisting] = useStoredFlag('assethub.chest.reuseExisting', true)
+  const [stripScripts, setStripScripts] = useStoredFlag('assethub.chest.stripScripts', true)
   const exportOptions: ExportOptions = { layout: exportLayout, skipByName, targetProject, reuseExisting, stripScripts }
   const [exportState, setExportState] = useState<ExportState>({ status: 'idle' })
   const reports = useRef(new Map<string, DependencyReport>())
@@ -343,7 +345,7 @@ export function Browse({
   const clipNames = useMemo(() => new Map(Object.entries(modelStats).flatMap(([sha, s]) => (s.clipNames ? [[sha, s.clipNames] as const] : []))), [clipKey])
   /** Shas of models known to hold clips, for tabs that list them (`alsoShows`). */
   /** Shown anyway: assets their handler leaves out of lists (clips no model was found for). */
-  const [showUnlisted, setShowUnlisted] = useState(false)
+  const [showUnlisted, setShowUnlisted] = useStoredFlag('assethub.filter.showUnlisted', false)
   const unlistedKey = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.rigged === false).map(([sha]) => sha).sort().join('|'), [modelStats])
   const withClips = useMemo(() => Object.entries(modelStats).filter(([, s]) => s.clips > 0).map(([sha]) => sha).sort().join('|'), [modelStats])
   /** Shas measured as effects or not (particles read), for the effects tab. */

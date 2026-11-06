@@ -55,11 +55,19 @@ export function App() {
   const [checking, setChecking] = useState(true)
 
   useEffect(() => {
-    void window.api.getSettings().then(setSettings)
-    setScreen('signin')
+    const loaded = window.api.getSettings()
+    void loaded.then((s) => {
+      setSettings(s)
+      // With "skip the lobby" on, nothing shows until the previous sign-in is checked, so the lobby
+      // never flashes up on the way to the hub.
+      if (!s.skipLobby) setScreen('signin')
+    })
     // Restores the previous sign-in; any failure falls back to the sign-in buttons.
-    void window.api.auth.status().then((result) => {
-      if (result.ok && result.data.signedIn) setAutoEnter(result.data)
+    void Promise.all([loaded, window.api.auth.status()]).then(([s, result]) => {
+      const signedIn = result.ok && result.data.signedIn
+      if (signedIn && s.skipLobby) return enterGitHub(result.data)
+      if (signedIn) setAutoEnter(result.data)
+      setScreen('signin')
       setChecking(false)
     })
   }, [enterGitHub])
