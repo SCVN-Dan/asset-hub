@@ -2,6 +2,14 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.4] — 2026-11-06
+
+### Added
+- **The team shares one index:** what one person's app has listed and drawn (branch listings, thumbnails, measurements) is shared through GitHub, so searching All branches and All repos starts full on everyone's Mac. It keeps itself up to date: a teammate's additions are taken in at start and every 30 minutes, and yours are added when the shared one is more than 2 hours old. The first time takes a few minutes in the background. Needs access to the shared index repo; Settings › Shared index shows its state.
+
+### Changed
+- **Only what can be shown is listed:** EXR and HDR textures, AIFF and tracker audio, and .asset files that cannot be fonts are no longer listed, which also makes scanning lighter. They are still exported with the assets that use them.
+
 ## [1.0.3] — 2026-11-06
 
 ### Changed
