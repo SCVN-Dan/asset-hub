@@ -16,6 +16,7 @@ import { hasGit, listTreeWithGit, prefetchBlobsWithGit, readBlobsWithGit } from 
 import { CacheJanitor, FileBlobCache, FileCommitCache, StatsStore, THUMB_SCHEME, ThumbnailStore } from './caches'
 import { CatalogService } from './catalog'
 import { SharedIndexService } from './sharedIndex'
+import { IndexRepo } from './indexRepo'
 
 interface Session {
   source: GitHubAssetSource
@@ -115,7 +116,9 @@ export function registerGitHubIpc(options: { authFile: string; cacheDir: () => s
       () => join(options.cacheDir(), 'shared-index.json'),
       types,
       user.login,
-      (status) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.sharedIndexProgress, status))
+      (status) => BrowserWindow.getAllWindows().forEach((w) => !w.webContents.isDestroyed() && w.webContents.send(IPC.sharedIndexProgress, status)),
+      // Needs a real git; without one, only a shared folder works.
+      (await hasGit()) ? new IndexRepo(join(options.cacheDir(), 'shared-index-repo'), () => token.trim()) : undefined
     )
     session = { source, catalog, sharedIndex, status: { signedIn: true, login: user.login, method, persisted }, token: token.trim() }
     // A teammate's index makes searching across branches instant: taken in right away when newer.

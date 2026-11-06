@@ -5,6 +5,7 @@ import { gunzip, gzip } from 'zlib'
 import { SHARED_FACT_KINDS, type GitHubAssetSource } from '@core/github/source'
 import { CARD_VERSIONS, newerCard, type StatsSummary } from '@core/checks/playable'
 import type { SharedIndexManifest, SharedIndexResult, SharedIndexStatus } from '@shared/ipc'
+import type { IndexRepo } from './indexRepo'
 import type { CatalogService } from './catalog'
 import { writeAtomic, type StatsStore, type ThumbnailStore } from './caches'
 
@@ -21,6 +22,10 @@ const repoFile = (repo: string) => `${repo.replace('/', '__').replace(/[^A-Za-z0
 
 const readJsonGz = async <T>(file: string): Promise<T> => JSON.parse((await gunzipAsync(await readFile(file))).toString('utf8')) as T
 const writeJsonGz = async (file: string, value: unknown) => writeAtomic(file, await gzipAsync(JSON.stringify(value)))
+/** Keys in order: the same data gives the same bytes on every machine, so a git-backed index sees no change. */
+const sorted = <T>(record: Record<string, T>): Record<string, T> => Object.fromEntries(Object.keys(record).sort().map((k) => [k, record[k]]))
+/** Every key of `want` is in `have`. */
+const covers = (have: object | undefined, want: object) => !!have && Object.keys(want).every((k) => k in have)
 const list = (dir: string) => readdir(dir).catch(() => [] as string[])
 
 async function inBatches<T>(items: readonly T[], fn: (item: T) => Promise<void>): Promise<void> {
@@ -93,24 +98,33 @@ export async function importIndex(root: string, deps: Deps): Promise<SharedIndex
  * alone unless this app drew a newer kind of card; the manifest goes last,
  * so a reader never sees it before the files it lists.
  */
-export async function exportIndex(root: string, deps: Deps, by: string | undefined, types: string): Promise<SharedIndexResult> {
+export async function exportIndex(root: string, deps: Deps, by: string | undefined, types: string, include: (repo: string) => boolean = () => true): Promise<SharedIndexResult> {
   if (await readManifest(root)) await importIndex(root, deps)
   await mkdir(join(root, 'thumbs'), { recursive: true })
-  const catalogs = await deps.catalog.snapshot()
-  for (const c of catalogs) await writeJsonGz(join(root, 'catalog', repoFile(c.repo)), c)
+  const catalogs = (await deps.catalog.snapshot()).filter((c) => include(c.repo))
+  // What is there already was taken in above, so a file is written again only when this app knows more.
+  for (const c of catalogs) {
+    const file = join(root, 'catalog', repoFile(c.repo))
+    const there = await readJsonGz<typeof c>(file).catch(() => undefined)
+    const same = there && covers(there.commits, c.commits) && there.defaultBranch === c.defaultBranch && JSON.stringify(there.branches) === JSON.stringify(c.branches)
+    if (!same) await writeJsonGz(file, c)
+  }
   let facts = 0
   for (const kind of SHARED_FACT_KINDS) {
     for (const c of catalogs) {
       const known = await deps.source.sharedFacts(kind, c.repo)
       const n = Object.keys(known).length
       if (!n) continue
-      await writeJsonGz(join(root, 'facts', kind, repoFile(c.repo)), { repo: c.repo, facts: known })
+      const file = join(root, 'facts', kind, repoFile(c.repo))
+      const there = await readJsonGz<{ facts?: Record<string, unknown> }>(file).catch(() => undefined)
+      if (!covers(there?.facts, known)) await writeJsonGz(file, { repo: c.repo, facts: sorted(known) })
       facts += n
     }
   }
   const sharedBefore = await readJsonGz<Record<string, StatsSummary>>(join(root, 'stats.json.gz')).catch(() => ({}) as Record<string, StatsSummary>)
-  const stats = await deps.stats.all()
-  await writeJsonGz(join(root, 'stats.json.gz'), stats)
+  const stats = sorted(await deps.stats.all())
+  const flat = (r: Record<string, StatsSummary>) => JSON.stringify(Object.entries(sorted(r)).map(([k, v]) => [k, sorted(v as unknown as Record<string, unknown>)]))
+  if (flat(stats) !== flat(sharedBefore)) await writeJsonGz(join(root, 'stats.json.gz'), stats)
   const there = new Set((await list(join(root, 'thumbs'))).filter((f) => f.endsWith('.img')).map((f) => f.slice(0, -4)))
   const names = await deps.thumbs.names()
   let thumbs = 0
@@ -142,13 +156,22 @@ interface Seen {
   exportedAt: string
 }
 
+/** A teammate's index this new is not written over by an automatic contribution. */
+export const CONTRIBUTE_AFTER_MS = 2 * 60 * 60_000
+/** Tries this many times when others push first. */
+const PUSH_ATTEMPTS = 4
+
 /**
- * Keeps this app in step with a shared index folder: takes it in when a newer
- * one appears (at sign-in, every so often, or when asked) and writes it when asked.
+ * Keeps this app in step with the team's shared index: a folder the user picks or, when none
+ * is picked, the GitHub repo (`IndexRepo`). Takes it in when a newer one appears (at sign-in,
+ * every so often, or when asked) and writes it when asked. With the GitHub repo, it also
+ * writes its own index there on its own when the shared one is old and this app knows more.
  */
 export class SharedIndexService {
   private state: SharedIndexStatus = { state: 'idle' }
   private running?: Promise<void>
+  private readOnly = false
+  private lastContribution = 0
 
   constructor(
     private readonly deps: Deps,
@@ -156,68 +179,136 @@ export class SharedIndexService {
     private readonly seenFile: () => string,
     private readonly types: string,
     private readonly login: string | undefined,
-    private readonly emit: (status: SharedIndexStatus) => void
+    private readonly emit: (status: SharedIndexStatus) => void,
+    private readonly repo?: IndexRepo
   ) {}
+
+  /** The GitHub repo is used when no folder is picked. */
+  private github(): IndexRepo | undefined {
+    return this.dir() ? undefined : this.repo
+  }
 
   private root(): string | undefined {
     const dir = this.dir()
-    return dir ? join(dir, INDEX_FOLDER) : undefined
+    return dir ? join(dir, INDEX_FOLDER) : this.repo?.dir
   }
+
+  /** Personal repos stay out of the team's index. */
+  private include = (repo: string): boolean => !this.github() || !this.login || repo.split('/')[0].toLowerCase() !== this.login.toLowerCase()
 
   async status(): Promise<SharedIndexStatus> {
     const root = this.root()
-    return { ...this.state, manifest: root ? await readManifest(root) : undefined, importedAt: (await this.seen())?.exportedAt }
+    const github = this.github()
+    return {
+      ...this.state,
+      via: github ? 'github' : this.dir() ? 'folder' : undefined,
+      repo: github?.repo,
+      readOnly: github ? this.readOnly : undefined,
+      manifest: root ? await readManifest(root) : undefined,
+      importedAt: (await this.seen())?.exportedAt
+    }
   }
 
-  /** Takes in the shared index when it is newer than the one taken in last. */
+  /** Takes in the shared index when it is newer than the one taken in last; with GitHub, may then contribute. */
   check(): Promise<void> {
     return this.run('importing', async (root) => {
+      await this.github()?.pull()
       const manifest = await readManifest(root)
       const seen = await this.seen()
+      let result: SharedIndexResult | undefined
       // Made for other asset types, its catalogs are left out (`CatalogService.merge`); the rest still counts.
-      if (!manifest || (seen?.dir === root && seen.exportedAt === manifest.exportedAt)) return undefined
-      const result = await importIndex(root, this.deps)
-      await this.remember(root, manifest.exportedAt)
-      return result
+      if (manifest && !(seen?.dir === root && seen.exportedAt === manifest.exportedAt)) {
+        result = await importIndex(root, this.deps)
+        await this.remember(root, manifest.exportedAt)
+      }
+      if (this.shouldContribute(manifest)) {
+        this.lastContribution = Date.now()
+        this.update({ state: 'exporting' })
+        // Failing to contribute (offline, no write access) leaves what was taken in as it is.
+        const wrote = await this.write(root, true).catch(() => undefined)
+        if (wrote) return { result: wrote, action: 'exported' as const }
+      }
+      return result && { result, action: 'imported' as const }
     })
+  }
+
+  private shouldContribute(manifest: SharedIndexManifest | undefined): boolean {
+    if (!this.github() || this.readOnly) return false
+    if (Date.now() - this.lastContribution < CONTRIBUTE_AFTER_MS) return false
+    return !manifest || Date.now() - Date.parse(manifest.exportedAt) >= CONTRIBUTE_AFTER_MS
   }
 
   importNow(): Promise<void> {
     return this.run('importing', async (root) => {
+      await this.github()?.pull()
       const manifest = await readManifest(root)
       if (!manifest) throw new Error('noIndex')
       const result = await importIndex(root, this.deps)
       await this.remember(root, manifest.exportedAt)
-      return result
+      return { result, action: 'imported' as const }
     })
   }
 
   exportNow(): Promise<void> {
     return this.run('exporting', async (root) => {
+      const result = await this.write(root, false)
+      return result && { result, action: 'exported' as const }
+    })
+  }
+
+  /**
+   * Writes this app's index. With GitHub: on top of the latest commit, pushed without forcing;
+   * when someone pushed first, pulls their work, takes it in and writes again. Returns undefined
+   * when an automatic contribution had nothing new.
+   */
+  private async write(root: string, automatic: boolean): Promise<SharedIndexResult | undefined> {
+    const github = this.github()
+    if (!github) {
       const result = await exportIndex(root, this.deps, this.login, this.types)
       const manifest = await readManifest(root)
       if (manifest) await this.remember(root, manifest.exportedAt)
       return result
-    })
+    }
+    for (let attempt = 1; attempt <= PUSH_ATTEMPTS; attempt++) {
+      // On top of the latest commit; after a refused push, that has the work of whoever pushed first.
+      await github.pull()
+      const result = await exportIndex(root, this.deps, this.login, this.types, this.include)
+      const pushed = await github.push(`${automatic ? 'Update' : 'Write'} index (${this.login ?? 'unknown'})`)
+      if (pushed === 'readOnly') {
+        this.readOnly = true
+        await github.discard()
+        throw new Error('readOnly')
+      }
+      if (pushed === 'behind') continue
+      const manifest = await readManifest(root)
+      if (pushed === 'pushed' && manifest) await this.remember(root, manifest.exportedAt)
+      return pushed === 'unchanged' && automatic ? undefined : result
+    }
+    await github.discard()
+    throw new Error('busy')
   }
 
-  private run(state: 'importing' | 'exporting', fn: (root: string) => Promise<SharedIndexResult | undefined>): Promise<void> {
+  private run(state: 'importing' | 'exporting', fn: (root: string) => Promise<{ result: SharedIndexResult; action: 'imported' | 'exported' } | undefined>): Promise<void> {
     if (this.running) return this.running
     const root = this.root()
     if (!root) return Promise.resolve()
     this.update({ state, error: undefined })
     this.running = fn(root)
       .then(
-        (last) => this.update({ state: 'idle', ...(last ? { last, lastAction: state === 'importing' ? 'imported' : 'exported' } : {}) }),
+        (done) => this.update({ state: 'idle', ...(done ? { last: done.result, lastAction: done.action } : {}) }),
         (err) => this.update({ state: 'error', error: err instanceof Error ? err.message : String(err) })
       )
       .finally(() => (this.running = undefined))
     return this.running
   }
 
+  private emitted = 0
+
   private update(patch: Partial<SharedIndexStatus>): void {
     this.state = { ...this.state, ...patch }
-    void this.status().then(this.emit)
+    // status() reads files: an older update finishing late must not overwrite a newer one.
+    const n = ++this.emitted
+    void this.status().then((s) => n === this.emitted && this.emit(s))
   }
 
   private async seen(): Promise<Seen | undefined> {

@@ -1,8 +1,8 @@
 import { resolveSelf } from '../deps/self'
 import type { AssetTypeHandler } from '../types'
 
-/** Audio files Unity imports as clips. AIFF and tracker modules are listed, though the preview may not play them. */
-const AUDIO_EXT = /\.(wav|mp3|ogg|aiff?|mod|it|s3m|xm)$/i
+/** Audio files the app can play. AIFF and tracker modules (Unity imports them too) are left out: they could not be heard here. */
+const AUDIO_EXT = /\.(wav|mp3|ogg)$/i
 
 /** Audio clips: played in the app with a waveform; taken as the file itself. */
 export const audioHandler: AssetTypeHandler = {

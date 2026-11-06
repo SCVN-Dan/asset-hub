@@ -4,7 +4,7 @@ import { mkdir } from 'fs/promises'
 import { join } from 'path'
 import { SourceError, type TreeEntry } from '@core/index'
 
-function git(args: string[], env: NodeJS.ProcessEnv, cwd?: string, input?: string): Promise<Buffer> {
+export function git(args: string[], env: NodeJS.ProcessEnv, cwd?: string, input?: string): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, { cwd, env })
     const out: Buffer[] = []
@@ -43,7 +43,7 @@ export function hasGit(): Promise<boolean> {
 }
 
 /** Token passed through GIT_CONFIG_* env vars so it never appears in argv. */
-function gitEnv(token: string): NodeJS.ProcessEnv {
+export function gitEnv(token: string): NodeJS.ProcessEnv {
   return {
     ...process.env,
     GIT_TERMINAL_PROMPT: '0',

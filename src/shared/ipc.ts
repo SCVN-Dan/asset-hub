@@ -243,6 +243,12 @@ export interface SharedIndexResult {
 export interface SharedIndexStatus {
   state: 'idle' | 'importing' | 'exporting' | 'error'
   error?: string
+  /** Shared through the GitHub repo (no folder picked) or a folder. */
+  via?: 'github' | 'folder'
+  /** The GitHub repo, `via: 'github'`. */
+  repo?: string
+  /** This account can read the GitHub repo but not write to it. */
+  readOnly?: boolean
   /** In the shared folder now. */
   manifest?: SharedIndexManifest
   /** `exportedAt` of the index taken in last. */

@@ -360,7 +360,7 @@ function CacheSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange
   )
 }
 
-/** A folder the team shares: an index one person writes and everyone takes in, so cross-branch search starts full. */
+/** The team's shared index (GitHub repo, or a folder): what one app has listed and drawn, everyone takes in, so cross-branch search starts full. */
 function SharedIndexSetting({ settings, onChange }: Pick<Props, 'settings' | 'onChange'>) {
   const { t, i18n } = useTranslation()
   const status = useSharedIndex()
@@ -384,7 +384,13 @@ function SharedIndexSetting({ settings, onChange }: Pick<Props, 'settings' | 'on
         <label htmlFor="shared-index">{t('settings.sharedIndex')}</label>
       </h2>
       <div className="field-row">
-        <input id="shared-index" className="input mono" value={settings.sharedIndexDir ?? ''} placeholder={t('settings.sharedIndexNone')} readOnly />
+        <input
+          id="shared-index"
+          className="input mono"
+          value={settings.sharedIndexDir ?? ''}
+          placeholder={status?.via === 'github' ? t('settings.sharedIndexNone', { repo: status.repo }) : t('settings.sharedIndexNoGit')}
+          readOnly
+        />
         <button type="button" className="btn" onClick={() => void choose()}>
           {t('settings.choose')}
         </button>
@@ -394,8 +400,9 @@ function SharedIndexSetting({ settings, onChange }: Pick<Props, 'settings' | 'on
           </button>
         )}
       </div>
-      {settings.sharedIndexDir && (
+      {(settings.sharedIndexDir || status?.via === 'github') && (
         <>
+          {status?.via === 'github' && <span className="muted small">{t(status.readOnly ? 'settings.sharedIndexReadOnly' : 'settings.sharedIndexAuto', { repo: status.repo })}</span>}
           <span className="muted small" role="status">
             {m
               ? t('settings.sharedIndexThere', { when: when(m.exportedAt), who: m.exportedBy ?? '?', repos: m.repos.length, thumbs: m.thumbs })
@@ -406,7 +413,7 @@ function SharedIndexSetting({ settings, onChange }: Pick<Props, 'settings' | 'on
             <button type="button" className="btn" disabled={busy || !m} onClick={() => void act(window.api.sharedIndex.import)}>
               {status?.state === 'importing' ? t('settings.sharedIndexImporting') : t('settings.sharedIndexImport')}
             </button>
-            <button type="button" className="btn" disabled={busy} onClick={() => void act(window.api.sharedIndex.export)}>
+            <button type="button" className="btn" disabled={busy || !!status?.readOnly} onClick={() => void act(window.api.sharedIndex.export)}>
               {status?.state === 'exporting' ? t('settings.sharedIndexExporting') : t('settings.sharedIndexExport')}
             </button>
           </div>

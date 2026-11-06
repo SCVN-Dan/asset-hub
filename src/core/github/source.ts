@@ -7,6 +7,7 @@ import type { AssetTypeHandler, RepoRef, TreeEntry } from '../types'
 import { isInExcludedFolder } from '../unity'
 import { folderAffinity, modelMaterials } from '../unity/prefab'
 import { effectShas, prefabEffectFact } from '../unity/particles'
+import { TMP_CANDIDATE } from '../handlers/tmpFont'
 import { isTmpFontAsset } from '../unity/tmpFont'
 import type { FactKind } from '../types'
 import { metaGuid } from '../unity/yaml'
@@ -189,11 +190,6 @@ const TMP_KIND = 'tmpfont'
 export const SHARED_FACT_KINDS = [SHA_KIND, PREFAB_KIND, EFFECT_KIND, SPRITE_KIND, TMP_KIND] as const
 /** Textures whose .meta can say "sprite". */
 const SPRITE_TEXTURE = /\.(png|jpe?g|tga|psd|gif|bmp|tiff?)$/i
-/**
- * .asset files worth reading for TextMeshPro fonts: TextMeshPro names them "<Font> SDF" and keeps them
- * under Fonts folders. Other .asset files can be huge (terrain data), so they are not read.
- */
-const TMP_CANDIDATE = /(sdf|font)[^/]*\.asset$|\/fonts?[^/]*\/[^/]*\.asset$/i
 
 /** Bytes of prefabs read by a "nearby" search before it stops. */
 const NEAR_BUDGET = 16 * 1024 * 1024
