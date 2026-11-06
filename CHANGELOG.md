@@ -2,6 +2,15 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.3] — 2026-11-06
+
+### Changed
+- **Searching shows pictures sooner:** results from All branches and All repos get their thumbnails in a second or two each, instead of waiting for every branch to be indexed (minutes when results came from many branches). On a branch opened for the first time, model cards show their shape right away and their textures a few seconds later.
+
+### Fixed
+- **TIFF textures (.tif) show:** their cards, the image viewer and models using them now draw them.
+- **Enter in the search box searches what you typed,** instead of replacing it with the first suggestion. Pick a suggestion with the arrow keys and Enter, a click, or Tab.
+
 ## [1.0.2] — 2026-11-06
 
 ### Added
