@@ -14,7 +14,8 @@ interface Props {
 export function SearchBox({ value, search, onChange }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(0)
+  /** Highlighted suggestion; -1 while none is (typing, or just focused): Enter then keeps what was typed. */
+  const [active, setActive] = useState(-1)
   const suggestions = useMemo(() => (open ? search.suggest(value) : []), [open, search, value])
   const choose = (text: string) => {
     onChange(text)
@@ -38,20 +39,35 @@ export function SearchBox({ value, search, onChange }: Props) {
         value={value}
         onChange={(e) => {
           onChange(e.target.value)
-          setActive(0)
+          setActive(-1)
           // A pasted assethub:// link opens its asset and empties the box: no suggestions for Enter to pick.
           setOpen(!parseAssetLink(e.target.value))
         }}
-        onFocus={() => setOpen(true)}
+        onFocus={() => {
+          setOpen(true)
+          setActive(-1)
+        }}
         onBlur={() => setOpen(false)}
         onKeyDown={(e) => {
+          // Enter searches what was typed and closes the list, even before its suggestions have come in.
+          if (e.key === 'Enter' && (active < 0 || !suggestions[active])) {
+            setOpen(false)
+            return
+          }
           if (!suggestions.length) return
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault()
-            setActive((i) => (i + (e.key === 'ArrowDown' ? 1 : suggestions.length - 1)) % suggestions.length)
-          } else if (e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey)) {
+            // From none highlighted, Down goes to the first and Up to the last.
+            setActive((i) => (e.key === 'ArrowDown' ? (i + 1) % suggestions.length : i <= 0 ? suggestions.length - 1 : i - 1))
+          } else if (e.key === 'Enter') {
+            // Enter searches what was typed; a suggestion only when one was picked with the arrows (or the mouse).
             e.preventDefault()
-            choose(suggestions[active]?.text ?? value)
+            if (active >= 0 && suggestions[active]) choose(suggestions[active].text)
+            else setOpen(false)
+          } else if (e.key === 'Tab' && !e.shiftKey) {
+            // Tab completes: the highlighted suggestion, else the first.
+            e.preventDefault()
+            choose(suggestions[Math.max(0, active)]?.text ?? value)
           } else if (e.key === 'Escape') setOpen(false)
         }}
       />

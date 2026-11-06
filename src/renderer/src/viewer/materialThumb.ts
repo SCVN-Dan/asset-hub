@@ -11,10 +11,11 @@ import { fetchMaterialTextures, materialSlots, materialStats } from './materialP
  * what its textures weigh. Uses what the branch already knows about GUIDs
  * nearby (`quick`), so a texture still unknown is left off until it is opened.
  */
-export async function renderMaterialThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats: StatsSummary }> {
+export async function renderMaterialThumbnail(live: LiveContext, path: string, elsewhere = false): Promise<{ url: string; stats: StatsSummary }> {
   const [bytes, report] = await Promise.all([
     window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
-    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true).then(unwrap)
+    // On another branch or repo: what is known already, not that branch's whole index (see backgroundThumb).
+    window.api.assets.resolve(live.repo, live.branch, path, live.root, elsewhere ? 'instant' : 'full', true).then(unwrap)
   ])
   const material = report.materials[0]
   const textures = await fetchMaterialTextures(live, material, true)

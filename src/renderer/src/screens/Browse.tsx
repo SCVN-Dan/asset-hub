@@ -561,7 +561,9 @@ export function Browse({
   const remeasure = (a: Asset) => {
     const s = modelStats[a.sha]
     if (!s) return kindOf(a) === 'prefab' && !!thumbs[a.sha] && !unmeasuredPrefabs.current.has(a.sha)
-    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures) || staleEffect(a) || staleClip(a) || staleModel(a)
+    // Results of other branches / repos are drawn with what is known (no index per branch): not again
+    // here, or every one would build its branch's index; in full once their branch is opened.
+    return (s.clips > 0 && !s.clipNames) || (kindOf(a) === 'three' && s.source === 'thumb' && !s.matTextures && !inCatalog) || staleEffect(a) || staleClip(a) || staleModel(a)
   }
 
   /** Queues a card's thumbnail, read from the open branch or (for results elsewhere) its main location. */

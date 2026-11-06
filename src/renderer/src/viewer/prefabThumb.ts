@@ -35,8 +35,9 @@ function labelCard(label: string): string {
  * answers every card at once. Nearby lookups (`quick`) took 20-30 s per prefab on a cold cache,
  * four at a time, and no card showed for over 45 s.
  */
-export async function renderPrefabThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats?: StatsSummary; motion?: string }> {
-  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true))
+export async function renderPrefabThumbnail(live: LiveContext, path: string, elsewhere = false): Promise<{ url: string; stats?: StatsSummary; motion?: string }> {
+  // On another branch or repo: what is known already, not that branch's whole index (see backgroundThumb).
+  const report = unwrap(await window.api.assets.resolve(live.repo, live.branch, path, live.root, elsewhere ? 'instant' : 'full', true))
   const build = await buildPrefab(live, path, report, true)
   try {
     const fx = report.particles?.length ? report : undefined

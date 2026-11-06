@@ -22,18 +22,44 @@ export function offscreenHost(): HTMLDivElement {
   return host
 }
 
+/** How long a card waits for the branch's GUID index before it is drawn with what is known. */
+const FAST_MS = 1200
+/** Models drawn quickly this session (before the index was ready): their redraw waits for it. */
+const drawnQuickly = new Set<string>()
+
+/**
+ * The model's materials for its card. The branch's GUID index (`full`) knows them all, but the first
+ * time a branch is opened it takes several seconds to build, and every card waited for it (a search
+ * showed no picture for 6 s). So a card waits a moment, then is drawn with what is already known
+ * (`quick`: its shape and the textures the FBX names); drawn without its .mat textures, it is drawn
+ * again once the grid is idle (Browse `remeasure`), and that time it waits for the index.
+ */
+async function materialsFor(live: LiveContext, path: string, elsewhere: boolean): Promise<{ report?: DependencyReport; quick: boolean }> {
+  // A result on another branch or repo: what is known already (GUIDs are shared by a repo's branches),
+  // never that branch's whole index; the card is drawn in full once that branch is opened.
+  if (elsewhere) {
+    const known = await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'instant', true).then(unwrap, () => undefined)
+    return { report: known, quick: !known || !!known.partial }
+  }
+  const key = `${live.repo}@${live.branch}:${path}`
+  const full = window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true).then(unwrap, () => undefined)
+  if (drawnQuickly.has(key)) return { report: await full, quick: false }
+  const first = await Promise.race([full.then((report) => ({ report })), new Promise<undefined>((done) => setTimeout(done, FAST_MS))])
+  if (first) return { report: first.report, quick: false }
+  const known = await window.api.assets.resolve(live.repo, live.branch, path, live.root, 'instant', true).then(unwrap, () => undefined)
+  if (known && !known.partial) return { report: known, quick: false }
+  drawnQuickly.add(key)
+  return { report: known, quick: true }
+}
+
 /**
  * Renders a grid thumbnail without opening the model: downloads the FBX, the
  * textures of its .mat files (kind A, from GUIDs the branch already knows
  * nearby) and the textures it names, draws one frame and returns a data URL.
  * Every texture counts toward the size, even one not downloaded.
  */
-export async function renderThumbnail(live: LiveContext, path: string): Promise<{ url: string; stats: StatsSummary }> {
-  const [bytes, report] = await Promise.all([
-    window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap),
-    // Without its materials the model is still drawn and measured, as before.
-    window.api.assets.resolve(live.repo, live.branch, path, live.root, 'full', true).then(unwrap, () => undefined)
-  ])
+export async function renderThumbnail(live: LiveContext, path: string, elsewhere = false): Promise<{ url: string; stats: StatsSummary }> {
+  const [bytes, { report, quick }] = await Promise.all([window.api.assets.readFile(live.repo, live.branch, path, true).then(unwrap), materialsFor(live, path, elsewhere)])
   const names = extractFbxTextureNames(bytes)
   const found = names.length ? unwrap(await window.api.assets.findByNames(live.repo, live.branch, names, path, live.root)) : {}
   const slotPaths = reportSlotPaths(report)
@@ -51,7 +77,8 @@ export async function renderThumbnail(live: LiveContext, path: string): Promise<
     if (slots.length) await viewer.applyMaterialSlots(slots)
     else if (!viewer.hasColorMaps() && files.length) await viewer.applyMaterialSlots(guessedSlots(files))
     // Measured while the model is loaded anyway: lets results be ranked without opening them.
-    const stats: StatsSummary = { ...summarizeStats(viewer.stats(bytes.byteLength, files), 'thumb'), matTextures: true, modelThumb: MODEL_THUMB_VERSION }
+    // Drawn before its .mat textures were known: no `matTextures`, so the card is drawn again.
+    const stats: StatsSummary = { ...summarizeStats(viewer.stats(bytes.byteLength, files), 'thumb'), ...(quick ? {} : { matTextures: true as const }), modelThumb: MODEL_THUMB_VERSION }
     stats.textureBytes += skippedBytes(report, new Set(byPath.keys()))
     return { url: viewer.snapshot(), stats }
   } finally {

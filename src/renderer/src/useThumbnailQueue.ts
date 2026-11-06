@@ -3,7 +3,8 @@ import type { LiveContext } from './components/ModelViewer'
 import type { StatsSummary } from '@core/checks/playable'
 export type ThumbKind = 'three' | 'material' | 'image' | 'audio' | 'prefab' | 'animation' | 'font' | 'tmpfont'
 
-type Render = (ctx: LiveContext, path: string) => Promise<{ url: string; stats?: StatsSummary; motion?: string }>
+/** `elsewhere`: the asset is on another branch or repo than the open one (results of All branches / All repos). */
+type Render = (ctx: LiveContext, path: string, elsewhere?: boolean) => Promise<{ url: string; stats?: StatsSummary; motion?: string }>
 
 /** Renderers load with the first thumbnail of their kind (most draw with three.js, kept out of the startup bundle). */
 const RENDER: Record<ThumbKind, () => Promise<Render>> = {
@@ -59,7 +60,7 @@ export function useThumbnailQueue(live: LiveContext | undefined, onThumb: (key: 
       if (!ctx) continue
       active.current.add(job.key)
       void RENDER[job.kind]()
-        .then((render) => render(ctx, job.path))
+        .then((render) => render(ctx, job.path, !!job.ctx))
         .then(({ url, stats, motion }) => onThumbRef.current(job.key, url, stats, motion))
         .catch(() => failed.current.set(job.key, Date.now()))
         .finally(() => {
