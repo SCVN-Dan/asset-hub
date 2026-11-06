@@ -30,6 +30,7 @@ function machine(name: string) {
   }
   const source = {
     sharedFacts: async (kind: string, repo: string) => shared(kind, repo),
+    factRepos: async (kind: string) => [...facts.keys()].filter((k) => k.startsWith(`${kind}:`)).map((k) => k.slice(kind.length + 1)),
     mergeSharedFacts: async (kind: string, repo: string, more: Record<string, unknown>) => {
       const known = shared(kind, repo)
       let n = 0
@@ -65,6 +66,16 @@ describe('shared index', () => {
     expect((await b.thumbs.read('fish'))?.type).toBe('image/png')
     // Nothing new the second time.
     expect(await importIndex(shared, b)).toEqual({ commits: 0, facts: 0, stats: 0, thumbs: 0 })
+  })
+
+  it('shares facts of repos opened but never scanned (their GUIDs make the first prefab slow)', async () => {
+    const a = machine('a')
+    a.shared('metaguids', 'org/opened').m1 = 'g1'
+    const shared = join(tmp, 'drive', INDEX_FOLDER)
+    await exportIndex(shared, a, 'dan', TYPES)
+    const b = machine('b')
+    await importIndex(shared, b)
+    expect(b.shared('metaguids', 'org/opened')).toEqual({ m1: 'g1' })
   })
 
   it('keeps what an app measured itself, but takes newer effect cards', async () => {

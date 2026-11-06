@@ -39,6 +39,7 @@ function machine(name: string, login: string) {
   }
   const source = {
     sharedFacts: async (kind: string, repo: string) => shared(kind, repo),
+    factRepos: async (kind: string) => [...facts.keys()].filter((k) => k.startsWith(`${kind}:`)).map((k) => k.slice(kind.length + 1)),
     mergeSharedFacts: async (kind: string, repo: string, more: Record<string, unknown>) => {
       const known = shared(kind, repo)
       let n = 0

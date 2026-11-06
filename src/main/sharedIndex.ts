@@ -111,13 +111,16 @@ export async function exportIndex(root: string, deps: Deps, by: string | undefin
   }
   let facts = 0
   for (const kind of SHARED_FACT_KINDS) {
-    for (const c of catalogs) {
-      const known = await deps.source.sharedFacts(kind, c.repo)
+    // Every repo with facts, not only scanned ones: the GUIDs of a branch opened once are what make
+    // its first model or prefab slow (15 s and more) on the next Mac.
+    const repos = [...new Set([...catalogs.map((c) => c.repo), ...(await deps.source.factRepos(kind)).filter(include)])]
+    for (const repo of repos) {
+      const known = await deps.source.sharedFacts(kind, repo)
       const n = Object.keys(known).length
       if (!n) continue
-      const file = join(root, 'facts', kind, repoFile(c.repo))
+      const file = join(root, 'facts', kind, repoFile(repo))
       const there = await readJsonGz<{ facts?: Record<string, unknown> }>(file).catch(() => undefined)
-      if (!covers(there?.facts, known)) await writeJsonGz(file, { repo: c.repo, facts: sorted(known) })
+      if (!covers(there?.facts, known)) await writeJsonGz(file, { repo, facts: sorted(known) })
       facts += n
     }
   }

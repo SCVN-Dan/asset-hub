@@ -58,6 +58,12 @@ export class FileCommitCache implements CommitCache {
     }
   }
 
+  async repos(kind: string): Promise<string[]> {
+    const names = await readdir(join(this.cacheDir(), safe(kind))).catch(() => [] as string[])
+    // Folders are named owner__name (see `file`); GitHub owners cannot contain "__".
+    return names.filter((n) => n.includes('__')).map((n) => n.replace('__', '/'))
+  }
+
   async set(kind: string, repo: string, commitSha: string, value: unknown): Promise<void> {
     const bytes = await gzipAsync(JSON.stringify(value))
     await writeAtomic(this.file(kind, repo, commitSha), bytes)

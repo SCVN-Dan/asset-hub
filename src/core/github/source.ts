@@ -18,6 +18,8 @@ import { isLfsPath, parseLfsAttributes, parseLfsPointer } from './lfs'
 export interface CommitCache {
   get<T>(kind: string, repo: string, commitSha: string): Promise<T | undefined>
   set(kind: string, repo: string, commitSha: string, value: unknown): Promise<void>
+  /** Repos something of `kind` is saved for. */
+  repos?(kind: string): Promise<string[]>
 }
 
 /** File contents keyed by content hash (git blob SHA or LFS oid). */
@@ -89,6 +91,13 @@ const LOOKUP_BUDGET = 640
 /** One GraphQL request reads 40 files in about a second; four run side by side. */
 const LOOKUP_CHUNK = 160
 const LOOKUP_PARALLEL = 4
+/**
+ * A quick lookup reads more chunks only this long (after its first one): a GUID it cannot find
+ * nearby may not be in the branch at all, and reading on through every .meta (a texture searched
+ * for 30 s) is what the full index, built at the same time, does faster. What it found is shown
+ * at once; the full index fills in the rest.
+ */
+export const QUICK_LOOKUP_MS = 4000
 
 /**
  * GUID → path answered on demand: GUIDs whose .meta was read before (on any
@@ -124,7 +133,7 @@ class LazyGuids {
    * out: files named like `hints` first (an FBX names its materials), then
    * the folders nearest the model.
    */
-  find(guids: readonly string[], kind: GuidKind, nearPath: string, hints: readonly string[] = [], limit = LOOKUP_BUDGET): Promise<void> {
+  find(guids: readonly string[], kind: GuidKind, nearPath: string, hints: readonly string[] = [], limit = LOOKUP_BUDGET, until = Infinity): Promise<void> {
     const wanted = () => [...new Set(guids)].filter((g) => !this.known.has(g))
     if (!wanted().length || this.complete) return Promise.resolve()
     const run = (this.locks.get(kind) ?? Promise.resolve()).then(async () => {
@@ -144,7 +153,8 @@ class LazyGuids {
         .sort((a, b) => b.score - a.score)
         .map((c) => c.m)
       let budget = limit
-      for (let i = 0; i < candidates.length && budget > 0 && wanted().length; ) {
+      // At least one chunk, so what is nearest is always looked at.
+      for (let i = 0; i < candidates.length && budget > 0 && wanted().length && (i === 0 || Date.now() < until); ) {
         const chunk = candidates.slice(i, i + Math.min(LOOKUP_CHUNK, budget))
         i += chunk.length
         budget -= chunk.length
@@ -361,13 +371,14 @@ export class GitHubAssetSource implements AssetSource {
     }
     const extra = snap.extra
     const asked = new Set<string>()
+    const until = mode === 'full' ? Infinity : Date.now() + QUICK_LOOKUP_MS
     return {
       ...ctx,
       pathForGuid: (guid) => ctx.pathForGuid(guid) ?? extra.known.get(guid),
       prepare: async (guids, kind, hints) => {
         if (!EXTRA_KINDS.has(kind)) return ctx.prepare?.(guids, kind, hints)
         guids.forEach((g) => asked.add(g))
-        if (mode !== 'instant') await extra.find(guids, kind, nearPath, hints, mode === 'full' ? Infinity : LOOKUP_BUDGET)
+        if (mode !== 'instant') await extra.find(guids, kind, nearPath, hints, mode === 'full' ? Infinity : LOOKUP_BUDGET, until)
       },
       // After a full search an extra GUID that is still unknown is not in the branch (a package script, a deleted file).
       unsure: (guid) => (asked.has(guid) ? mode !== 'full' && !extra.complete && !extra.known.has(guid) : (ctx.unsure?.(guid) ?? false))
@@ -403,9 +414,10 @@ export class GitHubAssetSource implements AssetSource {
       )
     }
     const lazy = snap.lazy
+    const until = Date.now() + QUICK_LOOKUP_MS
     return {
       ...this.depContext(repo, snap, root, lazy.known),
-      prepare: (guids, kind, hints) => lazy.find(guids, kind, nearPath, hints),
+      prepare: (guids, kind, hints) => lazy.find(guids, kind, nearPath, hints, LOOKUP_BUDGET, until),
       unsure: (guid) => !lazy.complete && !lazy.known.has(guid)
     }
   }
@@ -651,6 +663,13 @@ export class GitHubAssetSource implements AssetSource {
   }
 
   /** Facts by blob SHA of one repo (what `SHARED_FACT_KINDS` name), as kept in memory. */
+  /** Repos with facts of `kind`, saved or read this session (a repo opened but never scanned has some too). */
+  async factRepos(kind: string): Promise<string[]> {
+    const saved = (await this.options.cache?.repos?.(kind).catch(() => [] as string[])) ?? []
+    const loaded = [...this.shared.keys()].filter((k) => k.startsWith(`${kind}:`)).map((k) => k.slice(kind.length + 1))
+    return [...new Set([...saved, ...loaded])]
+  }
+
   sharedFacts(kind: string, repo: string): Promise<Record<string, unknown>> {
     return this.sharedCache(kind, repo)
   }
