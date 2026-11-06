@@ -2,6 +2,21 @@
 
 What changed in each release of Asset Hub. `npm run release` publishes the section of the version in `package.json` as the release notes, so add each change under an **Unreleased** heading as it is made, and rename that heading to the version when releasing.
 
+## [1.0.2] — 2026-11-06
+
+### Added
+- **Skip the lobby:** Settings › Lobby › "Skip the lobby when already signed in" opens straight into the hub. The lobby still shows to sign in.
+- **A new lobby each time:** the camera, the gems' colours and how the gems and coins lie change every time the app opens. The chest's red band is now a cloth band tied in a knot on its side.
+
+### Changed
+- **New app icon:** the chest on the lobby's floor and pedestal, on a slate blue background.
+- **Ticks are remembered:** Filters (merge identical files, only what fits) and the chest's options keep their ticks when the app is opened again.
+
+### Fixed
+- **Thumbnails on a new branch:** opening the Prefab tab of a large repository for the first time left the cards empty for minutes; they now fill in within about 20 seconds. Effects that loop for a very long time no longer freeze the app for seconds when they are previewed.
+- **Settings no longer reset** when two versions of the app are used on the same Mac (for example right after an update).
+- The chest's lid no longer passes through the sword when it opens.
+
 ## [1.0.1] — 2026-11-05
 
 ### Changed
